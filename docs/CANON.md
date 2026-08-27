@@ -113,6 +113,22 @@ Use deterministic code for search, hashing, math, dates, exact comparisons and d
 
 Use AI only where reasoning/semantic analysis adds value.
 
+## Product Posture
+
+Chronium is currently **founder-first/private**. Optimize for research capability, reliability, and low operating cost — not SaaS features.
+
+Architect clean boundaries so authentication, multi-tenancy, usage metering, and a paid gateway can be added later **without rewriting the research engine**. Do not build those commercial layers until explicitly requested.
+
+## Cost Principle
+
+**Make the expensive part valuable before making the valuable part expensive.**
+
+Division of labor:
+
+* public archives (Wayback, Common Crawl, Arquivo.pt, original publishers, public APIs) already do the crawling and storage — lean on them instead of re-crawling or mirroring
+* the browser does local processing (unzip, hash, extract, index) where practical, so cost stays near zero regardless of production size
+* Cloudflare is reserved for the owned intelligence layer — the parts only Chronium can provide, not general-purpose storage or compute
+
 ## Stack
 
 Bootstrap and low maintenance:
@@ -130,9 +146,13 @@ Do not overengineer.
 ## Build Priority
 
 **P0:** Research library, investigations, universal search, provenance
-**P1:** PDF extraction, entities, related records, Then vs Now, timelines
-**P2:** evidence-grounded AI assistant, publishing investigations
+**P1:** bulk investigation ingestion (incl. PDF extraction), entities, related records, Then vs Now, timelines, research outline, research bibliography
+**P2:** evidence-grounded AI assistant, automated final reports, publishing investigations
 **P3:** broader federated/public search
+
+Research Outline and Research Bibliography (see `docs/RESEARCH_METHOD.md`) come
+**before** automated final reports — a report is only as good as the outline that
+scoped the research and the bibliography that backs it.
 
 ## Development Rules
 
