@@ -1,7 +1,13 @@
+import corpus from "../data/copperas-cove/normalized.json";
+
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "public, max-age=60"
 };
+
+const LOCAL_CORPORA = [
+  { id: "copperas-cove", label: "Copperas Cove Investigation Corpus", data: corpus }
+];
 
 export default {
   async fetch(request, env, ctx) {
@@ -26,7 +32,7 @@ export default {
 
       const mode = looksLikeUrlOrDomain(q) ? "url" : "topic";
       const started = Date.now();
-      const jobs = [searchArquivo(q, limit, mode)];
+      const jobs = [searchArquivo(q, limit, mode), searchLocalCorpora(q, limit)];
 
       // Wayback and Common Crawl CDX are URL/capture indexes, not global full-text engines.
       if (mode === "url") {
@@ -89,6 +95,7 @@ async function searchArquivo(query, limit, mode) {
       return {
         id: `arquivo-${ts || i}-${hashString(original)}`,
         source,
+        sourceKind: "archive-connector",
         title: stripHtml(item.title || original || "Archived result"),
         originalUrl: original,
         archiveUrl,
@@ -133,6 +140,7 @@ async function searchWayback(query, limit) {
       return {
         id: `wayback-${obj.timestamp || i}-${hashString(obj.original || "")}`,
         source,
+        sourceKind: "archive-connector",
         title: obj.original || "Archived page",
         originalUrl: obj.original || "",
         archiveUrl: obj.timestamp && obj.original ? `https://web.archive.org/web/${obj.timestamp}/${obj.original}` : "",
@@ -178,6 +186,7 @@ async function searchCommonCrawl(query, limit) {
     const results = rows.map((obj, i) => ({
       id: `cc-${obj.collection}-${obj.timestamp || i}-${hashString(obj.url || "")}`,
       source,
+      sourceKind: "archive-connector",
       title: obj.url || "Common Crawl capture",
       originalUrl: obj.url || "",
       archiveUrl: obj.filename ? `https://data.commoncrawl.org/${obj.filename}` : "",
@@ -195,6 +204,50 @@ async function searchCommonCrawl(query, limit) {
       note: "MVP searches the latest 3 Common Crawl monthly indexes for URL/domain queries." };
   } catch (e) {
     return { source, capability: "URL/capture index", ok: false, error: e.message, count: 0, results: [] };
+  }
+}
+
+async function searchLocalCorpora(query, limit) {
+  const source = LOCAL_CORPORA.map((c) => c.label).join(", ") || "Investigation corpus";
+  try {
+    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const matches = [];
+    for (const { label, data } of LOCAL_CORPORA) {
+      for (const record of data.records || []) {
+        const haystack = `${record.title} ${record.category} ${record.description} ${record.originalUrl}`.toLowerCase();
+        if (terms.every((t) => haystack.includes(t))) matches.push({ label, record });
+      }
+    }
+    const results = matches.slice(0, limit).map(({ label, record }) => {
+      const version = record.versions?.[0] || {};
+      return {
+        id: record.id,
+        source: label,
+        sourceKind: "investigation-corpus",
+        title: record.title,
+        originalUrl: record.originalUrl,
+        archiveUrl: version.archiveUrl,
+        captureDate: version.capturedAt,
+        mime: record.documentType,
+        language: null,
+        snippet: record.description,
+        matchType: "investigation-record",
+        organization: record.organization,
+        jurisdiction: record.jurisdiction,
+        category: record.category,
+        captureCount: record.captureCount,
+        uniqueVersionCount: record.uniqueVersionCount,
+        historyUrl: record.provenance?.historyUrl || null,
+        priority: record.provenance?.priority || null
+      };
+    });
+    return {
+      source, capability: "local investigation corpus (keyword match)", ok: true,
+      count: results.length, results,
+      note: "Searches a locally bundled, previously harvested investigation dataset, not a live crawl."
+    };
+  } catch (e) {
+    return { source, capability: "local investigation corpus", ok: false, error: e.message, count: 0, results: [] };
   }
 }
 
