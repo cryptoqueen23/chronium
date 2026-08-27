@@ -9,6 +9,65 @@ const LOCAL_CORPORA = [
   { id: "copperas-cove", label: "Copperas Cove Investigation Corpus", data: corpus }
 ];
 
+// Formalizes the connector contract from docs/ARCHITECTURE.md. A provider's search()
+// NEVER rejects/throws — it always resolves to the {source, capability, ok, count,
+// results, note} shape the API has always returned, even if its own implementation
+// has a bug. That's what keeps one archive being down from breaking federated search;
+// each provider already has its own try/catch, this is defense in depth around it.
+class ArchiveProvider {
+  constructor({ id, label, capabilities, run }) {
+    this.id = id;
+    this.label = label;
+    this.capabilities = capabilities; // e.g. ['full-text', 'url-history']
+    this.run = run; // async (query, { limit, mode }) => same payload shape as before
+  }
+
+  supports(capability) {
+    return this.capabilities.includes(capability);
+  }
+
+  async search(query, options) {
+    try {
+      return await this.run(query, options);
+    } catch (e) {
+      return {
+        source: this.label,
+        capability: this.capabilities.join(" + "),
+        ok: false,
+        error: e?.message || "Provider failed",
+        count: 0,
+        results: []
+      };
+    }
+  }
+
+  // Not called by /api/search yet. Declared now so a dedicated URL/version-history
+  // lookup (distinct from a keyword search) and single-capture fetch have one place
+  // to live per provider once they're built, instead of another interface change.
+  async history() {
+    throw new Error(`${this.label} does not implement history() yet`);
+  }
+  async fetchVersion() {
+    throw new Error(`${this.label} does not implement fetchVersion() yet`);
+  }
+
+  // Placeholder for selective Cloudflare R2 evidence preservation (docs/ARCHITECTURE.md
+  // Phase C: "R2 only for evidence a user explicitly chooses to preserve"). Intentionally
+  // unimplemented — no bucket binding or storage logic yet. Exists so the Investigation
+  // Workspace's "Save" action has one documented seam to call into later without another
+  // interface change: e.g. `await provider.preserve(record, env)` once env.EVIDENCE_BUCKET
+  // exists.
+  async preserve(_record, _env) {
+    return { preserved: false, reason: "R2 preservation not implemented yet" };
+  }
+}
+
+const ARCHIVE_PROVIDERS = [
+  new ArchiveProvider({ id: "arquivo", label: "Arquivo.pt", capabilities: ["full-text", "url-history"], run: searchArquivo }),
+  new ArchiveProvider({ id: "wayback", label: "Wayback Machine", capabilities: ["url-history"], run: searchWayback }),
+  new ArchiveProvider({ id: "commoncrawl", label: "Common Crawl", capabilities: ["url-history"], run: searchCommonCrawl })
+];
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -32,12 +91,20 @@ export default {
 
       const mode = looksLikeUrlOrDomain(q) ? "url" : "topic";
       const started = Date.now();
-      const jobs = [searchArquivo(q, limit, mode), searchLocalCorpora(q, limit)];
+      const options = { limit, mode };
 
-      // Wayback and Common Crawl CDX are URL/capture indexes, not global full-text engines.
+      const arquivo = ARCHIVE_PROVIDERS.find((p) => p.id === "arquivo");
+      const jobs = [arquivo.search(q, options), searchLocalCorpora(q, limit)];
+
+      // Wayback and Common Crawl CDX are URL/capture indexes, not global full-text engines;
+      // only query them in URL mode. Each is an independent provider — one being down
+      // (or slow, or rate-limited) never blocks the others, per ArchiveProvider.search().
       if (mode === "url") {
-        jobs.push(searchWayback(q, limit));
-        jobs.push(searchCommonCrawl(q, limit));
+        for (const provider of ARCHIVE_PROVIDERS) {
+          if (provider.id !== "arquivo" && provider.supports("url-history")) {
+            jobs.push(provider.search(q, options));
+          }
+        }
       }
 
       const settled = await Promise.allSettled(jobs);
@@ -72,7 +139,7 @@ export default {
   }
 };
 
-async function searchArquivo(query, limit, mode) {
+async function searchArquivo(query, { limit, mode }) {
   const source = "Arquivo.pt";
   try {
     let endpoint;
@@ -119,7 +186,7 @@ async function searchArquivo(query, limit, mode) {
   }
 }
 
-async function searchWayback(query, limit) {
+async function searchWayback(query, { limit }) {
   const source = "Wayback Machine";
   try {
     const target = normalizeTarget(query);
@@ -159,7 +226,7 @@ async function searchWayback(query, limit) {
   }
 }
 
-async function searchCommonCrawl(query, limit) {
+async function searchCommonCrawl(query, { limit }) {
   const source = "Common Crawl";
   try {
     const target = normalizeTarget(query);
