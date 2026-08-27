@@ -1,0 +1,15 @@
+{
+  "name": "chronium-mind",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Historical web and public-record intelligence aggregator",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "node --check src/index.js && node --check public/app.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.31.0"
+  }
+}

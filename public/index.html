@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Chronium Mind searches the historical web across independent archives." />
+  <title>Chronium Mind — Search the Internet Through Time</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Chronium Mind home"><span class="mark">CM</span><span>Chronium Mind</span></a>
+    <span class="version">MVP 0.2</span>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow">HISTORICAL WEB RESEARCH</p>
+      <h1>Search the Internet <span>through time.</span></h1>
+      <p class="lede">One search layer across independent web archives. Find historical pages, trace versions, and follow the evidence back to its source.</p>
+
+      <form id="searchForm" class="search" role="search">
+        <label class="sr-only" for="query">Search historical web</label>
+        <input id="query" name="q" autocomplete="off" placeholder="Try: copperascovetx.gov  or  public infrastructure" maxlength="300" />
+        <button type="submit">Search history</button>
+      </form>
+      <div class="examples">
+        <button data-q="copperascovetx.gov">Copperas Cove history</button>
+        <button data-q="cair.com">cair.com</button>
+        <button data-q="whitehouse.gov">whitehouse.gov</button>
+      </div>
+
+      <div class="heads" aria-label="Connected archive heads">
+        <span><i class="dot live"></i>Arquivo.pt <small>full text + URL</small></span>
+        <span><i class="dot live"></i>Wayback <small>URL history</small></span>
+        <span><i class="dot live"></i>Common Crawl <small>URL history</small></span>
+      </div>
+    </section>
+
+    <section id="status" class="status hidden" aria-live="polite"></section>
+
+    <section id="resultsSection" class="results hidden">
+      <div class="results-head">
+        <div><p class="eyebrow">RESULTS</p><h2 id="resultsTitle">Historical evidence</h2></div>
+        <div class="filters">
+          <select id="sourceFilter" aria-label="Filter by source"><option value="all">All sources</option></select>
+          <select id="typeFilter" aria-label="Filter by content type"><option value="all">All content</option></select>
+        </div>
+      </div>
+      <div id="coverage" class="coverage"></div>
+      <div id="results" class="cards"></div>
+    </section>
+
+    <section class="principles">
+      <div><strong>Source first.</strong><p>Every result points back to the archive that holds it.</p></div>
+      <div><strong>No fake coverage.</strong><p>Chronium tells you which heads actually searched your query.</p></div>
+      <div><strong>Low storage.</strong><p>The archives keep the heavy data. Chronium organizes the map.</p></div>
+    </section>
+  </main>
+
+  <footer><span>Chronium Mind</span><span>Search what the Internet remembers.</span></footer>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
