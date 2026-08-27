@@ -34,7 +34,62 @@
         <span><i class="dot live"></i>Arquivo.pt <small>full text + URL</small></span>
         <span><i class="dot live"></i>Wayback <small>URL history</small></span>
         <span><i class="dot live"></i>Common Crawl <small>URL history</small></span>
+        <span><i class="dot live"></i>Investigation corpus <small>local keyword match</small></span>
       </div>
+    </section>
+
+    <section id="workspace" class="workspace" aria-label="Research workspace">
+      <div class="workspace-row">
+        <label class="sr-only" for="investigationSelect">Active investigation</label>
+        <select id="investigationSelect">
+          <option value="">No investigation selected</option>
+        </select>
+        <button type="button" id="newInvestigationBtn">New investigation</button>
+        <button type="button" id="deleteInvestigationBtn" disabled>Delete investigation</button>
+        <button type="button" id="toggleLibraryBtn" disabled aria-expanded="false" aria-controls="librarySection">My Library</button>
+      </div>
+
+      <form id="newInvestigationForm" class="workspace-form hidden">
+        <div>
+          <label for="newInvestigationName">Investigation name</label>
+          <input id="newInvestigationName" required maxlength="120" />
+        </div>
+        <div>
+          <label for="newInvestigationDescription">Description (optional)</label>
+          <input id="newInvestigationDescription" maxlength="300" />
+        </div>
+        <div class="workspace-form-actions">
+          <button type="submit">Create</button>
+          <button type="button" id="cancelNewInvestigation">Cancel</button>
+        </div>
+      </form>
+
+      <form id="addUrlForm" class="workspace-form hidden">
+        <div>
+          <label for="addUrlInput">Add a URL to this investigation</label>
+          <input id="addUrlInput" type="url" required placeholder="https://example.gov/record" />
+        </div>
+        <div>
+          <label for="addUrlTitle">Title (optional)</label>
+          <input id="addUrlTitle" maxlength="200" />
+        </div>
+        <div>
+          <label for="addUrlNote">Note (optional)</label>
+          <input id="addUrlNote" maxlength="300" />
+        </div>
+        <div class="workspace-form-actions">
+          <button type="submit">Add to investigation</button>
+        </div>
+      </form>
+
+      <div id="workspaceStatus" class="status hidden" aria-live="polite"></div>
+
+      <section id="librarySection" class="results hidden">
+        <div class="results-head">
+          <div><p class="eyebrow">MY LIBRARY</p><h2 id="libraryTitle">Saved records</h2></div>
+        </div>
+        <div id="libraryResults" class="cards"></div>
+      </section>
     </section>
 
     <section id="status" class="status hidden" aria-live="polite"></section>
