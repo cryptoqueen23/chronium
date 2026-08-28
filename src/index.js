@@ -66,6 +66,7 @@ class ArchiveProvider {
         kind: "historical-archive",
         ok: false,
         skipped: true,
+        verdict: "provider-unavailable",
         error: `Temporarily skipped after repeated failures — retrying automatically in ~${retryInS}s.`,
         count: 0,
         results: []
@@ -79,10 +80,18 @@ class ArchiveProvider {
         const outcome = result.ok ? "success" : (classifyError(result.error) || "otherError");
         recordOutcome(env, ctx, this.id, outcome, Date.now() - started, result.error);
       }
+      // Coverage Verdict (see docs/CANON.md "Never Confuse Absence of
+      // Evidence With Evidence of Absence"): "no results" is never one
+      // thing. A provider that failed to answer never gets to look the
+      // same as one that answered and found nothing - and "found nothing"
+      // is not the same claim as "verified nothing exists here". Providers
+      // may set their own richer `verdict` (see searchWayback's
+      // cross-check); this is only the default for ones that don't.
+      const verdict = result.verdict || (!result.ok ? "provider-unavailable" : (result.count > 0 ? "found" : "no-captures-in-index"));
       // Every ArchiveProvider is, definitionally, a historical archive - the
       // frontend must never lump this in with the researcher's own saved
       // corpus/library when summarizing "archives searched".
-      return { kind: "historical-archive", ...result };
+      return { kind: "historical-archive", ...result, verdict };
     } catch (e) {
       if (env && ctx) {
         recordOutcome(env, ctx, this.id, classifyError(e?.message) || "otherError", Date.now() - started, e?.message);
@@ -92,6 +101,7 @@ class ArchiveProvider {
         capability: this.capabilities.join(" + "),
         kind: "historical-archive",
         ok: false,
+        verdict: "provider-unavailable",
         error: e?.message || "Provider failed",
         count: 0,
         results: []
@@ -382,8 +392,13 @@ export default {
         mode,
         tookMs: Date.now() - started,
         total: results.length,
-        connectors: payloads.map(({ source, capability, kind, ok, error, count, note, skipped }) => ({
-          source, capability, kind: kind || "historical-archive", ok, error: error || null, count: count || 0, note: note || null, skipped: !!skipped
+        connectors: payloads.map(({ source, capability, kind, ok, error, count, note, skipped, verdict, crossCheckFoundCaptures, earliestKnownCapture }) => ({
+          source, capability, kind: kind || "historical-archive", ok, error: error || null, count: count || 0, note: note || null, skipped: !!skipped,
+          // Coverage Verdict: distinguishes "no captures found" from
+          // "provider unavailable" from "verified historical gap" - never
+          // collapse these into one generic "0 results" state client-side.
+          verdict: verdict || (ok ? (count > 0 ? "found" : "no-captures-in-index") : "provider-unavailable"),
+          crossCheckFoundCaptures: !!crossCheckFoundCaptures, earliestKnownCapture: earliestKnownCapture || null
         })),
         results
       });
@@ -465,37 +480,76 @@ async function searchWayback(query, { limit, ctx }) {
     const res = await fetchResilient(api.toString(), 12000, { headers: { accept: "application/json" } });
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const text = await res.text();
-    if (!text.trim()) {
-      const empty = { source, capability: "URL/capture index", ok: true, count: 0, results: [],
-        note: "Wayback CDX indexes URLs and captures; it is not a global full-text topic search API." };
-      putCachedProviderResult(ctx, "wayback", cacheParams, empty);
-      return empty;
+
+    let results = [];
+    if (text.trim()) {
+      const rows = JSON.parse(text);
+      const headers = rows.shift() || [];
+      results = rows.map((row, i) => {
+        const obj = Object.fromEntries(headers.map((h, idx) => [h, row[idx]]));
+        return {
+          id: `wayback-${obj.timestamp || i}-${hashString(obj.original || "")}`,
+          source,
+          sourceKind: "archive-connector",
+          title: obj.original || "Archived page",
+          originalUrl: obj.original || "",
+          archiveUrl: obj.timestamp && obj.original ? `https://web.archive.org/web/${obj.timestamp}/${obj.original}` : "",
+          captureDate: normalizeTimestamp(obj.timestamp),
+          mime: obj.mimetype || null,
+          language: null,
+          snippet: "",
+          digest: obj.digest || null,
+          matchType: "url-history"
+        };
+      });
     }
-    const rows = JSON.parse(text);
-    const headers = rows.shift() || [];
-    const results = rows.map((row, i) => {
-      const obj = Object.fromEntries(headers.map((h, idx) => [h, row[idx]]));
-      return {
-        id: `wayback-${obj.timestamp || i}-${hashString(obj.original || "")}`,
-        source,
-        sourceKind: "archive-connector",
-        title: obj.original || "Archived page",
-        originalUrl: obj.original || "",
-        archiveUrl: obj.timestamp && obj.original ? `https://web.archive.org/web/${obj.timestamp}/${obj.original}` : "",
-        captureDate: normalizeTimestamp(obj.timestamp),
-        mime: obj.mimetype || null,
-        language: null,
-        snippet: "",
-        digest: obj.digest || null,
-        matchType: "url-history"
-      };
-    });
-    const payload = { source, capability: "URL/capture index", ok: true, count: results.length, results,
-      note: "Wayback CDX indexes URLs and captures; it is not a global full-text topic search API." };
+
+    let payload;
+    if (results.length > 0) {
+      payload = { source, capability: "URL/capture index", ok: true, verdict: "found", count: results.length, results,
+        note: "Wayback CDX indexes URLs and captures; it is not a global full-text topic search API." };
+    } else {
+      // CDX search coming back empty is NEVER reported as "nothing was
+      // archived" on its own - CANON "Never Confuse Absence of Evidence
+      // With Evidence of Absence". Cross-check against the Wayback
+      // Availability API: a separate index that answers "does ANY capture
+      // exist for this URL at all", independent of CDX's own indexing/query
+      // quirks. Only when that ALSO finds nothing does Chronium call it a
+      // verified gap.
+      const availability = await checkWaybackAvailability(target, 6000);
+      if (!availability.checked) {
+        payload = { source, capability: "URL/capture index", ok: true, verdict: "no-captures-in-index", count: 0, results: [],
+          note: "No matches in Wayback's CDX index for this query. The independent availability cross-check could not be completed, so this is not a verified gap - it may still exist and be unreachable right now." };
+      } else if (availability.hasAnyCapture) {
+        payload = { source, capability: "URL/capture index", ok: true, verdict: "no-captures-in-index", count: 0, results: [],
+          crossCheckFoundCaptures: true, earliestKnownCapture: availability.timestamp,
+          note: `No matches for this exact query, but Wayback DOES have other captures of this domain (e.g. ${availability.timestamp ? normalizeTimestamp(availability.timestamp) : "an earlier capture"}) - this is a query-scope miss, not evidence the domain was never archived.` };
+      } else {
+        payload = { source, capability: "URL/capture index", ok: true, verdict: "verified-gap", count: 0, results: [],
+          note: "No captures found via Wayback CDX, cross-checked against the independent Availability API - both agree nothing is archived here." };
+      }
+    }
     putCachedProviderResult(ctx, "wayback", cacheParams, payload);
     return payload;
   } catch (e) {
-    return { source, capability: "URL/capture index", ok: false, error: e.message, count: 0, results: [] };
+    return { source, capability: "URL/capture index", ok: false, verdict: "provider-unavailable", error: e.message, count: 0, results: [] };
+  }
+}
+
+// Independent of CDX search - answers only "does Wayback have ANY capture
+// of this URL at all" via a separate, typically faster/more reliable API
+// surface. Used as a cross-check so a CDX query returning zero results is
+// never silently treated as "this was never archived".
+async function checkWaybackAvailability(target, ms) {
+  try {
+    const api = `https://archive.org/wayback/available?url=${encodeURIComponent(target)}`;
+    const res = await fetchResilient(api, ms, { headers: { accept: "application/json" } });
+    if (!res.ok) return { checked: false };
+    const data = await res.json();
+    const closest = data?.archived_snapshots?.closest;
+    return { checked: true, hasAnyCapture: !!closest?.available, timestamp: closest?.timestamp || null };
+  } catch {
+    return { checked: false };
   }
 }
 

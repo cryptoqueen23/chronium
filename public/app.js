@@ -385,13 +385,30 @@ function renderCoverage(data, libraryHits) {
   const myResearchConnectors = data.connectors.filter((c) => c.kind === 'my-research');
   const myResearchHits = myResearchConnectors.reduce((sum, c) => sum + (c.count || 0), 0) + libraryHits.length;
 
-  const okWithResults = archiveConnectors.filter((c) => c.ok && c.count > 0);
-  const okZeroResults = archiveConnectors.filter((c) => c.ok && !c.count);
-  const failedList = archiveConnectors.filter((c) => !c.ok);
-  const allArchivesFailed = archiveConnectors.length > 0 && archiveConnectors.every((c) => !c.ok);
+  // Coverage Verdict (src/index.js): "no results" is never one thing.
+  // These four cases must never be presented the same way:
+  //   found                - matches came back
+  //   provider-unavailable - the connector couldn't be reached; UNKNOWN
+  //                          coverage, never "nothing archived"
+  //   no-captures-in-index - this exact query matched nothing; may still
+  //                          contradict itself via crossCheckFoundCaptures
+  //   verified-gap         - cross-checked two independent ways, both agree
+  const okWithResults = archiveConnectors.filter((c) => c.verdict === 'found');
+  const unavailable = archiveConnectors.filter((c) => c.verdict === 'provider-unavailable');
+  const verifiedGaps = archiveConnectors.filter((c) => c.verdict === 'verified-gap');
+  const contradicted = archiveConnectors.filter((c) => c.verdict === 'no-captures-in-index' && c.crossCheckFoundCaptures);
+  const softNoMatch = archiveConnectors.filter((c) => c.verdict === 'no-captures-in-index' && !c.crossCheckFoundCaptures);
+  const allArchivesUnavailable = archiveConnectors.length > 0 && archiveConnectors.every((c) => c.verdict === 'provider-unavailable');
 
-  const banner = allArchivesFailed
-    ? `<div class="status status-bad">All historical archives are temporarily unavailable right now — try again in a moment. Results below (if any) are from your own research only.</div>`
+  const banner = allArchivesUnavailable
+    ? `<div class="status status-bad">All historical archives are temporarily unavailable right now — this means Chronium couldn't ask, not that nothing was archived. Try again in a moment. Results below (if any) are from your own research only.</div>`
+    : '';
+  // A provider that found nothing for THIS query but is independently known
+  // to have other captures of the same domain is the exact "don't confuse
+  // absence of evidence with evidence of absence" case - it gets a visible
+  // callout, not a line buried in collapsed Source status.
+  const contradictionCallout = contradicted.length
+    ? `<div class="status status-warn">${contradicted.map((c) => esc(c.note || `${c.source} found no matches for this exact query, but has other captures of this domain.`)).join(' ')}</div>`
     : '';
   const summary = `<p class="coverage-summary">${okWithResults.length} of ${archiveConnectors.length} historical archives returned matches${myResearchHits ? ` · ${myResearchHits} from your own research` : ''}</p>`;
   // Only connectors that actually found something get a prominent card - a
@@ -401,14 +418,15 @@ function renderCoverage(data, libraryHits) {
     ? `<div class="coverage-grid">${okWithResults.map((c) => `<div class="source"><strong><i class="dot"></i>${esc(c.source)} · ${c.count}</strong><p>${esc(c.capability)}${c.note ? `<br>${esc(c.note)}` : ''}</p></div>`).join('')}</div>`
     : '';
   const statusItems = [
-    ...failedList.map((c) => `<li>${esc(humanizeConnectorError(c))}</li>`),
-    ...okZeroResults.map((c) => `<li>${esc(c.source)} searched, no matches for this query.</li>`)
+    ...unavailable.map((c) => `<li>${esc(humanizeConnectorError(c))} — coverage unknown, not confirmed absent.</li>`),
+    ...softNoMatch.map((c) => `<li>${esc(c.source)} found no matches for this query.</li>`),
+    ...verifiedGaps.map((c) => `<li>${esc(c.source)}: no captures found for this domain (verified against an independent cross-check).</li>`)
   ];
   const details = statusItems.length
     ? `<details class="source-status"><summary>Source status</summary><ul>${statusItems.join('')}</ul></details>`
     : '';
 
-  coverage.innerHTML = `${banner}${summary}${grid}${details}`;
+  coverage.innerHTML = `${banner}${contradictionCallout}${summary}${grid}${details}`;
 }
 function buildFilters(items) {
   const sources = [...new Set(items.map((x) => x.source).filter(Boolean))].sort();

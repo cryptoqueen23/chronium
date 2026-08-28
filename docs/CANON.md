@@ -174,6 +174,44 @@ click time, updates the row's provenance when a fallback wins, and only
 shows "No accessible archived copy found" once every known capture has
 actually been tried.
 
+### CANON RULE — Never Confuse Absence of Evidence With Evidence of Absence
+
+"No results" is never one thing, and Chronium must never collapse it into
+one. A researcher acting on a false "nothing was ever archived here" can
+miss the actual evidence. Every archive query result carries a **Coverage
+Verdict** distinguishing exactly what happened:
+
+* **`found`** — the provider answered and returned matches.
+* **`provider-unavailable`** — the provider could not be reached (timeout,
+  5xx, rate-limited, circuit open). Coverage is **unknown**. Never
+  presented as "nothing archived" — only as "Chronium couldn't ask."
+* **`no-captures-in-index`** — the provider answered successfully and this
+  *exact query* matched nothing. This is a soft, query-scoped result, not
+  a claim that the material was never archived anywhere.
+* **`verified-gap`** — cross-checked against an independent signal (not
+  just re-asking the same index the same way), and both agree nothing is
+  archived. This is the *only* verdict that supports saying "no captures
+  exist" with actual confidence.
+
+A `no-captures-in-index` result can still directly contradict itself: if
+an independent cross-check finds the domain *does* have other captures
+(just not matching this query), that's flagged (`crossCheckFoundCaptures`)
+and shown as a visible callout, not buried in collapsed "Source status" -
+it's telling the researcher their exact query missed real history, which
+is exactly the failure mode this rule exists to prevent.
+
+**Shipped:** `searchWayback` (`src/index.js`) computes this verdict. When
+its CDX query returns zero results, it cross-checks against the Wayback
+Availability API (`archive.org/wayback/available`) - a separate index
+surface, independent of CDX's own query/indexing quirks - before ever
+calling something a gap. `ArchiveProvider.search()` gives every other
+connector a sane default (`provider-unavailable` on failure,
+`no-captures-in-index` on an empty success) so nothing falls through
+unlabeled. The frontend (`renderCoverage`, `public/app.js`) renders each
+verdict differently: a contradiction gets a visible warning callout, a
+verified gap gets a quiet note, and "provider unavailable" is always
+worded as unknown coverage, never as absence.
+
 ## AI
 
 AI assists research. **AI is never the source of truth.**

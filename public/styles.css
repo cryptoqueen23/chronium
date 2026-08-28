@@ -192,6 +192,7 @@ svg[hidden] { display: none !important; }
 /* ---------- Status / coverage ---------- */
 .status { margin: 22px 0; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-secondary); font-size: 13.5px; }
 .status.status-bad { color: var(--danger); border-color: #4a2622; }
+.status.status-warn { color: var(--accent); border-color: #4a3a1a; }
 
 .results { padding-top: 30px; }
 .results-head { display: flex; gap: 16px; align-items: end; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 14px; flex-wrap: wrap; }
