@@ -198,9 +198,17 @@ async function searchWayback(query, { limit }) {
     api.searchParams.set("collapse", "digest");
     api.searchParams.set("limit", String(Math.min(limit, 50)));
 
-    const res = await fetchWithTimeout(api.toString(), 8000, { headers: { accept: "application/json" } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const rows = await res.json();
+    // 12s not 8s: the CDX endpoint is noticeably slower now that requests
+    // reach the app layer at all (see the missing-User-Agent fix above) -
+    // it was previously rejecting everything instantly at the nginx layer.
+    const res = await fetchWithTimeout(api.toString(), 12000, { headers: { accept: "application/json" } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const text = await res.text();
+    if (!text.trim()) {
+      return { source, capability: "URL/capture index", ok: true, count: 0, results: [],
+        note: "Wayback CDX indexes URLs and captures; it is not a global full-text topic search API." };
+    }
+    const rows = JSON.parse(text);
     const headers = rows.shift() || [];
     const results = rows.map((row, i) => {
       const obj = Object.fromEntries(headers.map((h, idx) => [h, row[idx]]));
@@ -360,10 +368,20 @@ function stripHtml(s) {
 function clamp(n, min, max) { return Math.min(Math.max(Number.isFinite(n) ? n : min, min), max); }
 function hashString(s) { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
 
+// A default User-Agent matters here: web.archive.org's CDX endpoint rejects
+// requests with no User-Agent at the nginx layer with a bare 400, before the
+// query is ever parsed - Cloudflare Workers' fetch() sends none by default.
+// Identifies Chronium honestly to these public archive APIs (a descriptive
+// UA is standard etiquette for API consumers) rather than spoofing a browser.
+const DEFAULT_HEADERS = {
+  "user-agent": "ChroniumMind/0.2 (+https://chronium-mind.truewolfflix777.workers.dev; research tool, not a browser)",
+  "accept-language": "en-US,en;q=0.9"
+};
+
 async function fetchWithTimeout(url, ms, init = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
-  try { return await fetch(url, { ...init, signal: controller.signal }); }
+  try { return await fetch(url, { ...init, headers: { ...DEFAULT_HEADERS, ...init.headers }, signal: controller.signal }); }
   finally { clearTimeout(timer); }
 }
 
