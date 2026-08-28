@@ -215,6 +215,78 @@ When commercial layers do get built, the intended shape:
   today requiring an explicit button click, just with real billing behind
   it once that exists.
 
+#### Chronium Monetization (tiers)
+
+| Tier | Revenue |
+|---|---|
+| **Free** | Core research, archives, local/BYOS storage |
+| **Pro** | Advanced research tools — subscription |
+| **AI** | AI analysis/reports — paid credits |
+| **Vault** | Hosted storage — subscription |
+| **Premium Data** | Legal, medical, academic, etc. — add-ons |
+| **Ads/Services** | Contextual only — ads/referrals |
+| **Research Trends** | Anonymous aggregate trends — B2B/API |
+| **Enterprise/Gov** | Teams, private deployments, API — contracts |
+
+**Economic rule:** Charge when Chronium incurs cost or creates professional
+value. Keep core research useful for free.
+
+**Four businesses:** Research + AI + Vault + Trends, with Enterprise on top.
+
+**Flywheel:** More researchers → better aggregate intelligence → better
+Chronium → more users → more paying customers.
+
+> **The research belongs to the researcher. Chronium monetizes the service
+> and aggregate interest — not the individual.**
+
+#### Free/Freemium Rules
+
+**Free must be a genuinely useful research product, not a demo.**
+
+**Free includes:**
+
+* Live + historical web search
+* Public archive connectors
+* Investigations/workspaces
+* Local files, USB/external drive + BYOS
+* Document indexing/search
+* Duplicate detection/hashing
+* Sources + provenance
+* Evidence collection
+* Claims
+* Gaps
+* Timelines
+* Citations/bibliography
+* Basic version comparison
+* Deterministic quantitative analysis
+* Deterministic evidence-backed reports
+* Export of the user's own research
+
+**Free excludes / paid:**
+
+* AI-generated/enhanced reports
+* AI qualitative analysis/synthesis
+* Advanced AI contradiction interpretation
+* AI drafting/research agents
+* Chronium-hosted Vault storage beyond any small free allowance
+* Premium/paid data connectors
+* Heavy compute/high-volume usage
+* Advanced professional automation
+* Team/collaboration features
+* Enterprise admin, SSO, private deployment
+* Commercial/API access
+
+**Monetization rule:** Never cripple basic research to force payment.
+Charge for AI, Chronium-incurred costs, premium data, scale, convenience,
+professional tools, teams, and enterprise capabilities.
+
+Free should be good enough that someone can conduct and prove a real
+investigation from beginning to end. Notably, everything in "Free includes"
+above except deterministic quantitative analysis and deterministic reports
+is **already built** (Sources/Evidence/Claims/Gaps/Timeline/Bibliography,
+2026-08-28) — this list is a real, mostly-shipped baseline to hold the line
+on, not just an aspiration.
+
 ## Cost Principle
 
 **Make the expensive part valuable before making the valuable part expensive.**
