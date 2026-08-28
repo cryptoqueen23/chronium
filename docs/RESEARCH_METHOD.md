@@ -207,6 +207,60 @@ Today's Investigation Workspace covers `Sources → My Files` (bulk-ingested
 documents) and the equivalent of `Current Web`/`Historical Web` (the federated
 search merge). The rest of the tree is the target shape, not yet built.
 
+## Bulk Import UX (illustrative)
+
+Two sketches of the intended import experience — a landing/drop state inside an
+investigation, and the post-import summary. Directional for layout/prominence;
+the underlying ingestion engine (`public/ingest/`) already implements the
+hash/dedupe/extract/report mechanics these describe.
+
+```text
+CHRONIUM MIND
+Research Everything. Lose Nothing.
+
+[ + New Investigation ]   [ ⇧ Import Research ]
+
+────────────────────────────────────────
+
+MY INVESTIGATION
+Copperas Cove Road Funding
+
+┌─────────────────────────────────────────────┐
+│                                             │
+│       DROP YOUR RESEARCH HERE               │
+│                                             │
+│   ZIP • PDF • CSV • XLSX • DOCX • TXT • EML│
+│                                             │
+│   Drop files, folders, or a ZIP             │
+│                                             │
+│              [ Browse Files ]               │
+│                                             │
+│   Originals stay on your device by default  │
+└─────────────────────────────────────────────┘
+
+3,233 documents indexed
+
+[ Search everything in this investigation... ]
+```
+
+```text
+IMPORT COMPLETE
+
+Files received          1,847
+Successfully indexed    1,796
+Duplicates                 31
+Needs attention             20
+
+PDF                       932
+Excel/CSV                  311
+Word                       247
+Email                      188
+Text                       118
+Other                       51
+
+[ Search Corpus ] [ Organize ] [ Review Problems ]
+```
+
 ## Target Source Record Shape
 
 A worked example of what a fully-populated source record should look like once the
