@@ -134,6 +134,40 @@ Use deterministic code for search, hashing, math, dates, exact comparisons and d
 
 Use AI only where reasoning/semantic analysis adds value.
 
+### CANON RULE — AI/Agents Are Last Resort
+
+Chronium must **never use AI or agents when normal software can do the job
+reliably.**
+
+Priority order, always tried in this sequence:
+
+```text
+Cache → deterministic code → database/index → search/connectors
+      → rules/algorithms → AI → Agent
+```
+
+* AI is used only when reasoning/synthesis genuinely requires it.
+* Agents are used only when multi-step reasoning/orchestration genuinely requires them.
+* **Never** use AI for sorting, counting, filtering, deduping, hashing, citations, metadata, basic timelines, statistics, file organization, or any other deterministic work — this is the concrete rule behind Quantitative Analysis (`public/app.js`) being 100% client-side/free while only Qualitative Analysis calls an AI provider, and only on explicit user action.
+* **Bootstrap rule:** use the cheapest reliable method.
+* **Bottom-line rule:** every paid AI/agent call must create enough value to justify its marginal cost.
+
+AI and agents are **replaceable accelerators — not dependencies of
+Chronium's core research engine.** The core (search, evidence, claims,
+reports) must work with zero AI calls; AI only ever adds interpretation on
+top, never becomes required to use the product.
+
+### Provider-agnostic AI router (shipped)
+
+`src/ai/provider.js` defines the interface every adapter implements;
+`src/ai/index.js` is the registry (`AI_PROVIDER` config var in
+`wrangler.jsonc` picks the active one — a config change, not a code
+change). Anthropic Claude (Haiku) is the first adapter (`src/ai/anthropic.js`)
+— not a special case. Add OpenAI/Gemini/a local model the same way: a new
+adapter file + one registry line. The credential is always a Cloudflare
+secret (`wrangler secret put ANTHROPIC_API_KEY`), never committed, never
+sent to the client.
+
 ## Internationalization
 
 Chronium is **English-first, multilingual-native** — architect for it from
@@ -161,6 +195,25 @@ into the core rather than behind a locale-aware seam).
 Chronium is currently **founder-first/private**. Optimize for research capability, reliability, and low operating cost — not SaaS features.
 
 Architect clean boundaries so authentication, multi-tenancy, usage metering, and a paid gateway can be added later **without rewriting the research engine**. Do not build those commercial layers until explicitly requested.
+
+### Future monetization shape (design note, not built — no auth/payments/credits system exists yet)
+
+When commercial layers do get built, the intended shape:
+
+* Standard evidence-backed reports (Report tab, `docs/RESEARCH_METHOD.md`)
+  are **deterministic and free by default** — generating, updating,
+  exporting, or citing a report must never require an AI call.
+* AI-generated/AI-enhanced output (narrative synthesis, deeper
+  interpretation, rewriting) is the **paid feature** — free research stays
+  genuinely useful on its own; AI sells acceleration and deeper analysis on
+  top of it.
+* AI report cost gets tied to the paying user and tracked per generation
+  through the provider-agnostic AI router, using the cheapest capable model.
+* **Never silently trigger a paid AI call.** Any AI-powered action must be
+  clearly labeled ("Generate with AI") and show the user when it's about to
+  use their AI allowance/credits — same spirit as Qualitative Analysis
+  today requiring an explicit button click, just with real billing behind
+  it once that exists.
 
 ## Cost Principle
 
