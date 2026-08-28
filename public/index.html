@@ -47,6 +47,8 @@
         <button type="button" id="newInvestigationBtn">New investigation</button>
         <button type="button" id="deleteInvestigationBtn" disabled>Delete investigation</button>
         <button type="button" id="toggleLibraryBtn" disabled aria-expanded="false" aria-controls="librarySection">My Library</button>
+        <button type="button" id="bulkImportBtn" disabled>Bulk import</button>
+        <button type="button" id="toggleReportBtn" disabled aria-expanded="false" aria-controls="reportSection">Document Report</button>
       </div>
 
       <form id="newInvestigationForm" class="workspace-form hidden">
@@ -82,6 +84,21 @@
         </div>
       </form>
 
+      <form id="bulkImportForm" class="workspace-form hidden">
+        <div>
+          <label for="bulkImportInput">Import files or a .zip export into this investigation</label>
+          <input id="bulkImportInput" type="file" multiple />
+        </div>
+        <div class="workspace-checkbox">
+          <label><input type="checkbox" id="preserveOriginalsCheckbox" /> Keep a local copy of original files in this browser</label>
+          <p class="hint">Off by default (Local Only): Chronium indexes file content and metadata but leaves originals wherever they already are. Turning this on stores a copy of each file's bytes in this browser.</p>
+        </div>
+        <div class="workspace-form-actions">
+          <button type="submit">Import</button>
+        </div>
+        <div id="bulkImportProgress" class="hint hidden" aria-live="polite"></div>
+      </form>
+
       <div id="workspaceStatus" class="status hidden" aria-live="polite"></div>
 
       <section id="librarySection" class="results hidden">
@@ -89,6 +106,14 @@
           <div><p class="eyebrow">MY LIBRARY</p><h2 id="libraryTitle">Saved records</h2></div>
         </div>
         <div id="libraryResults" class="cards"></div>
+      </section>
+
+      <section id="reportSection" class="results hidden">
+        <div class="results-head">
+          <div><p class="eyebrow">DOCUMENT REPORT</p><h2>Ingested documents</h2></div>
+        </div>
+        <div id="reportSummary" class="coverage"></div>
+        <div id="reportList" class="report-table"></div>
       </section>
     </section>
 

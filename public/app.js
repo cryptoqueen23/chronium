@@ -1,8 +1,9 @@
 import {
   listInvestigations, createInvestigation, deleteInvestigation,
   saveRecordToInvestigation, removeRecordFromInvestigation, listInvestigationRecords,
-  getSavedCanonicalKeys, searchLibrary, addUserUrl
+  getSavedCanonicalKeys, searchLibrary, addUserUrl, listIngestionBatches, getBlob
 } from './db.js';
+import { ingestFiles, ingestZip } from './ingest/pipeline.js';
 
 const form = document.querySelector('#searchForm');
 const input = document.querySelector('#query');
@@ -24,6 +25,15 @@ const librarySection = document.querySelector('#librarySection');
 const libraryList = document.querySelector('#libraryResults');
 const addUrlForm = document.querySelector('#addUrlForm');
 const workspaceStatus = document.querySelector('#workspaceStatus');
+const bulkImportBtn = document.querySelector('#bulkImportBtn');
+const bulkImportForm = document.querySelector('#bulkImportForm');
+const bulkImportInput = document.querySelector('#bulkImportInput');
+const preserveOriginalsCheckbox = document.querySelector('#preserveOriginalsCheckbox');
+const bulkImportProgress = document.querySelector('#bulkImportProgress');
+const toggleReportBtn = document.querySelector('#toggleReportBtn');
+const reportSection = document.querySelector('#reportSection');
+const reportSummary = document.querySelector('#reportSummary');
+const reportList = document.querySelector('#reportList');
 
 let current = [];
 let activeInvestigationId = localStorage.getItem('chronium.activeInvestigation') || '';
@@ -85,7 +95,12 @@ function card(x, mode) {
     : activeInvestigationId
       ? `<button type="button" class="mini save-btn" data-key="${attr(key)}" ${isSaved ? 'disabled' : ''}>${isSaved ? 'Saved' : 'Save'}</button>`
       : `<button type="button" class="mini" disabled title="Select or create an investigation first">Save</button>`;
-  return `<article class="card"><div class="when"><strong>${esc(year)}</strong>${esc(date)}</div><div><h3>${esc(x.title||x.originalUrl||'Archived result')}</h3><div class="url">${esc(x.originalUrl||'')}</div>${x.snippet?`<p class="snippet">${esc(x.snippet).slice(0,450)}</p>`:''}<div class="tags"><span class="tag ${kindClass(x.sourceKind)}">${esc(kindLabel(x.sourceKind))}</span><span class="tag">${esc(x.source)}</span><span class="tag">${esc(x.matchType||'archive')}</span>${x.mime?`<span class="tag">${esc(x.mime)}</span>`:''}${x.language?`<span class="tag">${esc(x.language)}</span>`:''}</div></div><div class="actions">${x.archiveUrl?`<a class="primary" target="_blank" rel="noopener" href="${attr(x.archiveUrl)}">View source</a>`:''}${x.originalUrl?`<a target="_blank" rel="noopener" href="${attr(asUrl(x.originalUrl))}">Live URL</a>`:''}${action}</div></article>`;
+  const previewAction = x.sourceType === 'bulk-document'
+    ? (x.storageMode === 'local-copy'
+        ? `<button type="button" class="mini preview-btn" data-hash="${attr(x.fileHash)}" data-mime="${attr(x.mime)}">Preview original</button>`
+        : `<span class="hint">Not stored by Chronium — original at: ${esc(x.filePath || x.title)}</span>`)
+    : '';
+  return `<article class="card"><div class="when"><strong>${esc(year)}</strong>${esc(date)}</div><div><h3>${esc(x.title||x.originalUrl||'Archived result')}</h3>${x.originalUrl?`<div class="url">${esc(x.originalUrl)}</div>`:''}${x.sourceId?`<div class="url">${esc(x.sourceId)}</div>`:''}${x.snippet?`<p class="snippet">${esc(x.snippet).slice(0,450)}</p>`:''}${previewAction}<div class="tags"><span class="tag ${kindClass(x.sourceKind)}">${esc(kindLabel(x.sourceKind))}</span><span class="tag">${esc(x.source)}</span><span class="tag">${esc(x.matchType||'archive')}</span>${x.mime?`<span class="tag">${esc(x.mime)}</span>`:''}${x.language?`<span class="tag">${esc(x.language)}</span>`:''}</div></div><div class="actions">${x.archiveUrl?`<a class="primary" target="_blank" rel="noopener" href="${attr(x.archiveUrl)}">View source</a>`:''}${x.originalUrl?`<a target="_blank" rel="noopener" href="${attr(asUrl(x.originalUrl))}">Live URL</a>`:''}${action}</div></article>`;
 }
 function bucket(m=''){m=String(m).toLowerCase();if(m.includes('pdf'))return'PDF';if(m.startsWith('image/'))return'Image';if(m.includes('html'))return'Webpage';if(m.includes('audio'))return'Audio';if(m.includes('video'))return'Video';return m?'Other':'Unknown'}
 function setStatus(msg,bad=false){statusBox.textContent=msg;statusBox.classList.remove('hidden');statusBox.style.color=bad?'#ff8a8a':''}
@@ -104,6 +119,15 @@ list.addEventListener('click', async (e) => {
   savedKeys.add(btn.dataset.key);
   setWorkspaceStatus(`Saved "${item.title || item.originalUrl}" to your investigation.`);
   render();
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.preview-btn');
+  if (!btn) return;
+  const row = await getBlob(btn.dataset.hash);
+  if (!row) { setWorkspaceStatus('Original not found in this browser (was it imported with "keep a local copy" off?).', true); return; }
+  const url = URL.createObjectURL(row.blob);
+  window.open(url, '_blank', 'noopener');
 });
 
 libraryList.addEventListener('click', async (e) => {
@@ -131,9 +155,14 @@ async function setActiveInvestigation(id) {
   localStorage.setItem('chronium.activeInvestigation', id);
   deleteInvestigationBtn.disabled = !id;
   toggleLibraryBtn.disabled = !id;
+  bulkImportBtn.disabled = !id;
+  toggleReportBtn.disabled = !id;
   addUrlForm.classList.toggle('hidden', !id);
+  bulkImportForm.classList.add('hidden');
   librarySection.classList.add('hidden');
+  reportSection.classList.add('hidden');
   toggleLibraryBtn.setAttribute('aria-expanded', 'false');
+  toggleReportBtn.setAttribute('aria-expanded', 'false');
   savedKeys = id ? await getSavedCanonicalKeys(id) : new Set();
   render();
 }
@@ -186,6 +215,86 @@ toggleLibraryBtn.addEventListener('click', async () => {
   librarySection.classList.toggle('hidden', !willOpen);
   toggleLibraryBtn.setAttribute('aria-expanded', String(willOpen));
 });
+
+bulkImportBtn.addEventListener('click', () => {
+  bulkImportForm.classList.toggle('hidden');
+});
+
+bulkImportForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!activeInvestigationId) return;
+  const files = bulkImportInput.files;
+  if (!files || !files.length) return;
+  const preserveOriginals = preserveOriginalsCheckbox.checked;
+
+  bulkImportProgress.classList.remove('hidden');
+  bulkImportProgress.textContent = 'Starting import…';
+  const onProgress = (p) => {
+    bulkImportProgress.textContent = p.status === 'error'
+      ? `Processed ${p.processed} files — error on "${p.current}": ${p.error}`
+      : `Processed ${p.processed} files (${formatBytes(p.byteTotal)}) — current: ${p.current}`;
+  };
+
+  try {
+    const isSingleZip = files.length === 1 && /\.zip$/i.test(files[0].name);
+    const batch = isSingleZip
+      ? await ingestZip(files[0], activeInvestigationId, onProgress, { preserveOriginals })
+      : await ingestFiles(files, activeInvestigationId, onProgress, { preserveOriginals });
+
+    savedKeys = await getSavedCanonicalKeys(activeInvestigationId);
+    bulkImportForm.reset();
+    bulkImportProgress.classList.add('hidden');
+    setWorkspaceStatus(`Imported ${batch.fileCount} file${batch.fileCount === 1 ? '' : 's'} (${formatBytes(batch.byteTotal)}). ${batch.skipped.length} unrecognized, ${batch.errors.length} errors.`);
+    if (!librarySection.classList.contains('hidden')) await renderLibrary();
+    if (!reportSection.classList.contains('hidden')) await renderReport();
+  } catch (err) {
+    bulkImportProgress.textContent = `Import failed: ${err.message}`;
+  }
+});
+
+toggleReportBtn.addEventListener('click', async () => {
+  const willOpen = reportSection.classList.contains('hidden');
+  if (willOpen) await renderReport();
+  reportSection.classList.toggle('hidden', !willOpen);
+  toggleReportBtn.setAttribute('aria-expanded', String(willOpen));
+});
+
+function formatBytes(n) {
+  if (!n) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0; let v = n;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+async function renderReport() {
+  if (!activeInvestigationId) { reportSummary.innerHTML = ''; reportList.innerHTML = ''; return; }
+  const [batches, records] = await Promise.all([
+    listIngestionBatches(activeInvestigationId),
+    listInvestigationRecords(activeInvestigationId)
+  ]);
+  const docs = records.filter((r) => r.sourceType === 'bulk-document');
+  const duplicates = docs.filter((r) => r.isDuplicateOf).length;
+  const totalBytes = docs.reduce((n, r) => n + (r.fileSize || 0), 0);
+  const skippedTotal = batches.reduce((n, b) => n + (b.skipped?.length || 0), 0);
+  const errorTotal = batches.reduce((n, b) => n + (b.errors?.length || 0), 0);
+
+  reportSummary.innerHTML = [
+    { label: 'Batches', value: batches.length },
+    { label: 'Files ingested', value: docs.length },
+    { label: 'Total size', value: formatBytes(totalBytes) },
+    { label: 'Unrecognized types', value: skippedTotal },
+    { label: 'Errors', value: errorTotal }
+  ].map((s) => `<div class="source"><strong>${esc(String(s.value))}</strong><p>${esc(s.label)}</p></div>`).join('');
+
+  reportList.innerHTML = docs.length ? `<table><thead><tr><th>Source ID</th><th>Name</th><th>Type</th><th>Size</th><th>Hash</th><th>Snippet</th><th>Original</th></tr></thead><tbody>${
+    docs.map((r) => `<tr><td>${esc(r.sourceId || '')}</td><td>${esc(r.title || '')}</td><td>${esc(r.mime || '')}</td><td>${esc(formatBytes(r.fileSize))}</td><td title="${attr(r.fileHash || '')}">${esc((r.fileHash || '').slice(0, 10))}…</td><td>${esc((r.snippet || '').slice(0, 120))}</td><td>${
+      r.storageMode === 'local-copy'
+        ? `<button type="button" class="mini preview-btn" data-hash="${attr(r.fileHash)}">Preview</button>`
+        : `<span class="hint">Not stored — ${esc(r.filePath || '')}</span>`
+    }</td></tr>`).join('')
+  }</tbody></table>` : '<p class="status">No documents ingested into this investigation yet.</p>';
+}
 
 addUrlForm.addEventListener('submit', async (e) => {
   e.preventDefault();

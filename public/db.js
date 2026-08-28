@@ -1,8 +1,10 @@
 // Local-first investigation workspace storage. IndexedDB, no dependencies.
-// Stores: investigations, records (deduped evidence), investigationRecords (join).
+// Stores: investigations, records (deduped evidence/sources), investigationRecords
+// (join), blobs (original evidence bytes, deduped by content hash),
+// ingestionBatches (one row per bulk import), meta (small counters).
 
 const DB_NAME = 'chronium';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 let dbPromise = null;
 
 function openDb() {
@@ -23,6 +25,16 @@ function openDb() {
         links.createIndex('investigationId', 'investigationId', { unique: false });
         links.createIndex('recordId', 'recordId', { unique: false });
         links.createIndex('byPair', ['investigationId', 'recordId'], { unique: true });
+      }
+      if (!db.objectStoreNames.contains('blobs')) {
+        db.createObjectStore('blobs', { keyPath: 'hash' });
+      }
+      if (!db.objectStoreNames.contains('ingestionBatches')) {
+        const batches = db.createObjectStore('ingestionBatches', { keyPath: 'id' });
+        batches.createIndex('investigationId', 'investigationId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('meta')) {
+        db.createObjectStore('meta', { keyPath: 'key' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -136,6 +148,86 @@ export async function searchLibrary(query, limit = 25) {
     return terms.every((term) => haystack.includes(term));
   });
   return matches.slice(0, limit).map((r) => ({ ...r, sourceKind: 'personal-library', matchType: 'personal-library' }));
+}
+
+export async function updateRecord(recordId, patch) {
+  const db = await openDb();
+  return tx(db, ['records'], 'readwrite', async (t) => {
+    const store = t.objectStore('records');
+    const existing = await reqToPromise(store.get(recordId));
+    if (!existing) return null;
+    const updated = { ...existing, ...patch };
+    await reqToPromise(store.put(updated));
+    return updated;
+  });
+}
+
+export async function getRecordByCanonicalKey(canonicalKey) {
+  const db = await openDb();
+  return tx(db, ['records'], 'readonly', (t) =>
+    reqToPromise(t.objectStore('records').index('canonicalKey').get(canonicalKey))
+  );
+}
+
+// Human-readable Source ID per docs/RESEARCH_METHOD.md (CHR-000184 style).
+// A small counter in `meta`, incremented inside its own transaction.
+export async function getNextSourceId() {
+  const db = await openDb();
+  return tx(db, ['meta'], 'readwrite', async (t) => {
+    const store = t.objectStore('meta');
+    const row = await reqToPromise(store.get('sourceIdCounter'));
+    const next = (row?.value || 0) + 1;
+    await reqToPromise(store.put({ key: 'sourceIdCounter', value: next }));
+    return `CHR-${String(next).padStart(6, '0')}`;
+  });
+}
+
+// Original-evidence preservation, deduped globally by content hash. Returns
+// {isNew} so callers (the ingestion pipeline) can report duplicate counts
+// without guessing from the record layer.
+export async function saveBlob({ hash, blob, mimeType, size }) {
+  const db = await openDb();
+  return tx(db, ['blobs'], 'readwrite', async (t) => {
+    const store = t.objectStore('blobs');
+    const existing = await reqToPromise(store.get(hash));
+    if (existing) return { isNew: false };
+    await reqToPromise(store.add({ hash, blob, mimeType, size, firstSeenAt: new Date().toISOString() }));
+    return { isNew: true };
+  });
+}
+
+export async function getBlob(hash) {
+  const db = await openDb();
+  return tx(db, ['blobs'], 'readonly', (t) => reqToPromise(t.objectStore('blobs').get(hash)));
+}
+
+export async function createIngestionBatch({ investigationId, label }) {
+  const db = await openDb();
+  const batch = {
+    id: genId('batch'), investigationId, label, createdAt: new Date().toISOString(),
+    completedAt: null, fileCount: 0, byteTotal: 0, skipped: [], errors: []
+  };
+  await tx(db, ['ingestionBatches'], 'readwrite', (t) => t.objectStore('ingestionBatches').add(batch));
+  return batch;
+}
+
+export async function updateIngestionBatch(batchId, patch) {
+  const db = await openDb();
+  return tx(db, ['ingestionBatches'], 'readwrite', async (t) => {
+    const store = t.objectStore('ingestionBatches');
+    const batch = await reqToPromise(store.get(batchId));
+    if (!batch) return null;
+    const updated = { ...batch, ...patch };
+    await reqToPromise(store.put(updated));
+    return updated;
+  });
+}
+
+export async function listIngestionBatches(investigationId) {
+  const db = await openDb();
+  return tx(db, ['ingestionBatches'], 'readonly', (t) =>
+    reqToPromise(t.objectStore('ingestionBatches').index('investigationId').getAll(investigationId))
+  ).then((rows) => rows.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
 }
 
 export async function addUserUrl(investigationId, { url, title, note }) {

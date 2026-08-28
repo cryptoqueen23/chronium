@@ -163,6 +163,50 @@ search results or AI summaries.** This is the concrete mechanism behind "never
 lose the receipt" once reporting exists: a report can always be walked backward,
 claim → evidence item → source.
 
+## Workspace Navigation (illustrative)
+
+A later sketch of how the investigation tree could be organized in the UI —
+directional, not yet built beyond Sources/My Files/Bibliography-as-records:
+
+```text
+CHRONIUM MIND
+Research Intelligence Workspace
+
+[ New Investigation ]
+
+Research Question:
+[ Where did Copperas Cove road funding go since 2016? ]
+
+Research Method
+[ Quantitative ] [ Qualitative ] [ Mixed Methods ]
+
+INVESTIGATION
+├── Research Outline
+├── Sources
+│   ├── My Files
+│   ├── Current Web
+│   ├── Historical Web
+│   │   ├── Arquivo.pt
+│   │   ├── Wayback
+│   │   └── Common Crawl
+│   └── Datasets / APIs
+│
+├── Bibliography
+├── Evidence
+├── Quantitative Analysis
+├── Qualitative Analysis
+├── Timeline
+├── Connections
+├── Contradictions
+├── Research Gaps
+├── Claims
+└── Report
+```
+
+Today's Investigation Workspace covers `Sources → My Files` (bulk-ingested
+documents) and the equivalent of `Current Web`/`Historical Web` (the federated
+search merge). The rest of the tree is the target shape, not yet built.
+
 ## Target Source Record Shape
 
 A worked example of what a fully-populated source record should look like once the

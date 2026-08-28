@@ -129,6 +129,33 @@ Division of labor:
 * the browser does local processing (unzip, hash, extract, index) where practical, so cost stays near zero regardless of production size
 * Cloudflare is reserved for the owned intelligence layer — the parts only Chronium can provide, not general-purpose storage or compute
 
+## Storage Modes
+
+**User-owned files are local-first and must not be uploaded to Chronium storage by
+default.** Separate Evidence Metadata/Index (hash, extracted text, provenance —
+always kept, always small) from Evidence Bytes (the original file — kept only
+when explicitly asked). Chronium locally hashes, extracts, indexes, and analyzes
+user files while leaving originals on the user's device whenever practical.
+
+Three eventual storage modes for evidence bytes:
+
+- **Local Only (default)** — Chronium indexes; the original stays wherever the
+  user already had it. No copy enters Chronium storage unless the user opts in.
+- **Bring Your Own Storage** — the user's own cloud (their S3/Drive/etc).
+- **Chronium Cloud Storage (paid)** — Chronium hosts the bytes (R2).
+
+Public evidence already reliably hosted elsewhere (Wayback, Arquivo.pt, Common
+Crawl, the original publisher) should normally be **referenced/indexed, not
+duplicated** — already true of the `ArchiveProvider` connectors, which never copy
+archive content. Any cloud-preserved public evidence must be content-hash
+deduplicated (the `ArchiveProvider.preserve()` seam is already hash-addressable
+in spirit).
+
+**Do not architect IndexedDB as the permanent storage location for arbitrarily
+large source collections.** It's fine as a small local cache/fallback for bytes a
+user explicitly asks Chronium to keep, never as the assumed home for a bulk
+production's original files.
+
 ## Stack
 
 Bootstrap and low maintenance:
