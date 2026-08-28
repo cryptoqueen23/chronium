@@ -644,9 +644,16 @@ function isKnownArchiveHost(u) {
 // wrapper's own nested <iframe> points at. Only rewrites URLs that already
 // match the exact unmodified pattern, so it's a no-op (and never
 // double-applies) for anything else, including an already-modified URL.
+// The wrapper-frameset problem is HTML-specific: pywb only injects its
+// toolbar chrome around a replayed HTML page. A capture URL that's clearly
+// a non-HTML file (PDF, image, doc, spreadsheet, archive...) already
+// resolves straight to the raw bytes with no wrapper to strip, and
+// applying an "if_"/"mp_" modifier to it is unnecessary at best.
+const NON_HTML_EXT = /\.(pdf|docx?|xlsx?|csv|zip|jpg|jpeg|png|gif|webp|svg|json|xml|txt|mp3|mp4|wav)(\?|#|$)/i;
 function toDirectContentUrl(u) {
   try {
     const host = new URL(u).hostname.toLowerCase();
+    if (NON_HTML_EXT.test(u)) return u;
     if (host.endsWith("arquivo.pt") && /\/wayback\/\d{14}\//.test(u)) return u.replace(/(\/wayback\/\d{14})\//, "$1mp_/");
     if (host.endsWith("web.archive.org") && /\/web\/\d{14}\//.test(u)) return u.replace(/(\/web\/\d{14})\//, "$1if_/");
     return u;
