@@ -38,6 +38,8 @@
 .report-table th,.report-table td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;max-width:280px;overflow:hidden;text-overflow:ellipsis}
 .report-table th{color:var(--muted);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
 
+.brand-logo{height:40px;width:auto;display:block}
+
 .workspace-row .btn-primary{background:var(--accent);border-color:var(--accent);color:#1a1406;font-weight:800}
 .workspace-row .btn-primary:disabled{background:#0d1422;border-color:var(--line);color:var(--muted);font-weight:700}
 
