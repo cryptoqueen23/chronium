@@ -3,154 +3,357 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="description" content="Chronium Mind searches the historical web across independent archives." />
+  <meta name="description" content="Chronium Mind — search the historical web, run investigations, and build an evidence-backed research archive." />
   <title>Chronium Mind — Search the Internet Through Time</title>
   <link rel="icon" href="/assets/brand/chronium-mind-mascot.png" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+  <a class="skip-link" href="#mainContent">Skip to content</a>
+
+  <!-- Icon sprite: simple stroke-based line icons, referenced via <use>. -->
+  <svg hidden aria-hidden="true">
+    <symbol id="icon-menu" viewBox="0 0 20 20"><line x1="3" y1="5.5" x2="17" y2="5.5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="14.5" x2="17" y2="14.5"/></symbol>
+    <symbol id="icon-close" viewBox="0 0 20 20"><line x1="5" y1="5" x2="15" y2="15"/><line x1="15" y1="5" x2="5" y2="15"/></symbol>
+    <symbol id="icon-search" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5"/><line x1="16.5" y1="16.5" x2="12.6" y2="12.6"/></symbol>
+    <symbol id="icon-layers" viewBox="0 0 20 20"><polygon points="10,3 17,7 10,11 3,7"/><polyline points="3,11 10,15 17,11"/><polyline points="3,15 10,19 17,15"/></symbol>
+    <symbol id="icon-plus" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.25"/><line x1="10" y1="6.5" x2="10" y2="13.5"/><line x1="6.5" y1="10" x2="13.5" y2="10"/></symbol>
+    <symbol id="icon-upload" viewBox="0 0 20 20"><path d="M10 13V4"/><polyline points="6,8 10,4 14,8"/><path d="M3.5 14v2a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5v-2"/></symbol>
+    <symbol id="icon-bookmark" viewBox="0 0 20 20"><path d="M5.5 3.5h9a1 1 0 0 1 1 1V17l-5.5-3.5L4.5 17V4.5a1 1 0 0 1 1-1Z"/></symbol>
+    <symbol id="icon-clock" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.25"/><polyline points="10,5.75 10,10 13.25,12"/></symbol>
+    <symbol id="icon-list" viewBox="0 0 20 20"><line x1="7" y1="5.5" x2="17" y2="5.5"/><line x1="7" y1="10" x2="17" y2="10"/><line x1="7" y1="14.5" x2="17" y2="14.5"/><circle cx="3.3" cy="5.5" r="0.9"/><circle cx="3.3" cy="10" r="0.9"/><circle cx="3.3" cy="14.5" r="0.9"/></symbol>
+    <symbol id="icon-grid" viewBox="0 0 20 20"><rect x="3" y="3" width="6" height="6" rx="0.75"/><rect x="11" y="3" width="6" height="6" rx="0.75"/><rect x="3" y="11" width="6" height="6" rx="0.75"/><rect x="11" y="11" width="6" height="6" rx="0.75"/></symbol>
+    <symbol id="icon-file" viewBox="0 0 20 20"><path d="M6 2.5h6l4 4V17a0.9 0.9 0 0 1-0.9 0.9H6a0.9 0.9 0 0 1-.9-.9V3.4A0.9 0.9 0 0 1 6 2.5Z"/><polyline points="12,2.5 12,6.5 16,6.5"/></symbol>
+    <symbol id="icon-flag" viewBox="0 0 20 20"><path d="M5 2.5v15"/><path d="M5 3.5h9l-2.5 3.25L14 10H5"/></symbol>
+    <symbol id="icon-bar" viewBox="0 0 20 20"><line x1="3" y1="17" x2="17" y2="17"/><rect x="4.5" y="11" width="3" height="6"/><rect x="8.5" y="7" width="3" height="10"/><rect x="12.5" y="3.5" width="3" height="13.5"/></symbol>
+    <symbol id="icon-timeline" viewBox="0 0 20 20"><line x1="2.5" y1="10" x2="17.5" y2="10"/><circle cx="5.5" cy="10" r="1.6"/><circle cx="10.5" cy="10" r="1.6"/><circle cx="15" cy="10" r="1.6"/></symbol>
+    <symbol id="icon-gap" viewBox="0 0 20 20"><path d="M10 3 3 16.5h14L10 3Z"/><line x1="10" y1="8.5" x2="10" y2="12.2"/><circle cx="10" cy="14.3" r="0.6" style="fill:currentColor;stroke:none"/></symbol>
+    <symbol id="icon-quote" viewBox="0 0 20 20"><path d="M4 7.5h3.5V11c0 2-1 3.3-2.8 4"/><path d="M11 7.5h3.5V11c0 2-1 3.3-2.8 4"/></symbol>
+    <symbol id="icon-doc-check" viewBox="0 0 20 20"><path d="M6 2.5h6l4 4V17a0.9 0.9 0 0 1-0.9 0.9H6a0.9 0.9 0 0 1-.9-.9V3.4A0.9 0.9 0 0 1 6 2.5Z"/><polyline points="12,2.5 12,6.5 16,6.5"/><polyline points="7,11.5 9,13.5 13,9"/></symbol>
+    <symbol id="icon-gear" viewBox="0 0 20 20"><circle cx="10" cy="10" r="2.6"/><path d="M10 2.8v2M10 15.2v2M17.2 10h-2M4.8 10h-2M15.1 4.9l-1.4 1.4M6.3 13.7l-1.4 1.4M15.1 15.1l-1.4-1.4M6.3 6.3 4.9 4.9"/></symbol>
+    <symbol id="icon-kebab" viewBox="0 0 20 20"><circle cx="10" cy="4.5" r="1.4" style="fill:currentColor;stroke:none"/><circle cx="10" cy="10" r="1.4" style="fill:currentColor;stroke:none"/><circle cx="10" cy="15.5" r="1.4" style="fill:currentColor;stroke:none"/></symbol>
+    <symbol id="icon-chevron" viewBox="0 0 20 20"><polyline points="7,4 13,10 7,16"/></symbol>
+    <symbol id="icon-dragon-outline" viewBox="0 0 20 20"><path d="M6 15c0-4 2-8 5-9 2 0 3 1.5 3 3-2 0-4 1-4 3 1 0 2 .5 2 1.5S11 15 9.5 15c-1.5 2-3.5 2.5-5 1Z"/><circle cx="9.7" cy="8" r="0.6" style="fill:currentColor;stroke:none"/></symbol>
+  </svg>
+
+  <!-- ============ NAV: persistent sidebar (desktop) / off-canvas drawer (mobile) ============ -->
+  <div id="navScrim" class="nav-scrim hidden"></div>
+  <nav id="navDrawer" class="nav-drawer hidden" aria-label="Main navigation">
+    <div class="nav-drawer-head">
+      <a class="nav-brand" href="#/" data-route="/"><span class="nav-brand-mark">CM</span><span class="nav-brand-text">Chronium<em>Mind</em></span></a>
+      <button type="button" id="navCloseBtn" class="icon-btn nav-close-btn" aria-label="Close navigation"><svg width="20" height="20"><use href="#icon-close"/></svg></button>
+    </div>
+
+    <div class="nav-scroll">
+      <a class="nav-link nav-link-primary" href="#/" data-route="/"><svg class="nav-icon" width="18" height="18"><use href="#icon-search"/></svg>Home</a>
+
+      <div class="nav-group">
+        <p class="nav-group-title">Research</p>
+        <a class="nav-link" href="#/investigations" data-route="/investigations"><svg class="nav-icon" width="18" height="18"><use href="#icon-layers"/></svg>Investigations</a>
+        <button type="button" class="nav-link" data-action="new-investigation"><svg class="nav-icon" width="18" height="18"><use href="#icon-plus"/></svg>New Investigation</button>
+        <button type="button" class="nav-link" data-action="import-research"><svg class="nav-icon" width="18" height="18"><use href="#icon-upload"/></svg>Import Research</button>
+        <a class="nav-link" href="#/library" data-route="/library"><svg class="nav-icon" width="18" height="18"><use href="#icon-bookmark"/></svg>My Library</a>
+      </div>
+
+      <div class="nav-group">
+        <p class="nav-group-title">Tools</p>
+        <button type="button" class="nav-link" data-action="research-search"><svg class="nav-icon" width="18" height="18"><use href="#icon-search"/></svg>Research Search</button>
+        <button type="button" class="nav-link" data-action="historical-web"><svg class="nav-icon" width="18" height="18"><use href="#icon-clock"/></svg>Historical Web</button>
+        <a class="nav-link" href="#/bibliography" data-route="/bibliography"><svg class="nav-icon" width="18" height="18"><use href="#icon-list"/></svg>Bibliography</a>
+      </div>
+
+      <div class="nav-group" id="navWorkspaceGroup" hidden>
+        <p class="nav-group-title" id="navWorkspaceTitle">Workspace</p>
+        <a class="nav-link" href="#/workspace/overview" data-route="/workspace/overview"><svg class="nav-icon" width="18" height="18"><use href="#icon-grid"/></svg>Overview</a>
+        <a class="nav-link" href="#/workspace/outline" data-route="/workspace/outline"><svg class="nav-icon" width="18" height="18"><use href="#icon-list"/></svg>Outline</a>
+        <a class="nav-link" href="#/workspace/sources" data-route="/workspace/sources"><svg class="nav-icon" width="18" height="18"><use href="#icon-file"/></svg>Sources</a>
+        <a class="nav-link" href="#/workspace/evidence" data-route="/workspace/evidence"><svg class="nav-icon" width="18" height="18"><use href="#icon-flag"/></svg>Evidence</a>
+        <a class="nav-link" href="#/workspace/analysis" data-route="/workspace/analysis"><svg class="nav-icon" width="18" height="18"><use href="#icon-bar"/></svg>Analysis</a>
+        <a class="nav-link" href="#/workspace/timeline" data-route="/workspace/timeline"><svg class="nav-icon" width="18" height="18"><use href="#icon-timeline"/></svg>Timeline</a>
+        <a class="nav-link" href="#/workspace/gaps" data-route="/workspace/gaps"><svg class="nav-icon" width="18" height="18"><use href="#icon-gap"/></svg>Gaps</a>
+        <a class="nav-link" href="#/workspace/claims" data-route="/workspace/claims"><svg class="nav-icon" width="18" height="18"><use href="#icon-quote"/></svg>Claims</a>
+        <a class="nav-link" href="#/workspace/report" data-route="/workspace/report"><svg class="nav-icon" width="18" height="18"><use href="#icon-doc-check"/></svg>Report</a>
+      </div>
+    </div>
+
+    <div class="nav-drawer-foot">
+      <a class="nav-link" href="#/settings" data-route="/settings"><svg class="nav-icon" width="18" height="18"><use href="#icon-gear"/></svg>Settings &amp; Help</a>
+    </div>
+  </nav>
+
+  <!-- ============ Mobile-only top bar ============ -->
   <header class="topbar">
-    <a class="brand" href="/" aria-label="Chronium Mind home"><img src="/assets/brand/chronium-mind-wordmark.png" alt="Chronium Mind" class="brand-logo" /></a>
-    <span class="version">MVP 0.2</span>
+    <button type="button" id="navOpenBtn" class="icon-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="navDrawer"><svg width="22" height="22"><use href="#icon-menu"/></svg></button>
+    <a class="topbar-brand" href="#/" data-route="/">Chronium Mind</a>
+    <span class="topbar-spacer" aria-hidden="true"></span>
   </header>
 
-  <main>
-    <section class="hero">
-      <p class="eyebrow">HISTORICAL WEB RESEARCH</p>
-      <h1>Search the Internet <span>through time.</span></h1>
-      <p class="lede">One search layer across independent web archives. Find historical pages, trace versions, and follow the evidence back to its source.</p>
+  <div id="mainContent" class="app-shell" tabindex="-1">
 
-      <form id="searchForm" class="search" role="search">
-        <label class="sr-only" for="query">Search historical web</label>
-        <input id="query" name="q" autocomplete="off" placeholder="Try: copperascovetx.gov  or  public infrastructure" maxlength="300" />
-        <button type="submit">Search history</button>
-      </form>
-      <div class="examples">
-        <button data-q="copperascovetx.gov">Copperas Cove history</button>
-        <button data-q="cair.com">cair.com</button>
-        <button data-q="whitehouse.gov">whitehouse.gov</button>
+    <!-- ============ HOME ============ -->
+    <section id="view-home" class="view" data-view="home" tabindex="-1">
+      <div class="hero">
+        <img class="hero-logo" src="/assets/brand/chronium-mind-wordmark.png" alt="Chronium Mind — Research Everything. Lose Nothing." />
+        <h1 class="sr-only">Chronium Mind</h1>
+        <p class="lede">Search the historical web, run investigations, and build an evidence-backed research archive.</p>
+
+        <form id="searchForm" class="search" role="search">
+          <label class="sr-only" for="query">Search historical web</label>
+          <svg class="search-icon" width="18" height="18" aria-hidden="true"><use href="#icon-search"/></svg>
+          <input id="query" name="q" autocomplete="off" placeholder="Try: copperascovetx.gov  or  public infrastructure" maxlength="300" />
+          <button type="submit">Search</button>
+        </form>
+        <div class="examples">
+          <span class="examples-label">Try:</span>
+          <button type="button" data-q="copperascovetx.gov">Copperas Cove history</button>
+          <button type="button" data-q="cair.com">cair.com</button>
+          <button type="button" data-q="whitehouse.gov">whitehouse.gov</button>
+        </div>
+        <p class="hint">Searches full-text history, URL &amp; version history, your investigation corpus, and your saved research. Which sources answered each query — and their names — are shown with every result.</p>
+
+        <div class="hero-actions">
+          <button type="button" class="btn btn-primary" data-action="new-investigation"><svg width="16" height="16"><use href="#icon-plus"/></svg>New Investigation</button>
+          <button type="button" class="btn" data-action="import-research"><svg width="16" height="16"><use href="#icon-upload"/></svg>Import Research</button>
+        </div>
       </div>
 
-      <div class="heads" aria-label="What Chronium searches">
-        <span><i class="dot live"></i>Full-text history</span>
-        <span><i class="dot live"></i>URL &amp; version history</span>
-        <span><i class="dot live"></i>Your investigation corpus</span>
-        <span><i class="dot live"></i>Your saved research</span>
-      </div>
-      <p class="hint">Exactly which sources answered each search — and their names — are shown with every result, for provenance.</p>
+      <section id="status" class="status hidden" aria-live="polite"></section>
+
+      <section id="resultsSection" class="results hidden">
+        <div class="results-head">
+          <div><p class="eyebrow">RESULTS</p><h2 id="resultsTitle">Historical evidence</h2></div>
+          <div class="filters">
+            <label class="sr-only" for="sourceFilter">Filter by source</label>
+            <select id="sourceFilter"><option value="all">All sources</option></select>
+            <label class="sr-only" for="typeFilter">Filter by content type</label>
+            <select id="typeFilter"><option value="all">All content</option></select>
+          </div>
+        </div>
+        <div id="coverage" class="coverage" aria-label="Search coverage by source"></div>
+        <div id="results" class="result-list"></div>
+      </section>
+
+      <section class="recent-investigations" aria-labelledby="recentInvestigationsTitle">
+        <div class="section-head">
+          <h2 id="recentInvestigationsTitle">Recent investigations</h2>
+          <a class="link-more" href="#/investigations" data-route="/investigations">View all</a>
+        </div>
+        <div id="recentInvestigationsList" class="investigation-grid"></div>
+      </section>
+
+      <section class="principles">
+        <div><strong>Source first.</strong><p>Every result points back to the archive that holds it.</p></div>
+        <div><strong>No fake coverage.</strong><p>Chronium tells you which heads actually searched your query.</p></div>
+        <div><strong>Low storage.</strong><p>The archives keep the heavy data. Chronium organizes the map.</p></div>
+      </section>
     </section>
 
-    <section id="workspace" class="workspace" aria-label="Research workspace">
-      <div class="workspace-row">
-        <label class="sr-only" for="investigationSelect">Active investigation</label>
-        <select id="investigationSelect">
-          <option value="">No investigation selected</option>
-        </select>
-        <button type="button" id="newInvestigationBtn" class="btn-primary">+ New investigation</button>
-        <button type="button" id="bulkImportBtn" class="btn-primary" disabled>⇧ Import Research</button>
-        <button type="button" id="deleteInvestigationBtn" disabled>Delete investigation</button>
-        <button type="button" id="toggleLibraryBtn" disabled aria-expanded="false" aria-controls="librarySection">My Library</button>
+    <!-- ============ INVESTIGATIONS (all) ============ -->
+    <section id="view-investigations" class="view hidden" data-view="investigations" tabindex="-1">
+      <div class="view-head">
+        <h1>Investigations</h1>
+        <button type="button" class="btn btn-primary" data-action="new-investigation"><svg width="16" height="16"><use href="#icon-plus"/></svg>New Investigation</button>
+      </div>
+      <div id="allInvestigationsList" class="investigation-grid"></div>
+    </section>
+
+    <!-- ============ MY LIBRARY ============ -->
+    <section id="view-library" class="view hidden" data-view="library" tabindex="-1">
+      <div class="view-head">
+        <div><h1>My Library</h1><p id="libraryContextLine" class="view-subtitle"></p></div>
+      </div>
+      <div id="libraryEmptyState" class="empty-state hidden"></div>
+      <div id="libraryResults" class="result-list"></div>
+    </section>
+
+    <!-- ============ BIBLIOGRAPHY (coming soon) ============ -->
+    <section id="view-bibliography" class="view hidden" data-view="bibliography" tabindex="-1">
+      <div class="view-head"><h1>Bibliography</h1></div>
+      <div class="coming-soon">
+        <svg class="coming-soon-mascot" width="40" height="40" aria-hidden="true"><use href="#icon-dragon-outline"/></svg>
+        <div>
+          <h2>Not built yet</h2>
+          <p>A detailed bibliography view — publisher, source type, authority, dates, pages cited, and preservation status per source — is planned per <code>docs/RESEARCH_METHOD.md</code>. Today, source records live under an investigation's <a href="#/workspace/sources" data-route="/workspace/sources">Sources</a> tab.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SETTINGS & HELP ============ -->
+    <section id="view-settings" class="view hidden" data-view="settings" tabindex="-1">
+      <div class="view-head"><h1>Settings &amp; Help</h1></div>
+
+      <div class="panel">
+        <h2>Active investigation</h2>
+        <p id="settingsActiveLine" class="view-subtitle"></p>
+        <button type="button" id="settingsClearActiveBtn" class="btn">Clear active investigation</button>
       </div>
 
-      <form id="newInvestigationForm" class="workspace-form hidden">
+      <div class="panel">
+        <h2>Local-first storage</h2>
+        <p>Chronium indexes what you import — file names, extracted text, hashes, provenance — in this browser's local database. Original file bytes stay on your device by default (<strong>Local Only</strong> mode). Checking "keep a local copy" when importing stores the original bytes in this browser too, so they can be previewed later, but nothing is uploaded to Chronium's servers.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Keyboard &amp; accessibility</h2>
+        <ul class="help-list">
+          <li>Open navigation: the menu button in the top bar (mobile), or the sidebar is always visible on wider screens.</li>
+          <li>Close any dialog or menu: <kbd>Esc</kbd></li>
+          <li>All controls are reachable by <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> with a visible focus ring.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ WORKSPACE (active investigation) ============ -->
+    <section id="view-workspace" class="view hidden" data-view="workspace" tabindex="-1">
+      <div id="workspaceEmptyState" class="empty-state hidden">
+        <svg class="empty-state-mascot" width="48" height="48" aria-hidden="true"><use href="#icon-dragon-outline"/></svg>
         <div>
+          <h2>No investigation open</h2>
+          <p>Open an existing investigation or start a new one to see its workspace.</p>
+          <div class="empty-state-actions">
+            <a class="btn" href="#/investigations" data-route="/investigations">Browse investigations</a>
+            <button type="button" class="btn btn-primary" data-action="new-investigation">New investigation</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="workspaceBody" class="hidden">
+        <div class="workspace-head">
+          <div>
+            <p class="eyebrow">INVESTIGATION</p>
+            <h1 id="workspaceTitle"></h1>
+            <p id="workspaceDescription" class="view-subtitle"></p>
+          </div>
+          <div class="workspace-head-actions">
+            <button type="button" class="btn btn-primary" data-action="import-research"><svg width="16" height="16"><use href="#icon-upload"/></svg>Add Research</button>
+            <div class="menu-wrap">
+              <button type="button" id="workspaceKebabBtn" class="icon-btn" aria-haspopup="true" aria-expanded="false" aria-controls="workspaceKebabMenu" aria-label="Investigation actions"><svg width="18" height="18"><use href="#icon-kebab"/></svg></button>
+              <ul id="workspaceKebabMenu" class="menu hidden" role="menu" aria-label="Investigation actions">
+                <li role="none"><button type="button" role="menuitem" class="menu-item menu-item-danger" data-action="delete-active-investigation">Delete investigation…</button></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-strip" role="tablist" aria-label="Investigation workspace sections" id="workspaceTabStrip"></div>
+
+        <div id="workspacePanel-overview" class="workspace-panel" role="tabpanel">
+          <div id="dashboardSummary" class="stat-grid"></div>
+          <form id="investigationSearchForm" class="search compact" role="search">
+            <label class="sr-only" for="investigationQuery">Search this investigation</label>
+            <svg class="search-icon" width="16" height="16" aria-hidden="true"><use href="#icon-search"/></svg>
+            <input id="investigationQuery" autocomplete="off" placeholder="Search this investigation…" />
+            <button type="submit">Search</button>
+          </form>
+          <div id="investigationSearchResults" class="result-list"></div>
+        </div>
+
+        <div id="workspacePanel-outline" class="workspace-panel hidden" role="tabpanel"></div>
+
+        <div id="workspacePanel-sources" class="workspace-panel hidden" role="tabpanel">
+          <div id="facetBar" class="tab-strip tab-strip-sub" role="tablist" aria-label="Source facets"></div>
+          <div id="reportList" class="report-table"></div>
+        </div>
+
+        <div id="workspacePanel-evidence" class="workspace-panel hidden" role="tabpanel"></div>
+        <div id="workspacePanel-analysis" class="workspace-panel hidden" role="tabpanel"></div>
+        <div id="workspacePanel-timeline" class="workspace-panel hidden" role="tabpanel"></div>
+        <div id="workspacePanel-gaps" class="workspace-panel hidden" role="tabpanel"></div>
+        <div id="workspacePanel-claims" class="workspace-panel hidden" role="tabpanel"></div>
+        <div id="workspacePanel-report" class="workspace-panel hidden" role="tabpanel"></div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer><span>Chronium Mind</span><span>Search what the Internet remembers.</span></footer>
+
+  <!-- ============ MODAL: New Investigation ============ -->
+  <div id="newInvestigationDialog" class="overlay hidden">
+    <div class="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="newInvestigationTitle">
+      <div class="dialog-head">
+        <h2 id="newInvestigationTitle">New investigation</h2>
+        <button type="button" class="icon-btn" data-dialog-close="newInvestigationDialog" aria-label="Close"><svg width="18" height="18"><use href="#icon-close"/></svg></button>
+      </div>
+      <form id="newInvestigationForm" class="dialog-form">
+        <div class="field">
           <label for="newInvestigationName">Investigation name</label>
           <input id="newInvestigationName" required maxlength="120" />
         </div>
-        <div>
+        <div class="field">
           <label for="newInvestigationDescription">Description (optional)</label>
           <input id="newInvestigationDescription" maxlength="300" />
         </div>
-        <div class="workspace-form-actions">
-          <button type="submit">Create</button>
-          <button type="button" id="cancelNewInvestigation">Cancel</button>
+        <div class="dialog-actions">
+          <button type="button" class="btn" data-dialog-close="newInvestigationDialog">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create investigation</button>
         </div>
       </form>
+    </div>
+  </div>
 
-      <form id="addUrlForm" class="workspace-form hidden">
-        <div>
-          <label for="addUrlInput">Add a URL to this investigation</label>
-          <input id="addUrlInput" type="url" required placeholder="https://example.gov/record" />
-        </div>
-        <div>
-          <label for="addUrlTitle">Title (optional)</label>
-          <input id="addUrlTitle" maxlength="200" />
-        </div>
-        <div>
-          <label for="addUrlNote">Note (optional)</label>
-          <input id="addUrlNote" maxlength="300" />
-        </div>
-        <div class="workspace-form-actions">
-          <button type="submit">Add to investigation</button>
-        </div>
-      </form>
-
-      <div id="workspaceStatus" class="status hidden" aria-live="polite"></div>
-
-      <!-- Persistent once an investigation is active - not behind a toggle. -->
-      <section id="importZone" class="import-zone hidden" aria-labelledby="importZoneTitle">
-        <div id="dropTarget" class="import-zone-inner">
-          <p class="eyebrow" id="importZoneTitle">IMPORT RESEARCH</p>
-          <h2>Drop your research here</h2>
-          <p class="import-formats">ZIP · PDF · CSV · XLSX · DOCX · TXT · EML</p>
-          <p class="hint">Drop files, folders, or a ZIP</p>
-          <div class="import-zone-actions">
-            <label class="btn-primary file-btn">Choose Files<input type="file" id="bulkImportFilesInput" multiple hidden /></label>
-            <label class="btn file-btn">Choose Folder<input type="file" id="bulkImportFolderInput" webkitdirectory hidden /></label>
-          </div>
-          <label class="import-zone-checkbox"><input type="checkbox" id="preserveOriginalsCheckbox" /> Keep a local copy of original files in this browser</label>
-          <p class="hint">Off by default (Local Only): originals stay on your device. Chronium indexes content and metadata, never uploads source bytes to Chronium cloud storage.</p>
-        </div>
-        <div id="bulkImportProgress" class="hint hidden" aria-live="polite"></div>
-      </section>
-
-      <section id="librarySection" class="results hidden">
-        <div class="results-head">
-          <div><p class="eyebrow">MY LIBRARY</p><h2 id="libraryTitle">Saved records</h2></div>
-        </div>
-        <div id="libraryResults" class="cards"></div>
-      </section>
-
-      <section id="dashboardSection" class="results hidden">
-        <div class="results-head">
-          <div><p class="eyebrow">INVESTIGATION CORPUS</p><h2>Import complete</h2></div>
-        </div>
-        <div id="dashboardSummary" class="coverage"></div>
-
-        <form id="investigationSearchForm" class="search compact" role="search">
-          <label class="sr-only" for="investigationQuery">Search this investigation</label>
-          <input id="investigationQuery" autocomplete="off" placeholder="Search this investigation…" />
-          <button type="submit">Search this investigation</button>
-        </form>
-        <div id="investigationSearchResults" class="cards"></div>
-
-        <div id="facetBar" class="facet-bar" role="tablist" aria-label="Corpus navigation"></div>
-        <div id="reportList" class="report-table"></div>
-      </section>
-    </section>
-
-    <section id="status" class="status hidden" aria-live="polite"></section>
-
-    <section id="resultsSection" class="results hidden">
-      <div class="results-head">
-        <div><p class="eyebrow">RESULTS</p><h2 id="resultsTitle">Historical evidence</h2></div>
-        <div class="filters">
-          <select id="sourceFilter" aria-label="Filter by source"><option value="all">All sources</option></select>
-          <select id="typeFilter" aria-label="Filter by content type"><option value="all">All content</option></select>
-        </div>
+  <!-- ============ MODAL: Add Research (consolidates URL + files/folder/ZIP) ============ -->
+  <div id="addResearchDialog" class="overlay hidden">
+    <div class="dialog-panel dialog-panel-wide" role="dialog" aria-modal="true" aria-labelledby="addResearchTitle">
+      <div class="dialog-head">
+        <h2 id="addResearchTitle">Add research</h2>
+        <button type="button" class="icon-btn" data-dialog-close="addResearchDialog" aria-label="Close"><svg width="18" height="18"><use href="#icon-close"/></svg></button>
       </div>
-      <div id="coverage" class="coverage"></div>
-      <div id="results" class="cards"></div>
-    </section>
+      <p id="addResearchTarget" class="view-subtitle dialog-context"></p>
 
-    <section class="principles">
-      <div><strong>Source first.</strong><p>Every result points back to the archive that holds it.</p></div>
-      <div><strong>No fake coverage.</strong><p>Chronium tells you which heads actually searched your query.</p></div>
-      <div><strong>Low storage.</strong><p>The archives keep the heavy data. Chronium organizes the map.</p></div>
-    </section>
-  </main>
+      <div class="dialog-body">
+        <form id="addUrlForm" class="dialog-form dialog-form-compact">
+          <p class="field-group-label">Add a URL</p>
+          <div class="field">
+            <label for="addUrlInput">Page URL</label>
+            <input id="addUrlInput" type="url" required placeholder="https://example.gov/record" />
+          </div>
+          <div class="field-row">
+            <div class="field"><label for="addUrlTitle">Title (optional)</label><input id="addUrlTitle" maxlength="200" /></div>
+            <div class="field"><label for="addUrlNote">Note (optional)</label><input id="addUrlNote" maxlength="300" /></div>
+          </div>
+          <div class="dialog-actions dialog-actions-inline">
+            <button type="submit" class="btn btn-primary">Add URL</button>
+          </div>
+        </form>
 
-  <footer><span>Chronium Mind</span><span>Search what the Internet remembers.</span></footer>
+        <div class="dialog-divider"><span>or upload files</span></div>
+
+        <section id="importZone" class="import-zone" aria-labelledby="importZoneTitle">
+          <div id="dropTarget" class="import-zone-inner">
+            <p class="eyebrow" id="importZoneTitle">DROP YOUR RESEARCH HERE</p>
+            <p class="import-formats">ZIP · PDF · CSV · XLSX · DOCX · TXT · EML</p>
+            <div class="import-zone-actions">
+              <label class="btn btn-primary file-btn">Choose Files<input type="file" id="bulkImportFilesInput" multiple hidden /></label>
+              <label class="btn file-btn">Choose Folder<input type="file" id="bulkImportFolderInput" webkitdirectory hidden /></label>
+            </div>
+            <label class="import-zone-checkbox"><input type="checkbox" id="preserveOriginalsCheckbox" /> Keep a local copy of original files in this browser</label>
+            <p class="hint">Off by default (Local Only): originals stay on your device. Chronium indexes content and metadata, never uploads source bytes to Chronium cloud storage.</p>
+          </div>
+          <div id="bulkImportProgress" class="hint hidden" aria-live="polite"></div>
+        </section>
+      </div>
+
+      <div id="addResearchStatus" class="status hidden" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <!-- ============ Generic confirm dialog (delete, etc.) ============ -->
+  <div id="confirmDialog" class="overlay hidden">
+    <div class="dialog-panel dialog-panel-narrow" role="alertdialog" aria-modal="true" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogMessage">
+      <div class="dialog-head">
+        <h2 id="confirmDialogTitle">Are you sure?</h2>
+      </div>
+      <p id="confirmDialogMessage" class="dialog-message"></p>
+      <div class="dialog-actions">
+        <button type="button" id="confirmDialogCancel" class="btn">Cancel</button>
+        <button type="button" id="confirmDialogConfirm" class="btn btn-danger">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
   <script type="module" src="/app.js"></script>
 </body>
 </html>

@@ -4,29 +4,41 @@ import {
   getSavedCanonicalKeys, searchLibrary, searchInvestigation, addUserUrl, listIngestionBatches, getBlob
 } from './db.js';
 import { ingestFiles, ingestZip } from './ingest/pipeline.js';
+import { openOverlay, openMenu, confirmDialog } from './ui.js';
+
+// ---------------------------------------------------------------------------
+// Element refs
+// ---------------------------------------------------------------------------
+const navScrim = document.querySelector('#navScrim');
+const navDrawer = document.querySelector('#navDrawer');
+const navOpenBtn = document.querySelector('#navOpenBtn');
+const navCloseBtn = document.querySelector('#navCloseBtn');
+const navWorkspaceGroup = document.querySelector('#navWorkspaceGroup');
+const navWorkspaceTitle = document.querySelector('#navWorkspaceTitle');
 
 const form = document.querySelector('#searchForm');
 const input = document.querySelector('#query');
 const statusBox = document.querySelector('#status');
-const section = document.querySelector('#resultsSection');
+const resultsSection = document.querySelector('#resultsSection');
 const list = document.querySelector('#results');
 const title = document.querySelector('#resultsTitle');
 const coverage = document.querySelector('#coverage');
 const sourceFilter = document.querySelector('#sourceFilter');
 const typeFilter = document.querySelector('#typeFilter');
 
-const investigationSelect = document.querySelector('#investigationSelect');
-const newInvestigationBtn = document.querySelector('#newInvestigationBtn');
-const newInvestigationForm = document.querySelector('#newInvestigationForm');
-const cancelNewInvestigation = document.querySelector('#cancelNewInvestigation');
-const deleteInvestigationBtn = document.querySelector('#deleteInvestigationBtn');
-const toggleLibraryBtn = document.querySelector('#toggleLibraryBtn');
-const librarySection = document.querySelector('#librarySection');
-const libraryList = document.querySelector('#libraryResults');
-const addUrlForm = document.querySelector('#addUrlForm');
-const workspaceStatus = document.querySelector('#workspaceStatus');
+const investigationSearchForm = document.querySelector('#investigationSearchForm');
+const investigationQuery = document.querySelector('#investigationQuery');
+const investigationSearchResults = document.querySelector('#investigationSearchResults');
 
-const bulkImportBtn = document.querySelector('#bulkImportBtn');
+const dashboardSummary = document.querySelector('#dashboardSummary');
+const facetBar = document.querySelector('#facetBar');
+const reportList = document.querySelector('#reportList');
+
+const newInvestigationForm = document.querySelector('#newInvestigationForm');
+const addUrlForm = document.querySelector('#addUrlForm');
+const addResearchStatus = document.querySelector('#addResearchStatus');
+const addResearchTarget = document.querySelector('#addResearchTarget');
+
 const importZone = document.querySelector('#importZone');
 const dropTarget = document.querySelector('#dropTarget');
 const bulkImportFilesInput = document.querySelector('#bulkImportFilesInput');
@@ -34,27 +46,253 @@ const bulkImportFolderInput = document.querySelector('#bulkImportFolderInput');
 const preserveOriginalsCheckbox = document.querySelector('#preserveOriginalsCheckbox');
 const bulkImportProgress = document.querySelector('#bulkImportProgress');
 
-const dashboardSection = document.querySelector('#dashboardSection');
-const dashboardSummary = document.querySelector('#dashboardSummary');
-const investigationSearchForm = document.querySelector('#investigationSearchForm');
-const investigationQuery = document.querySelector('#investigationQuery');
-const investigationSearchResults = document.querySelector('#investigationSearchResults');
-const facetBar = document.querySelector('#facetBar');
-const reportList = document.querySelector('#reportList');
+const toast = document.querySelector('#toast');
 
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
 let current = [];
 let activeInvestigationId = localStorage.getItem('chronium.activeInvestigation') || '';
 let savedKeys = new Set();
 let activeFacet = 'documents';
-let lastDashboardData = null; // { docs, batches } for the active investigation
+let lastDashboardData = null; // { docs, records, duplicateEntries, skipped, errors, typeCounts }
+let toastTimer = null;
+let closeNav = null;
+const activeCloses = {};
 
-document.querySelectorAll('[data-q]').forEach(btn => btn.addEventListener('click', () => { input.value = btn.dataset.q; form.requestSubmit(); }));
+const WORKSPACE_TABS = [
+  { id: 'overview', label: 'Overview', icon: 'icon-grid' },
+  { id: 'outline', label: 'Outline', icon: 'icon-list' },
+  { id: 'sources', label: 'Sources', icon: 'icon-file' },
+  { id: 'evidence', label: 'Evidence', icon: 'icon-flag' },
+  { id: 'analysis', label: 'Analysis', icon: 'icon-bar' },
+  { id: 'timeline', label: 'Timeline', icon: 'icon-timeline' },
+  { id: 'gaps', label: 'Gaps', icon: 'icon-gap' },
+  { id: 'claims', label: 'Claims', icon: 'icon-quote' },
+  { id: 'report', label: 'Report', icon: 'icon-doc-check' }
+];
+const DATA_DRIVEN_TABS = new Set(['overview', 'sources', 'timeline']);
+
+const COMING_SOON = {
+  outline: {
+    title: 'Research Outline',
+    body: 'Not built yet. Chronium will let you scope an investigation with a research question and a dynamic outline, then track evidence coverage against each lane (e.g. Budgets: 100%, Contracts: 40%) as you go.'
+  },
+  evidence: {
+    title: 'Evidence Items',
+    body: 'Not built yet. Individual paragraphs, table rows, or figures pulled from a Source that bear on your investigation will live here, each one linkable to a Claim.'
+  },
+  analysis: {
+    title: 'Quantitative & Qualitative Analysis',
+    body: 'Not built yet. Chronium will support three analysis modes over your evidence base: Quantitative (trends, totals, variances), Qualitative (themes, rationale, chronology), and Mixed-Method (cross-checking numbers against narrative records) — always with methodology and citations preserved.'
+  },
+  gaps: {
+    title: 'Research Gaps',
+    body: 'Not built yet. Chronium will surface a gap warning grounded in your outline’s coverage picture — e.g. "strong evidence for what was budgeted, insufficient evidence for actual project-level expenditures."'
+  },
+  claims: {
+    title: 'Claims',
+    body: 'Not built yet. A Claim is a specific factual assertion an Evidence Item supports or contradicts — the unit that findings and reports actually reason over, always traceable back to its source.'
+  },
+  report: {
+    title: 'Evidence-Backed Report',
+    body: 'Not built yet. Reports will be generated from your Claims, not directly from raw search results or AI summaries, so every finding can be walked backward: claim → evidence item → source.'
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Small utilities
+// ---------------------------------------------------------------------------
+function esc(s = '') { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function attr(s = '') { return esc(s); }
+function asUrl(u) { return /^https?:\/\//i.test(u) ? u : `https://${u}`; }
+function bucket(m = '') { m = String(m).toLowerCase(); if (m.includes('pdf')) return 'PDF'; if (m.startsWith('image/')) return 'Image'; if (m.includes('html')) return 'Webpage'; if (m.includes('audio')) return 'Audio'; if (m.includes('video')) return 'Video'; return m ? 'Other' : 'Unknown'; }
+function formatBytes(n) {
+  if (!n) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0; let v = n;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
+function formatDate(iso) {
+  const d = iso ? new Date(iso) : null;
+  return d && !isNaN(d) ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Unknown date';
+}
+function showToast(msg, bad = false) {
+  clearTimeout(toastTimer);
+  toast.textContent = msg;
+  toast.classList.remove('hidden');
+  toast.classList.toggle('toast-bad', bad);
+  toastTimer = setTimeout(() => toast.classList.add('hidden'), 4500);
+}
+function setStatus(msg, bad = false) { statusBox.textContent = msg; statusBox.classList.remove('hidden'); statusBox.classList.toggle('status-bad', bad); }
+function setAddResearchStatus(msg, bad = false) { addResearchStatus.textContent = msg; addResearchStatus.classList.remove('hidden'); addResearchStatus.classList.toggle('status-bad', bad); }
+
+function canonicalKeyOf(x) { return x.canonicalKey || x.originalUrl || x.archiveUrl || x.id; }
+function kindClass(k) { return k === 'investigation-corpus' ? 'kind-corpus' : k === 'personal-library' ? 'kind-library' : 'kind-connector'; }
+function kindLabel(k) { return k === 'investigation-corpus' ? 'Investigation corpus' : k === 'personal-library' ? 'My library' : 'Archive connector'; }
+
+function resultRow(x, mode) {
+  const d = x.captureDate ? new Date(x.captureDate) : null;
+  const year = d && !isNaN(d) ? d.getUTCFullYear() : 'Unknown';
+  const date = d && !isNaN(d) ? date_(d) : 'Capture date unavailable';
+  const key = canonicalKeyOf(x);
+  const isSaved = savedKeys.has(key);
+  const action = mode === 'library'
+    ? `<button type="button" class="remove-btn" data-record-id="${attr(x.id)}">Remove</button>`
+    : activeInvestigationId
+      ? `<button type="button" class="save-btn" data-key="${attr(key)}" ${isSaved ? 'disabled' : ''}>${isSaved ? 'Saved' : 'Save'}</button>`
+      : `<button type="button" disabled title="Select or create an investigation first">Save</button>`;
+  const previewAction = x.sourceType === 'bulk-document'
+    ? (x.storageMode === 'local-copy'
+        ? `<button type="button" class="preview-btn" data-hash="${attr(x.fileHash)}" data-mime="${attr(x.mime)}">Preview original</button>`
+        : `<span class="hint">Not stored by Chronium — original at: ${esc(x.filePath || x.title)}</span>`)
+    : '';
+  return `<article class="result-row"><div class="result-when"><strong>${esc(year)}</strong>${esc(date)}</div><div><h3>${esc(x.title || x.originalUrl || 'Archived result')}</h3>${x.originalUrl ? `<div class="result-url">${esc(x.originalUrl)}</div>` : ''}${x.sourceId ? `<div class="result-url">${esc(x.sourceId)}</div>` : ''}${x.snippet ? `<p class="result-snippet">${esc(x.snippet).slice(0, 450)}</p>` : ''}${previewAction}<div class="tags"><span class="tag ${kindClass(x.sourceKind)}">${esc(kindLabel(x.sourceKind))}</span><span class="tag">${esc(x.source)}</span><span class="tag">${esc(x.matchType || 'archive')}</span>${x.mime ? `<span class="tag">${esc(x.mime)}</span>` : ''}${x.language ? `<span class="tag">${esc(x.language)}</span>` : ''}</div></div><div class="result-actions">${x.archiveUrl ? `<a class="primary" target="_blank" rel="noopener" href="${attr(x.archiveUrl)}">View source</a>` : ''}${x.originalUrl ? `<a target="_blank" rel="noopener" href="${attr(asUrl(x.originalUrl))}">Live URL</a>` : ''}${action}</div></article>`;
+}
+function date_(d) { return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
+
+// ---------------------------------------------------------------------------
+// Dialog helpers (named overlays, reused across the app)
+// ---------------------------------------------------------------------------
+function openDialog(id, opts) {
+  const overlay = document.querySelector(`#${id}`);
+  const panel = overlay.querySelector('.dialog-panel');
+  activeCloses[id] = openOverlay(overlay, panel, { ...opts, onClose: () => { activeCloses[id] = null; opts?.onClose?.(); } });
+  return activeCloses[id];
+}
+function closeDialog(id) { activeCloses[id]?.(); }
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-dialog-close]');
+  if (btn) closeDialog(btn.dataset.dialogClose);
+});
+
+async function openAddResearchDialogFor(investigationId) {
+  const investigations = await listInvestigations();
+  const inv = investigations.find((i) => i.id === investigationId);
+  addResearchTarget.textContent = inv ? `Adding research to “${inv.name}”` : '';
+  addUrlForm.reset();
+  bulkImportProgress.classList.add('hidden');
+  addResearchStatus.classList.add('hidden');
+  openDialog('addResearchDialog');
+}
+
+// ---------------------------------------------------------------------------
+// Nav drawer (mobile off-canvas / desktop persistent via CSS)
+// ---------------------------------------------------------------------------
+function openNav() {
+  navDrawer.classList.remove('hidden');
+  navOpenBtn.setAttribute('aria-expanded', 'true');
+  closeNav = openOverlay(navScrim, navDrawer, {
+    onClose: () => { navDrawer.classList.add('hidden'); navOpenBtn.setAttribute('aria-expanded', 'false'); closeNav = null; }
+  });
+}
+navOpenBtn.addEventListener('click', openNav);
+navCloseBtn.addEventListener('click', () => closeNav?.());
+navDrawer.addEventListener('click', (e) => {
+  if (e.target.closest('[data-route], [data-action]')) closeNav?.();
+});
+
+// ---------------------------------------------------------------------------
+// Kebab menus (investigation cards + workspace header)
+// ---------------------------------------------------------------------------
+document.addEventListener('click', (e) => {
+  const trigger = e.target.closest('[data-kebab-toggle]');
+  if (!trigger) return;
+  const wrap = trigger.closest('.menu-wrap');
+  const menu = wrap.querySelector('.menu');
+  if (!menu.classList.contains('hidden')) { openMenu(menu, trigger); return; } // already-open guard falls through to close via outside click
+  openMenu(menu, trigger);
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  const action = btn.dataset.action;
+  if (action === 'new-investigation') {
+    openDialog('newInvestigationDialog');
+  } else if (action === 'import-research') {
+    if (activeInvestigationId) await openAddResearchDialogFor(activeInvestigationId);
+    else openDialog('newInvestigationDialog');
+  } else if (action === 'research-search' || action === 'historical-web') {
+    location.hash = '#/';
+    requestAnimationFrame(() => input?.focus());
+  } else if (action === 'delete-investigation') {
+    const id = btn.dataset.id, name = btn.dataset.name;
+    const ok = await confirmDialog({ title: 'Delete investigation?', message: `Delete “${name}”? Saved records stay in your library but will no longer be linked to this investigation.`, confirmLabel: 'Delete investigation', danger: true });
+    if (!ok) return;
+    await deleteInvestigation(id);
+    if (activeInvestigationId === id) await setActiveInvestigation('');
+    showToast(`Deleted investigation “${name}”.`);
+    await loadViewContent(parseHash());
+  } else if (action === 'delete-active-investigation') {
+    if (!activeInvestigationId) return;
+    const investigations = await listInvestigations();
+    const inv = investigations.find((i) => i.id === activeInvestigationId);
+    const name = inv?.name || 'this investigation';
+    const ok = await confirmDialog({ title: 'Delete investigation?', message: `Delete “${name}”? Saved records stay in your library but will no longer be linked to this investigation.`, confirmLabel: 'Delete investigation', danger: true });
+    if (!ok) return;
+    await deleteInvestigation(activeInvestigationId);
+    await setActiveInvestigation('');
+    showToast(`Deleted investigation “${name}”.`);
+    location.hash = '#/investigations';
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Router
+// ---------------------------------------------------------------------------
+const VIEW_TITLES = { home: 'Chronium Mind', investigations: 'Investigations', library: 'My Library', bibliography: 'Bibliography', settings: 'Settings & Help', workspace: 'Workspace' };
+
+function parseHash() {
+  const path = (location.hash || '#/').slice(1) || '/';
+  const parts = path.split('/').filter(Boolean);
+  if (parts[0] === 'workspace') return { view: 'workspace', tab: parts[1] || 'overview' };
+  if (['investigations', 'library', 'bibliography', 'settings'].includes(parts[0])) return { view: parts[0] };
+  return { view: 'home' };
+}
+
+function updateNavActiveStates(route) {
+  const path = route.view === 'workspace' ? `/workspace/${route.tab}` : route.view === 'home' ? '/' : `/${route.view}`;
+  document.querySelectorAll('[data-route]').forEach((el) => {
+    el.toggleAttribute('aria-current', el.dataset.route === path);
+    if (el.dataset.route === path) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current');
+  });
+}
+
+async function renderRoute() {
+  const route = parseHash();
+  document.querySelectorAll('.view').forEach((v) => v.classList.add('hidden'));
+  const target = document.querySelector(`#view-${route.view}`);
+  target.classList.remove('hidden');
+  document.title = `${VIEW_TITLES[route.view] || 'Chronium'} · Chronium Mind`;
+  updateNavActiveStates(route);
+  await loadViewContent(route);
+  window.scrollTo(0, 0);
+  target.focus({ preventScroll: true });
+}
+
+async function loadViewContent(route) {
+  if (route.view === 'home') await renderHomeRecent();
+  else if (route.view === 'investigations') await renderInvestigationsView();
+  else if (route.view === 'library') await renderLibraryView();
+  else if (route.view === 'settings') renderSettingsView();
+  else if (route.view === 'workspace') await renderWorkspaceView(route.tab);
+}
+
+window.addEventListener('hashchange', renderRoute);
+
+// ---------------------------------------------------------------------------
+// Home: universal search
+// ---------------------------------------------------------------------------
+document.querySelectorAll('[data-q]').forEach((btn) => btn.addEventListener('click', () => { input.value = btn.dataset.q; form.requestSubmit(); }));
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const q = input.value.trim(); if (!q) return;
   setStatus(`Searching Chronium heads for “${q}”…`);
-  section.classList.add('hidden');
+  resultsSection.classList.add('hidden');
   try {
     const [res, libraryHits] = await Promise.all([
       fetch(`/api/search?q=${encodeURIComponent(q)}&limit=25`),
@@ -66,182 +304,175 @@ form.addEventListener('submit', async (e) => {
     title.textContent = `${current.length} historical result${current.length === 1 ? '' : 's'}`;
     renderCoverage(data, libraryHits);
     buildFilters(current);
-    render();
-    section.classList.remove('hidden');
+    renderResults();
+    resultsSection.classList.remove('hidden');
     setStatus(data.mode === 'topic'
       ? `Topic mode: only heads with full-text capability were queried. ${data.tookMs} ms.`
       : `URL history mode: archive capture indexes were queried. ${data.tookMs} ms.`);
   } catch (err) { setStatus(`Search error: ${err.message}`, true); }
 });
-sourceFilter.addEventListener('change', render); typeFilter.addEventListener('change', render);
+sourceFilter.addEventListener('change', renderResults);
+typeFilter.addEventListener('change', renderResults);
 
 function renderCoverage(data, libraryHits) {
   const connectors = [...data.connectors, { source: 'My Library', capability: 'personal saved records', ok: true, count: libraryHits.length, note: null }];
-  coverage.innerHTML = connectors.map(c => `<div class="source ${c.ok ? '' : 'bad'}"><strong><i class="dot ${c.ok ? 'live' : ''}"></i>${esc(c.source)} · ${c.ok ? c.count : 'unavailable'}</strong><p>${esc(c.capability)}${c.note ? `<br>${esc(c.note)}` : ''}${c.error ? `<br>${esc(c.error)}` : ''}</p></div>`).join('');
+  coverage.innerHTML = connectors.map((c) => `<div class="source ${c.ok ? '' : 'bad'}"><strong><i class="dot" style="${c.ok ? '' : 'background:var(--danger)'}"></i>${esc(c.source)} · ${c.ok ? c.count : 'unavailable'}</strong><p>${esc(c.capability)}${c.note ? `<br>${esc(c.note)}` : ''}${c.error ? `<br>${esc(c.error)}` : ''}</p></div>`).join('');
 }
 function buildFilters(items) {
-  const sources = [...new Set(items.map(x=>x.source).filter(Boolean))].sort();
-  const types = [...new Set(items.map(x=>bucket(x.mime)).filter(Boolean))].sort();
-  sourceFilter.innerHTML = '<option value="all">All sources</option>'+sources.map(x=>`<option>${esc(x)}</option>`).join('');
-  typeFilter.innerHTML = '<option value="all">All content</option>'+types.map(x=>`<option>${esc(x)}</option>`).join('');
+  const sources = [...new Set(items.map((x) => x.source).filter(Boolean))].sort();
+  const types = [...new Set(items.map((x) => bucket(x.mime)).filter(Boolean))].sort();
+  sourceFilter.innerHTML = '<option value="all">All sources</option>' + sources.map((x) => `<option>${esc(x)}</option>`).join('');
+  typeFilter.innerHTML = '<option value="all">All content</option>' + types.map((x) => `<option>${esc(x)}</option>`).join('');
 }
-function render() {
-  const sf=sourceFilter.value, tf=typeFilter.value;
-  const filtered=current.filter(x=>(sf==='all'||x.source===sf)&&(tf==='all'||bucket(x.mime)===tf));
-  list.innerHTML = filtered.length ? filtered.map(x=>card(x,'search')).join('') : '<p class="status">No results match these filters.</p>';
-}
-function canonicalKeyOf(x) { return x.canonicalKey || x.originalUrl || x.archiveUrl || x.id; }
-function kindClass(k) { return k === 'investigation-corpus' ? 'kind-corpus' : k === 'personal-library' ? 'kind-library' : 'kind-connector'; }
-function kindLabel(k) { return k === 'investigation-corpus' ? 'Investigation corpus' : k === 'personal-library' ? 'My library' : 'Archive connector'; }
-function card(x, mode) {
-  const d=x.captureDate ? new Date(x.captureDate) : null;
-  const year=d&&!isNaN(d)?d.getUTCFullYear():'Unknown';
-  const date=d&&!isNaN(d)?d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}):'Capture date unavailable';
-  const key = canonicalKeyOf(x);
-  const isSaved = savedKeys.has(key);
-  const action = mode === 'library'
-    ? `<button type="button" class="mini remove-btn" data-record-id="${attr(x.id)}">Remove</button>`
-    : activeInvestigationId
-      ? `<button type="button" class="mini save-btn" data-key="${attr(key)}" ${isSaved ? 'disabled' : ''}>${isSaved ? 'Saved' : 'Save'}</button>`
-      : `<button type="button" class="mini" disabled title="Select or create an investigation first">Save</button>`;
-  const previewAction = x.sourceType === 'bulk-document'
-    ? (x.storageMode === 'local-copy'
-        ? `<button type="button" class="mini preview-btn" data-hash="${attr(x.fileHash)}" data-mime="${attr(x.mime)}">Preview original</button>`
-        : `<span class="hint">Not stored by Chronium — original at: ${esc(x.filePath || x.title)}</span>`)
-    : '';
-  return `<article class="card"><div class="when"><strong>${esc(year)}</strong>${esc(date)}</div><div><h3>${esc(x.title||x.originalUrl||'Archived result')}</h3>${x.originalUrl?`<div class="url">${esc(x.originalUrl)}</div>`:''}${x.sourceId?`<div class="url">${esc(x.sourceId)}</div>`:''}${x.snippet?`<p class="snippet">${esc(x.snippet).slice(0,450)}</p>`:''}${previewAction}<div class="tags"><span class="tag ${kindClass(x.sourceKind)}">${esc(kindLabel(x.sourceKind))}</span><span class="tag">${esc(x.source)}</span><span class="tag">${esc(x.matchType||'archive')}</span>${x.mime?`<span class="tag">${esc(x.mime)}</span>`:''}${x.language?`<span class="tag">${esc(x.language)}</span>`:''}</div></div><div class="actions">${x.archiveUrl?`<a class="primary" target="_blank" rel="noopener" href="${attr(x.archiveUrl)}">View source</a>`:''}${x.originalUrl?`<a target="_blank" rel="noopener" href="${attr(asUrl(x.originalUrl))}">Live URL</a>`:''}${action}</div></article>`;
-}
-function bucket(m=''){m=String(m).toLowerCase();if(m.includes('pdf'))return'PDF';if(m.startsWith('image/'))return'Image';if(m.includes('html'))return'Webpage';if(m.includes('audio'))return'Audio';if(m.includes('video'))return'Video';return m?'Other':'Unknown'}
-function setStatus(msg,bad=false){statusBox.textContent=msg;statusBox.classList.remove('hidden');statusBox.style.color=bad?'#ff8a8a':''}
-function setWorkspaceStatus(msg,bad=false){workspaceStatus.textContent=msg;workspaceStatus.classList.remove('hidden');workspaceStatus.style.color=bad?'#ff8a8a':''}
-function asUrl(u){return /^https?:\/\//i.test(u)?u:`https://${u}`}
-function esc(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function attr(s=''){return esc(s)}
-function formatBytes(n) {
-  if (!n) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let i = 0; let v = n;
-  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
-  return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+function renderResults() {
+  const sf = sourceFilter.value, tf = typeFilter.value;
+  const filtered = current.filter((x) => (sf === 'all' || x.source === sf) && (tf === 'all' || bucket(x.mime) === tf));
+  list.innerHTML = filtered.length ? filtered.map((x) => resultRow(x, 'search')).join('') : '<p class="status">No results match these filters.</p>';
 }
 
-list.addEventListener('click', async (e) => {
+document.addEventListener('click', async (e) => {
   const btn = e.target.closest('.save-btn');
   if (!btn || btn.disabled || !activeInvestigationId) return;
-  const item = current.find(r => canonicalKeyOf(r) === btn.dataset.key);
+  const item = current.find((r) => canonicalKeyOf(r) === btn.dataset.key)
+    || (await searchInvestigation(activeInvestigationId, '', 1000)).find((r) => canonicalKeyOf(r) === btn.dataset.key);
   if (!item) return;
   btn.disabled = true;
   await saveRecordToInvestigation(activeInvestigationId, item);
   savedKeys.add(btn.dataset.key);
-  setWorkspaceStatus(`Saved "${item.title || item.originalUrl}" to your investigation.`);
-  render();
+  showToast(`Saved “${item.title || item.originalUrl}” to your investigation.`);
+  renderResults();
 });
 
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('.preview-btn');
   if (!btn) return;
   const row = await getBlob(btn.dataset.hash);
-  if (!row) { setWorkspaceStatus('Original not found in this browser (was it imported with "keep a local copy" off?).', true); return; }
+  if (!row) { showToast('Original not found in this browser (was it imported with "keep a local copy" off?).', true); return; }
   const url = URL.createObjectURL(row.blob);
   window.open(url, '_blank', 'noopener');
 });
 
-libraryList.addEventListener('click', async (e) => {
+document.addEventListener('click', async (e) => {
   const btn = e.target.closest('.remove-btn');
   if (!btn || !activeInvestigationId) return;
   await removeRecordFromInvestigation(activeInvestigationId, btn.dataset.recordId);
   savedKeys = await getSavedCanonicalKeys(activeInvestigationId);
-  await renderLibrary();
-  render();
-  setWorkspaceStatus('Removed from investigation.');
+  await renderLibraryView();
+  showToast('Removed from investigation.');
 });
 
-async function refreshInvestigationOptions() {
+// ---------------------------------------------------------------------------
+// Investigations: shared card rendering (Home recent + Investigations view)
+// ---------------------------------------------------------------------------
+async function investigationCardHtml(inv) {
+  const records = await listInvestigationRecords(inv.id);
+  const n = records.length;
+  return `<div class="investigation-card">
+    <a class="investigation-card-link" href="#/workspace/overview" data-open-investigation="${attr(inv.id)}">${esc(inv.name)}</a>
+    ${inv.description ? `<p class="investigation-card-desc">${esc(inv.description)}</p>` : ''}
+    <p class="investigation-card-meta">${n} source${n === 1 ? '' : 's'} · updated ${esc(formatDate(inv.updatedAt))}</p>
+    <div class="menu-wrap">
+      <button type="button" class="icon-btn" data-kebab-toggle aria-haspopup="true" aria-expanded="false" aria-label="Actions for ${attr(inv.name)}"><svg width="18" height="18"><use href="#icon-kebab"/></svg></button>
+      <ul class="menu hidden" role="menu" aria-label="Actions for ${attr(inv.name)}">
+        <li role="none"><button type="button" role="menuitem" class="menu-item menu-item-danger" data-action="delete-investigation" data-id="${attr(inv.id)}" data-name="${attr(inv.name)}">Delete investigation…</button></li>
+      </ul>
+    </div>
+  </div>`;
+}
+function emptyInvestigationsHtml() {
+  return `<div class="empty-state">
+    <svg class="empty-state-mascot" width="48" height="48" aria-hidden="true"><use href="#icon-dragon-outline"/></svg>
+    <div>
+      <h2>No investigations yet</h2>
+      <p>An investigation is where saved research, imported documents, and URLs come together for one question or topic.</p>
+      <div class="empty-state-actions"><button type="button" class="btn btn-primary" data-action="new-investigation">New investigation</button></div>
+    </div>
+  </div>`;
+}
+
+document.addEventListener('click', async (e) => {
+  const link = e.target.closest('[data-open-investigation]');
+  if (!link) return;
+  e.preventDefault();
+  await setActiveInvestigation(link.dataset.openInvestigation);
+  location.hash = '#/workspace/overview';
+});
+
+async function renderHomeRecent() {
+  const investigations = (await listInvestigations()).slice(0, 6);
+  const container = document.querySelector('#recentInvestigationsList');
+  if (!investigations.length) { container.innerHTML = emptyInvestigationsHtml(); return; }
+  container.innerHTML = (await Promise.all(investigations.map(investigationCardHtml))).join('');
+}
+async function renderInvestigationsView() {
   const investigations = await listInvestigations();
-  const valid = new Set(investigations.map(i => i.id));
-  if (activeInvestigationId && !valid.has(activeInvestigationId)) activeInvestigationId = '';
-  investigationSelect.innerHTML = '<option value="">No investigation selected</option>' +
-    investigations.map(i => `<option value="${attr(i.id)}">${esc(i.name)}</option>`).join('');
-  investigationSelect.value = activeInvestigationId;
-  return investigations;
+  const container = document.querySelector('#allInvestigationsList');
+  if (!investigations.length) { container.innerHTML = emptyInvestigationsHtml(); return; }
+  container.innerHTML = (await Promise.all(investigations.map(investigationCardHtml))).join('');
 }
 
-async function setActiveInvestigation(id) {
-  activeInvestigationId = id;
-  localStorage.setItem('chronium.activeInvestigation', id);
-  deleteInvestigationBtn.disabled = !id;
-  toggleLibraryBtn.disabled = !id;
-  bulkImportBtn.disabled = !id;
-  addUrlForm.classList.toggle('hidden', !id);
-  importZone.classList.toggle('hidden', !id);
-  librarySection.classList.add('hidden');
-  dashboardSection.classList.add('hidden');
-  toggleLibraryBtn.setAttribute('aria-expanded', 'false');
-  investigationSearchResults.innerHTML = '';
-  investigationQuery.value = '';
-  savedKeys = id ? await getSavedCanonicalKeys(id) : new Set();
-  render();
-  if (id) {
-    const docs = (await listInvestigationRecords(id)).filter((r) => r.sourceType === 'bulk-document');
-    if (docs.length) { await renderDashboard(); dashboardSection.classList.remove('hidden'); }
+// ---------------------------------------------------------------------------
+// My Library (per active investigation)
+// ---------------------------------------------------------------------------
+async function renderLibraryView() {
+  const emptyState = document.querySelector('#libraryEmptyState');
+  const resultsEl = document.querySelector('#libraryResults');
+  const contextLine = document.querySelector('#libraryContextLine');
+  if (!activeInvestigationId) {
+    contextLine.textContent = '';
+    resultsEl.innerHTML = '';
+    emptyState.classList.remove('hidden');
+    emptyState.innerHTML = `<svg class="empty-state-mascot" width="48" height="48" aria-hidden="true"><use href="#icon-dragon-outline"/></svg>
+      <div><h2>No investigation open</h2><p>Your library is scoped to an investigation. Open or create one to see what you’ve saved.</p>
+      <div class="empty-state-actions"><a class="btn" href="#/investigations" data-route="/investigations">Browse investigations</a><button type="button" class="btn btn-primary" data-action="new-investigation">New investigation</button></div></div>`;
+    return;
   }
-}
-
-async function renderLibrary() {
-  if (!activeInvestigationId) { libraryList.innerHTML = ''; return; }
+  emptyState.classList.add('hidden');
+  const investigations = await listInvestigations();
+  const inv = investigations.find((i) => i.id === activeInvestigationId);
+  contextLine.textContent = inv ? `Saved to “${inv.name}”` : '';
   const records = await listInvestigationRecords(activeInvestigationId);
-  libraryList.innerHTML = records.length
-    ? records.map(r => card(r, 'library')).join('')
-    : '<p class="status">Nothing saved to this investigation yet.</p>';
+  resultsEl.innerHTML = records.length ? records.map((r) => resultRow(r, 'library')).join('') : '<p class="status">Nothing saved to this investigation yet.</p>';
 }
 
-investigationSelect.addEventListener('change', () => setActiveInvestigation(investigationSelect.value));
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+async function renderSettingsView() {
+  const line = document.querySelector('#settingsActiveLine');
+  const clearBtn = document.querySelector('#settingsClearActiveBtn');
+  if (!activeInvestigationId) { line.textContent = 'No investigation is currently active.'; clearBtn.disabled = true; return; }
+  const investigations = await listInvestigations();
+  const inv = investigations.find((i) => i.id === activeInvestigationId);
+  line.textContent = inv ? `“${inv.name}” is currently active.` : 'No investigation is currently active.';
+  clearBtn.disabled = !inv;
+}
+document.querySelector('#settingsClearActiveBtn').addEventListener('click', async () => {
+  await setActiveInvestigation('');
+  await renderSettingsView();
+  showToast('Cleared the active investigation.');
+});
 
-newInvestigationBtn.addEventListener('click', () => {
-  newInvestigationForm.classList.remove('hidden');
-  document.querySelector('#newInvestigationName').focus();
-});
-cancelNewInvestigation.addEventListener('click', () => {
-  newInvestigationForm.reset();
-  newInvestigationForm.classList.add('hidden');
-});
+// ---------------------------------------------------------------------------
+// New Investigation
+// ---------------------------------------------------------------------------
 newInvestigationForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = document.querySelector('#newInvestigationName').value.trim();
   if (!name) return;
   const description = document.querySelector('#newInvestigationDescription').value.trim();
   const investigation = await createInvestigation({ name, description });
-  await refreshInvestigationOptions();
-  investigationSelect.value = investigation.id;
   await setActiveInvestigation(investigation.id);
   newInvestigationForm.reset();
-  newInvestigationForm.classList.add('hidden');
-  setWorkspaceStatus(`Created investigation "${investigation.name}".`);
-  importZone.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  closeDialog('newInvestigationDialog');
+  showToast(`Created investigation “${investigation.name}”.`);
+  location.hash = '#/workspace/overview';
+  await openAddResearchDialogFor(investigation.id);
 });
 
-deleteInvestigationBtn.addEventListener('click', async () => {
-  if (!activeInvestigationId) return;
-  const name = investigationSelect.selectedOptions[0]?.textContent || 'this investigation';
-  if (!confirm(`Delete "${name}"? Saved records stay in your library but will no longer be linked to this investigation.`)) return;
-  await deleteInvestigation(activeInvestigationId);
-  await refreshInvestigationOptions();
-  await setActiveInvestigation('');
-  setWorkspaceStatus(`Deleted investigation "${name}".`);
-});
-
-toggleLibraryBtn.addEventListener('click', async () => {
-  const willOpen = librarySection.classList.contains('hidden');
-  if (willOpen) await renderLibrary();
-  librarySection.classList.toggle('hidden', !willOpen);
-  toggleLibraryBtn.setAttribute('aria-expanded', String(willOpen));
-});
-
-bulkImportBtn.addEventListener('click', () => {
-  importZone.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  dropTarget.querySelector('.file-btn')?.focus();
-});
-
+// ---------------------------------------------------------------------------
+// Add Research: URL form + bulk import (consolidated modal)
+// ---------------------------------------------------------------------------
 addUrlForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!activeInvestigationId) return;
@@ -252,11 +483,10 @@ addUrlForm.addEventListener('submit', async (e) => {
   await addUserUrl(activeInvestigationId, { url, title: urlTitle, note });
   savedKeys = await getSavedCanonicalKeys(activeInvestigationId);
   addUrlForm.reset();
-  setWorkspaceStatus(`Added ${url} to your investigation.`);
-  if (!librarySection.classList.contains('hidden')) await renderLibrary();
+  setAddResearchStatus(`Added ${url} to your investigation.`);
+  if (parseHash().view === 'workspace') await renderWorkspaceView(parseHash().tab);
+  if (parseHash().view === 'library') await renderLibraryView();
 });
-
-// ---------- Bulk import: file inputs + real drag-and-drop ----------
 
 bulkImportFilesInput.addEventListener('change', () => {
   if (bulkImportFilesInput.files.length) runImport([...bulkImportFilesInput.files]);
@@ -267,13 +497,8 @@ bulkImportFolderInput.addEventListener('change', () => {
   bulkImportFolderInput.value = '';
 });
 
-['dragenter', 'dragover'].forEach((evt) => dropTarget.addEventListener(evt, (e) => {
-  e.preventDefault();
-  dropTarget.classList.add('dragover');
-}));
-['dragleave', 'dragend'].forEach((evt) => dropTarget.addEventListener(evt, () => {
-  dropTarget.classList.remove('dragover');
-}));
+['dragenter', 'dragover'].forEach((evt) => dropTarget.addEventListener(evt, (e) => { e.preventDefault(); dropTarget.classList.add('dragover'); }));
+['dragleave', 'dragend'].forEach((evt) => dropTarget.addEventListener(evt, () => dropTarget.classList.remove('dragover')));
 dropTarget.addEventListener('drop', async (e) => {
   e.preventDefault();
   dropTarget.classList.remove('dragover');
@@ -282,8 +507,6 @@ dropTarget.addEventListener('drop', async (e) => {
   if (items.length) runImport(items);
 });
 
-// Walks a DataTransfer's items, resolving dropped folders recursively via the
-// File and Directory Entries API. Falls back to getAsFile for plain drops.
 async function filesFromDataTransfer(dataTransfer) {
   const out = [];
   const entries = [];
@@ -314,7 +537,6 @@ async function filesFromDataTransfer(dataTransfer) {
 async function runImport(items) {
   if (!activeInvestigationId || !items.length) return;
   const preserveOriginals = preserveOriginalsCheckbox.checked;
-
   bulkImportProgress.classList.remove('hidden');
   bulkImportProgress.textContent = 'Starting import…';
   const onProgress = (p) => {
@@ -322,7 +544,6 @@ async function runImport(items) {
       ? `Processed ${p.processed} files — error on "${p.current}": ${p.error}`
       : `Processed ${p.processed} files (${formatBytes(p.byteTotal)}) — current: ${p.current}`;
   };
-
   try {
     const first = items[0];
     const firstName = first instanceof File ? first.name : first.file.name;
@@ -333,32 +554,76 @@ async function runImport(items) {
 
     savedKeys = await getSavedCanonicalKeys(activeInvestigationId);
     bulkImportProgress.classList.add('hidden');
-    setWorkspaceStatus(`Imported ${batch.fileCount} file${batch.fileCount === 1 ? '' : 's'} (${formatBytes(batch.byteTotal)}). ${batch.duplicates.length} duplicates, ${batch.skipped.length + batch.errors.length} need attention.`);
-    if (!librarySection.classList.contains('hidden')) await renderLibrary();
-    await renderDashboard();
-    dashboardSection.classList.remove('hidden');
-    dashboardSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setAddResearchStatus(`Imported ${batch.fileCount} file${batch.fileCount === 1 ? '' : 's'} (${formatBytes(batch.byteTotal)}). ${batch.duplicates.length} duplicates, ${batch.skipped.length + batch.errors.length} need attention.`);
+    showToast(`Imported ${batch.fileCount} file${batch.fileCount === 1 ? '' : 's'} into your investigation.`);
+    closeDialog('addResearchDialog');
+    location.hash = '#/workspace/sources';
   } catch (err) {
-    bulkImportProgress.textContent = `Import failed: ${err.message}`;
+    setAddResearchStatus(`Import failed: ${err.message}`, true);
   }
 }
 
-// ---------- Dashboard: summary, facets, investigation-scoped search ----------
+// ---------------------------------------------------------------------------
+// Active investigation
+// ---------------------------------------------------------------------------
+async function setActiveInvestigation(id) {
+  const investigations = await listInvestigations();
+  const valid = new Set(investigations.map((i) => i.id));
+  if (id && !valid.has(id)) id = '';
+  activeInvestigationId = id;
+  localStorage.setItem('chronium.activeInvestigation', id);
+  savedKeys = id ? await getSavedCanonicalKeys(id) : new Set();
+  lastDashboardData = null;
+  const inv = id ? investigations.find((i) => i.id === id) : null;
+  navWorkspaceGroup.hidden = !id;
+  if (inv) navWorkspaceTitle.textContent = `Workspace · ${inv.name}`;
+  renderResults();
+}
 
-const FACETS = [
-  { id: 'documents', label: 'Documents' },
-  { id: 'sources', label: 'Sources' },
-  { id: 'duplicates', label: 'Duplicates' },
-  { id: 'attention', label: 'Needs Attention' },
-  { id: 'people', label: 'People', disabled: true },
-  { id: 'organizations', label: 'Organizations', disabled: true },
-  { id: 'money', label: 'Money', disabled: true },
-  { id: 'dates', label: 'Dates', disabled: true },
-  { id: 'topics', label: 'Topics', disabled: true }
-];
+// ---------------------------------------------------------------------------
+// Workspace
+// ---------------------------------------------------------------------------
+function buildWorkspaceTabStrip(activeTab) {
+  const strip = document.querySelector('#workspaceTabStrip');
+  strip.innerHTML = WORKSPACE_TABS.map((t) => `<button type="button" id="tab-${t.id}" role="tab" aria-selected="${t.id === activeTab}" aria-controls="workspacePanel-${t.id}" data-tab="${t.id}"><svg width="15" height="15" style="vertical-align:-3px;margin-right:6px"><use href="#${t.icon}"/></svg>${t.label}</button>`).join('');
+  strip.querySelectorAll('button[data-tab]').forEach((btn) => btn.addEventListener('click', () => { location.hash = `#/workspace/${btn.dataset.tab}`; }));
+}
 
-async function renderDashboard() {
-  if (!activeInvestigationId) { dashboardSummary.innerHTML = ''; reportList.innerHTML = ''; facetBar.innerHTML = ''; return; }
+function buildStaticComingSoonPanels() {
+  Object.entries(COMING_SOON).forEach(([tab, { title: t, body }]) => {
+    const panel = document.querySelector(`#workspacePanel-${tab}`);
+    panel.innerHTML = `<div class="coming-soon"><svg class="coming-soon-mascot" width="40" height="40" aria-hidden="true"><use href="#icon-dragon-outline"/></svg><div><h2>${esc(t)}</h2><p>${body}</p></div></div>`;
+  });
+}
+buildStaticComingSoonPanels();
+
+async function renderWorkspaceView(tab) {
+  const emptyState = document.querySelector('#workspaceEmptyState');
+  const body = document.querySelector('#workspaceBody');
+  if (!activeInvestigationId) { emptyState.classList.remove('hidden'); body.classList.add('hidden'); return; }
+  emptyState.classList.add('hidden');
+  body.classList.remove('hidden');
+
+  const investigations = await listInvestigations();
+  const inv = investigations.find((i) => i.id === activeInvestigationId);
+  document.querySelector('#workspaceTitle').textContent = inv?.name || 'Investigation';
+  document.querySelector('#workspaceDescription').textContent = inv?.description || '';
+
+  buildWorkspaceTabStrip(tab);
+  document.querySelectorAll('.workspace-panel').forEach((p) => p.classList.add('hidden'));
+  const panel = document.querySelector(`#workspacePanel-${tab}`) || document.querySelector('#workspacePanel-overview');
+  panel.classList.remove('hidden');
+
+  if (DATA_DRIVEN_TABS.has(tab)) {
+    await refreshWorkspaceData();
+    if (tab === 'overview') renderOverviewPanel();
+    if (tab === 'sources') renderSourcesPanel();
+    if (tab === 'timeline') renderTimelinePanel();
+  }
+}
+
+async function refreshWorkspaceData() {
+  if (!activeInvestigationId) { lastDashboardData = null; return; }
   const [batches, records] = await Promise.all([
     listIngestionBatches(activeInvestigationId),
     listInvestigationRecords(activeInvestigationId)
@@ -370,22 +635,39 @@ async function renderDashboard() {
   const totalReceived = batches.reduce((n, b) => n + (b.fileCount || 0), 0);
   const totalBytes = docs.reduce((n, r) => n + (r.fileSize || 0), 0);
   const typeCounts = docs.reduce((m, r) => { const k = bucket(r.mime) || 'Other'; m[k] = (m[k] || 0) + 1; return m; }, {});
+  lastDashboardData = { batches, records, docs, duplicateEntries, skipped, errors, typeCounts, totalReceived, totalBytes };
+}
 
-  lastDashboardData = { docs, records, duplicateEntries, skipped, errors, typeCounts };
-
+function renderOverviewPanel() {
+  if (!lastDashboardData) { dashboardSummary.innerHTML = ''; return; }
+  const { docs, records, duplicateEntries, skipped, errors, typeCounts, totalReceived, totalBytes } = lastDashboardData;
+  const savedOnly = records.length - docs.length;
   dashboardSummary.innerHTML = [
     { label: 'Files received', value: totalReceived },
     { label: 'Indexed documents', value: docs.length },
+    { label: 'Saved / web records', value: savedOnly },
     { label: 'Duplicates', value: duplicateEntries.length },
     { label: 'Needs attention', value: skipped.length + errors.length },
     { label: 'Total size', value: formatBytes(totalBytes) },
     ...Object.entries(typeCounts).map(([k, v]) => ({ label: k, value: v }))
-  ].map((s) => `<div class="source"><strong>${esc(String(s.value))}</strong><p>${esc(s.label)}</p></div>`).join('');
+  ].map((s) => `<div><strong>${esc(String(s.value))}</strong><p>${esc(s.label)}</p></div>`).join('');
+}
 
+const FACETS = [
+  { id: 'documents', label: 'Documents' },
+  { id: 'sources', label: 'All Sources' },
+  { id: 'duplicates', label: 'Duplicates' },
+  { id: 'attention', label: 'Needs Attention' },
+  { id: 'people', label: 'People', disabled: true },
+  { id: 'organizations', label: 'Organizations', disabled: true },
+  { id: 'money', label: 'Money', disabled: true },
+  { id: 'dates', label: 'Dates', disabled: true },
+  { id: 'topics', label: 'Topics', disabled: true }
+];
+function renderSourcesPanel() {
   renderFacetBar();
   applyFacet();
 }
-
 function renderFacetBar() {
   facetBar.innerHTML = FACETS.map((f) => `<button type="button" role="tab" data-facet="${f.id}" aria-selected="${f.id === activeFacet}" ${f.disabled ? 'disabled title="Needs entity extraction — not built yet"' : ''}>${esc(f.label)}</button>`).join('');
 }
@@ -396,37 +678,64 @@ facetBar.addEventListener('click', (e) => {
   renderFacetBar();
   applyFacet();
 });
-
 function applyFacet() {
   if (!lastDashboardData) return;
   const { docs, records, duplicateEntries, skipped, errors } = lastDashboardData;
   if (activeFacet === 'sources') { renderRecordTable(records); return; }
   if (activeFacet === 'duplicates') { renderDuplicateTable(duplicateEntries); return; }
   if (activeFacet === 'attention') { renderAttentionTable(skipped, errors); return; }
-  renderRecordTable(docs); // 'documents' default
+  renderRecordTable(docs);
 }
-
 function renderRecordTable(rows) {
   reportList.innerHTML = rows.length ? `<table><thead><tr><th>Source ID</th><th>Name</th><th>Type</th><th>Size</th><th>Hash</th><th>Snippet</th><th>Original</th></tr></thead><tbody>${
     rows.map((r) => `<tr><td>${esc(r.sourceId || '')}</td><td>${esc(r.title || '')}</td><td>${esc(r.mime || '')}</td><td>${esc(formatBytes(r.fileSize))}</td><td title="${attr(r.fileHash || '')}">${esc((r.fileHash || '').slice(0, 10))}${r.fileHash ? '…' : ''}</td><td>${esc((r.snippet || '').slice(0, 120))}</td><td>${
       r.storageMode === 'local-copy'
-        ? `<button type="button" class="mini preview-btn" data-hash="${attr(r.fileHash)}">Preview</button>`
+        ? `<button type="button" class="preview-btn" data-hash="${attr(r.fileHash)}">Preview</button>`
         : `<span class="hint">${r.filePath ? 'Not stored — ' + esc(r.filePath) : ''}</span>`
     }</td></tr>`).join('')
   }</tbody></table>` : '<p class="status">Nothing here yet.</p>';
 }
-
 function renderDuplicateTable(rows) {
   reportList.innerHTML = rows.length ? `<table><thead><tr><th>Duplicate file</th><th>Matches existing source</th></tr></thead><tbody>${
     rows.map((d) => `<tr><td>${esc(d.path)}</td><td>${esc(d.matchedTitle || d.matchedRecordId)}</td></tr>`).join('')
   }</tbody></table>` : '<p class="status">No duplicate files found.</p>';
 }
-
 function renderAttentionTable(skipped, errors) {
   const rows = [...skipped.map((s) => ({ path: s.path, reason: s.reason })), ...errors.map((e) => ({ path: e.path, reason: e.message }))];
   reportList.innerHTML = rows.length ? `<table><thead><tr><th>File</th><th>Reason</th></tr></thead><tbody>${
     rows.map((r) => `<tr><td>${esc(r.path)}</td><td>${esc(r.reason)}</td></tr>`).join('')
   }</tbody></table>` : '<p class="status">Nothing needs attention.</p>';
+}
+
+function renderTimelinePanel() {
+  const panel = document.querySelector('#workspacePanel-timeline');
+  const records = lastDashboardData?.records || [];
+  const yearCounts = new Map();
+  records.forEach((r) => {
+    const raw = r.captureDate || r.addedAt || r.savedAt;
+    const d = raw ? new Date(raw) : null;
+    if (d && !isNaN(d)) { const y = d.getUTCFullYear(); yearCounts.set(y, (yearCounts.get(y) || 0) + 1); }
+  });
+  const years = [...yearCounts.keys()].sort((a, b) => a - b);
+  let railHtml = '';
+  if (years.length) {
+    const min = years[0], max = years[years.length - 1];
+    const span = Math.max(1, max - min);
+    railHtml = `<div class="timeline-rail">${years.map((y) => {
+      const pct = ((y - min) / span) * 100;
+      return `<div class="timeline-node" style="left:${pct}%"><span class="timeline-node-label">${y} · ${yearCounts.get(y)}</span></div>`;
+    }).join('')}</div>`;
+  }
+  panel.innerHTML = `<div class="coming-soon">
+    <svg class="coming-soon-mascot" width="40" height="40" aria-hidden="true"><use href="#icon-dragon-outline"/></svg>
+    <div>
+      <h2>${years.length ? 'Sources by year' : 'No dated sources yet'}</h2>
+      <p>${years.length
+        ? `A real timeline of this investigation’s ${records.length} source${records.length === 1 ? '' : 's'} by capture year. Then-vs-now version comparison and full evidence timelines are still on the roadmap.`
+        : 'Import or save research with capture dates to populate this timeline. Then-vs-now version timelines are still on the roadmap.'}</p>
+      ${railHtml ? `<div class="timeline-preview">${railHtml}<p class="timeline-note">Node position is proportional to year, not to scale within a year.</p></div>` : ''}
+    </div>
+  </div>`;
 }
 
 investigationSearchForm.addEventListener('submit', async (e) => {
@@ -435,12 +744,13 @@ investigationSearchForm.addEventListener('submit', async (e) => {
   const q = investigationQuery.value.trim();
   if (!q) { investigationSearchResults.innerHTML = ''; return; }
   const results = await searchInvestigation(activeInvestigationId, q, 50);
-  investigationSearchResults.innerHTML = results.length
-    ? results.map((r) => card(r, 'library')).join('')
-    : '<p class="status">No matches in this investigation.</p>';
+  investigationSearchResults.innerHTML = results.length ? results.map((r) => resultRow(r, 'library')).join('') : '<p class="status">No matches in this investigation.</p>';
 });
 
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
 (async function init() {
-  await refreshInvestigationOptions();
   await setActiveInvestigation(activeInvestigationId);
+  await renderRoute();
 })();
