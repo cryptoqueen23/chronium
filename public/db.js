@@ -139,6 +139,17 @@ export async function getSavedCanonicalKeys(investigationId) {
   return new Set(rows.map((r) => r.canonicalKey));
 }
 
+export async function searchInvestigation(investigationId, query, limit = 50) {
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const rows = await listInvestigationRecords(investigationId);
+  if (!terms.length) return rows.slice(0, limit);
+  const matches = rows.filter((r) => {
+    const haystack = `${r.title || ''} ${r.description || r.snippet || ''} ${r.category || ''} ${r.originalUrl || ''} ${r.extractedText || ''}`.toLowerCase();
+    return terms.every((term) => haystack.includes(term));
+  });
+  return matches.slice(0, limit);
+}
+
 export async function searchLibrary(query, limit = 25) {
   const db = await openDb();
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -205,7 +216,7 @@ export async function createIngestionBatch({ investigationId, label }) {
   const db = await openDb();
   const batch = {
     id: genId('batch'), investigationId, label, createdAt: new Date().toISOString(),
-    completedAt: null, fileCount: 0, byteTotal: 0, skipped: [], errors: []
+    completedAt: null, fileCount: 0, byteTotal: 0, skipped: [], errors: [], duplicates: []
   };
   await tx(db, ['ingestionBatches'], 'readwrite', (t) => t.objectStore('ingestionBatches').add(batch));
   return batch;

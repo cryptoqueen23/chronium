@@ -1,7 +1,7 @@
 import {
   listInvestigations, createInvestigation, deleteInvestigation,
   saveRecordToInvestigation, removeRecordFromInvestigation, listInvestigationRecords,
-  getSavedCanonicalKeys, searchLibrary, addUserUrl, listIngestionBatches, getBlob
+  getSavedCanonicalKeys, searchLibrary, searchInvestigation, addUserUrl, listIngestionBatches, getBlob
 } from './db.js';
 import { ingestFiles, ingestZip } from './ingest/pipeline.js';
 
@@ -25,19 +25,28 @@ const librarySection = document.querySelector('#librarySection');
 const libraryList = document.querySelector('#libraryResults');
 const addUrlForm = document.querySelector('#addUrlForm');
 const workspaceStatus = document.querySelector('#workspaceStatus');
+
 const bulkImportBtn = document.querySelector('#bulkImportBtn');
-const bulkImportForm = document.querySelector('#bulkImportForm');
-const bulkImportInput = document.querySelector('#bulkImportInput');
+const importZone = document.querySelector('#importZone');
+const dropTarget = document.querySelector('#dropTarget');
+const bulkImportFilesInput = document.querySelector('#bulkImportFilesInput');
+const bulkImportFolderInput = document.querySelector('#bulkImportFolderInput');
 const preserveOriginalsCheckbox = document.querySelector('#preserveOriginalsCheckbox');
 const bulkImportProgress = document.querySelector('#bulkImportProgress');
-const toggleReportBtn = document.querySelector('#toggleReportBtn');
-const reportSection = document.querySelector('#reportSection');
-const reportSummary = document.querySelector('#reportSummary');
+
+const dashboardSection = document.querySelector('#dashboardSection');
+const dashboardSummary = document.querySelector('#dashboardSummary');
+const investigationSearchForm = document.querySelector('#investigationSearchForm');
+const investigationQuery = document.querySelector('#investigationQuery');
+const investigationSearchResults = document.querySelector('#investigationSearchResults');
+const facetBar = document.querySelector('#facetBar');
 const reportList = document.querySelector('#reportList');
 
 let current = [];
 let activeInvestigationId = localStorage.getItem('chronium.activeInvestigation') || '';
 let savedKeys = new Set();
+let activeFacet = 'documents';
+let lastDashboardData = null; // { docs, batches } for the active investigation
 
 document.querySelectorAll('[data-q]').forEach(btn => btn.addEventListener('click', () => { input.value = btn.dataset.q; form.requestSubmit(); }));
 
@@ -108,6 +117,13 @@ function setWorkspaceStatus(msg,bad=false){workspaceStatus.textContent=msg;works
 function asUrl(u){return /^https?:\/\//i.test(u)?u:`https://${u}`}
 function esc(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function attr(s=''){return esc(s)}
+function formatBytes(n) {
+  if (!n) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0; let v = n;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
 
 list.addEventListener('click', async (e) => {
   const btn = e.target.closest('.save-btn');
@@ -156,15 +172,19 @@ async function setActiveInvestigation(id) {
   deleteInvestigationBtn.disabled = !id;
   toggleLibraryBtn.disabled = !id;
   bulkImportBtn.disabled = !id;
-  toggleReportBtn.disabled = !id;
   addUrlForm.classList.toggle('hidden', !id);
-  bulkImportForm.classList.add('hidden');
+  importZone.classList.toggle('hidden', !id);
   librarySection.classList.add('hidden');
-  reportSection.classList.add('hidden');
+  dashboardSection.classList.add('hidden');
   toggleLibraryBtn.setAttribute('aria-expanded', 'false');
-  toggleReportBtn.setAttribute('aria-expanded', 'false');
+  investigationSearchResults.innerHTML = '';
+  investigationQuery.value = '';
   savedKeys = id ? await getSavedCanonicalKeys(id) : new Set();
   render();
+  if (id) {
+    const docs = (await listInvestigationRecords(id)).filter((r) => r.sourceType === 'bulk-document');
+    if (docs.length) { await renderDashboard(); dashboardSection.classList.remove('hidden'); }
+  }
 }
 
 async function renderLibrary() {
@@ -197,6 +217,7 @@ newInvestigationForm.addEventListener('submit', async (e) => {
   newInvestigationForm.reset();
   newInvestigationForm.classList.add('hidden');
   setWorkspaceStatus(`Created investigation "${investigation.name}".`);
+  importZone.scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 
 deleteInvestigationBtn.addEventListener('click', async () => {
@@ -217,84 +238,9 @@ toggleLibraryBtn.addEventListener('click', async () => {
 });
 
 bulkImportBtn.addEventListener('click', () => {
-  bulkImportForm.classList.toggle('hidden');
+  importZone.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  dropTarget.querySelector('.file-btn')?.focus();
 });
-
-bulkImportForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!activeInvestigationId) return;
-  const files = bulkImportInput.files;
-  if (!files || !files.length) return;
-  const preserveOriginals = preserveOriginalsCheckbox.checked;
-
-  bulkImportProgress.classList.remove('hidden');
-  bulkImportProgress.textContent = 'Starting import…';
-  const onProgress = (p) => {
-    bulkImportProgress.textContent = p.status === 'error'
-      ? `Processed ${p.processed} files — error on "${p.current}": ${p.error}`
-      : `Processed ${p.processed} files (${formatBytes(p.byteTotal)}) — current: ${p.current}`;
-  };
-
-  try {
-    const isSingleZip = files.length === 1 && /\.zip$/i.test(files[0].name);
-    const batch = isSingleZip
-      ? await ingestZip(files[0], activeInvestigationId, onProgress, { preserveOriginals })
-      : await ingestFiles(files, activeInvestigationId, onProgress, { preserveOriginals });
-
-    savedKeys = await getSavedCanonicalKeys(activeInvestigationId);
-    bulkImportForm.reset();
-    bulkImportProgress.classList.add('hidden');
-    setWorkspaceStatus(`Imported ${batch.fileCount} file${batch.fileCount === 1 ? '' : 's'} (${formatBytes(batch.byteTotal)}). ${batch.skipped.length} unrecognized, ${batch.errors.length} errors.`);
-    if (!librarySection.classList.contains('hidden')) await renderLibrary();
-    if (!reportSection.classList.contains('hidden')) await renderReport();
-  } catch (err) {
-    bulkImportProgress.textContent = `Import failed: ${err.message}`;
-  }
-});
-
-toggleReportBtn.addEventListener('click', async () => {
-  const willOpen = reportSection.classList.contains('hidden');
-  if (willOpen) await renderReport();
-  reportSection.classList.toggle('hidden', !willOpen);
-  toggleReportBtn.setAttribute('aria-expanded', String(willOpen));
-});
-
-function formatBytes(n) {
-  if (!n) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let i = 0; let v = n;
-  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
-  return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
-async function renderReport() {
-  if (!activeInvestigationId) { reportSummary.innerHTML = ''; reportList.innerHTML = ''; return; }
-  const [batches, records] = await Promise.all([
-    listIngestionBatches(activeInvestigationId),
-    listInvestigationRecords(activeInvestigationId)
-  ]);
-  const docs = records.filter((r) => r.sourceType === 'bulk-document');
-  const duplicates = docs.filter((r) => r.isDuplicateOf).length;
-  const totalBytes = docs.reduce((n, r) => n + (r.fileSize || 0), 0);
-  const skippedTotal = batches.reduce((n, b) => n + (b.skipped?.length || 0), 0);
-  const errorTotal = batches.reduce((n, b) => n + (b.errors?.length || 0), 0);
-
-  reportSummary.innerHTML = [
-    { label: 'Batches', value: batches.length },
-    { label: 'Files ingested', value: docs.length },
-    { label: 'Total size', value: formatBytes(totalBytes) },
-    { label: 'Unrecognized types', value: skippedTotal },
-    { label: 'Errors', value: errorTotal }
-  ].map((s) => `<div class="source"><strong>${esc(String(s.value))}</strong><p>${esc(s.label)}</p></div>`).join('');
-
-  reportList.innerHTML = docs.length ? `<table><thead><tr><th>Source ID</th><th>Name</th><th>Type</th><th>Size</th><th>Hash</th><th>Snippet</th><th>Original</th></tr></thead><tbody>${
-    docs.map((r) => `<tr><td>${esc(r.sourceId || '')}</td><td>${esc(r.title || '')}</td><td>${esc(r.mime || '')}</td><td>${esc(formatBytes(r.fileSize))}</td><td title="${attr(r.fileHash || '')}">${esc((r.fileHash || '').slice(0, 10))}…</td><td>${esc((r.snippet || '').slice(0, 120))}</td><td>${
-      r.storageMode === 'local-copy'
-        ? `<button type="button" class="mini preview-btn" data-hash="${attr(r.fileHash)}">Preview</button>`
-        : `<span class="hint">Not stored — ${esc(r.filePath || '')}</span>`
-    }</td></tr>`).join('')
-  }</tbody></table>` : '<p class="status">No documents ingested into this investigation yet.</p>';
-}
 
 addUrlForm.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -308,6 +254,190 @@ addUrlForm.addEventListener('submit', async (e) => {
   addUrlForm.reset();
   setWorkspaceStatus(`Added ${url} to your investigation.`);
   if (!librarySection.classList.contains('hidden')) await renderLibrary();
+});
+
+// ---------- Bulk import: file inputs + real drag-and-drop ----------
+
+bulkImportFilesInput.addEventListener('change', () => {
+  if (bulkImportFilesInput.files.length) runImport([...bulkImportFilesInput.files]);
+  bulkImportFilesInput.value = '';
+});
+bulkImportFolderInput.addEventListener('change', () => {
+  if (bulkImportFolderInput.files.length) runImport([...bulkImportFolderInput.files]);
+  bulkImportFolderInput.value = '';
+});
+
+['dragenter', 'dragover'].forEach((evt) => dropTarget.addEventListener(evt, (e) => {
+  e.preventDefault();
+  dropTarget.classList.add('dragover');
+}));
+['dragleave', 'dragend'].forEach((evt) => dropTarget.addEventListener(evt, () => {
+  dropTarget.classList.remove('dragover');
+}));
+dropTarget.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  dropTarget.classList.remove('dragover');
+  if (!activeInvestigationId) return;
+  const items = await filesFromDataTransfer(e.dataTransfer);
+  if (items.length) runImport(items);
+});
+
+// Walks a DataTransfer's items, resolving dropped folders recursively via the
+// File and Directory Entries API. Falls back to getAsFile for plain drops.
+async function filesFromDataTransfer(dataTransfer) {
+  const out = [];
+  const entries = [];
+  const dtItems = dataTransfer.items ? [...dataTransfer.items] : [];
+  for (const item of dtItems) {
+    const entry = item.webkitGetAsEntry?.();
+    if (entry) entries.push(entry);
+    else if (item.kind === 'file') { const f = item.getAsFile(); if (f) out.push(f); }
+  }
+  async function walk(entry, prefix) {
+    if (entry.isFile) {
+      const file = await new Promise((res, rej) => entry.file(res, rej));
+      out.push({ file, path: prefix + entry.name });
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      let batch;
+      do {
+        batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+        for (const e of batch) await walk(e, `${prefix}${entry.name}/`);
+      } while (batch.length > 0);
+    }
+  }
+  for (const entry of entries) await walk(entry, '');
+  if (!entries.length && !out.length && dataTransfer.files) return [...dataTransfer.files];
+  return out;
+}
+
+async function runImport(items) {
+  if (!activeInvestigationId || !items.length) return;
+  const preserveOriginals = preserveOriginalsCheckbox.checked;
+
+  bulkImportProgress.classList.remove('hidden');
+  bulkImportProgress.textContent = 'Starting import…';
+  const onProgress = (p) => {
+    bulkImportProgress.textContent = p.status === 'error'
+      ? `Processed ${p.processed} files — error on "${p.current}": ${p.error}`
+      : `Processed ${p.processed} files (${formatBytes(p.byteTotal)}) — current: ${p.current}`;
+  };
+
+  try {
+    const first = items[0];
+    const firstName = first instanceof File ? first.name : first.file.name;
+    const isSingleZip = items.length === 1 && /\.zip$/i.test(firstName);
+    const batch = isSingleZip
+      ? await ingestZip(first instanceof File ? first : first.file, activeInvestigationId, onProgress, { preserveOriginals })
+      : await ingestFiles(items, activeInvestigationId, onProgress, { preserveOriginals });
+
+    savedKeys = await getSavedCanonicalKeys(activeInvestigationId);
+    bulkImportProgress.classList.add('hidden');
+    setWorkspaceStatus(`Imported ${batch.fileCount} file${batch.fileCount === 1 ? '' : 's'} (${formatBytes(batch.byteTotal)}). ${batch.duplicates.length} duplicates, ${batch.skipped.length + batch.errors.length} need attention.`);
+    if (!librarySection.classList.contains('hidden')) await renderLibrary();
+    await renderDashboard();
+    dashboardSection.classList.remove('hidden');
+    dashboardSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    bulkImportProgress.textContent = `Import failed: ${err.message}`;
+  }
+}
+
+// ---------- Dashboard: summary, facets, investigation-scoped search ----------
+
+const FACETS = [
+  { id: 'documents', label: 'Documents' },
+  { id: 'sources', label: 'Sources' },
+  { id: 'duplicates', label: 'Duplicates' },
+  { id: 'attention', label: 'Needs Attention' },
+  { id: 'people', label: 'People', disabled: true },
+  { id: 'organizations', label: 'Organizations', disabled: true },
+  { id: 'money', label: 'Money', disabled: true },
+  { id: 'dates', label: 'Dates', disabled: true },
+  { id: 'topics', label: 'Topics', disabled: true }
+];
+
+async function renderDashboard() {
+  if (!activeInvestigationId) { dashboardSummary.innerHTML = ''; reportList.innerHTML = ''; facetBar.innerHTML = ''; return; }
+  const [batches, records] = await Promise.all([
+    listIngestionBatches(activeInvestigationId),
+    listInvestigationRecords(activeInvestigationId)
+  ]);
+  const docs = records.filter((r) => r.sourceType === 'bulk-document');
+  const duplicateEntries = batches.flatMap((b) => b.duplicates || []);
+  const skipped = batches.flatMap((b) => (b.skipped || []).map((s) => ({ ...s, kind: 'unsupported' })));
+  const errors = batches.flatMap((b) => (b.errors || []).map((e) => ({ ...e, kind: 'error' })));
+  const totalReceived = batches.reduce((n, b) => n + (b.fileCount || 0), 0);
+  const totalBytes = docs.reduce((n, r) => n + (r.fileSize || 0), 0);
+  const typeCounts = docs.reduce((m, r) => { const k = bucket(r.mime) || 'Other'; m[k] = (m[k] || 0) + 1; return m; }, {});
+
+  lastDashboardData = { docs, records, duplicateEntries, skipped, errors, typeCounts };
+
+  dashboardSummary.innerHTML = [
+    { label: 'Files received', value: totalReceived },
+    { label: 'Indexed documents', value: docs.length },
+    { label: 'Duplicates', value: duplicateEntries.length },
+    { label: 'Needs attention', value: skipped.length + errors.length },
+    { label: 'Total size', value: formatBytes(totalBytes) },
+    ...Object.entries(typeCounts).map(([k, v]) => ({ label: k, value: v }))
+  ].map((s) => `<div class="source"><strong>${esc(String(s.value))}</strong><p>${esc(s.label)}</p></div>`).join('');
+
+  renderFacetBar();
+  applyFacet();
+}
+
+function renderFacetBar() {
+  facetBar.innerHTML = FACETS.map((f) => `<button type="button" role="tab" data-facet="${f.id}" aria-selected="${f.id === activeFacet}" ${f.disabled ? 'disabled title="Needs entity extraction — not built yet"' : ''}>${esc(f.label)}</button>`).join('');
+}
+facetBar.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-facet]');
+  if (!btn || btn.disabled) return;
+  activeFacet = btn.dataset.facet;
+  renderFacetBar();
+  applyFacet();
+});
+
+function applyFacet() {
+  if (!lastDashboardData) return;
+  const { docs, records, duplicateEntries, skipped, errors } = lastDashboardData;
+  if (activeFacet === 'sources') { renderRecordTable(records); return; }
+  if (activeFacet === 'duplicates') { renderDuplicateTable(duplicateEntries); return; }
+  if (activeFacet === 'attention') { renderAttentionTable(skipped, errors); return; }
+  renderRecordTable(docs); // 'documents' default
+}
+
+function renderRecordTable(rows) {
+  reportList.innerHTML = rows.length ? `<table><thead><tr><th>Source ID</th><th>Name</th><th>Type</th><th>Size</th><th>Hash</th><th>Snippet</th><th>Original</th></tr></thead><tbody>${
+    rows.map((r) => `<tr><td>${esc(r.sourceId || '')}</td><td>${esc(r.title || '')}</td><td>${esc(r.mime || '')}</td><td>${esc(formatBytes(r.fileSize))}</td><td title="${attr(r.fileHash || '')}">${esc((r.fileHash || '').slice(0, 10))}${r.fileHash ? '…' : ''}</td><td>${esc((r.snippet || '').slice(0, 120))}</td><td>${
+      r.storageMode === 'local-copy'
+        ? `<button type="button" class="mini preview-btn" data-hash="${attr(r.fileHash)}">Preview</button>`
+        : `<span class="hint">${r.filePath ? 'Not stored — ' + esc(r.filePath) : ''}</span>`
+    }</td></tr>`).join('')
+  }</tbody></table>` : '<p class="status">Nothing here yet.</p>';
+}
+
+function renderDuplicateTable(rows) {
+  reportList.innerHTML = rows.length ? `<table><thead><tr><th>Duplicate file</th><th>Matches existing source</th></tr></thead><tbody>${
+    rows.map((d) => `<tr><td>${esc(d.path)}</td><td>${esc(d.matchedTitle || d.matchedRecordId)}</td></tr>`).join('')
+  }</tbody></table>` : '<p class="status">No duplicate files found.</p>';
+}
+
+function renderAttentionTable(skipped, errors) {
+  const rows = [...skipped.map((s) => ({ path: s.path, reason: s.reason })), ...errors.map((e) => ({ path: e.path, reason: e.message }))];
+  reportList.innerHTML = rows.length ? `<table><thead><tr><th>File</th><th>Reason</th></tr></thead><tbody>${
+    rows.map((r) => `<tr><td>${esc(r.path)}</td><td>${esc(r.reason)}</td></tr>`).join('')
+  }</tbody></table>` : '<p class="status">Nothing needs attention.</p>';
+}
+
+investigationSearchForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!activeInvestigationId) return;
+  const q = investigationQuery.value.trim();
+  if (!q) { investigationSearchResults.innerHTML = ''; return; }
+  const results = await searchInvestigation(activeInvestigationId, q, 50);
+  investigationSearchResults.innerHTML = results.length
+    ? results.map((r) => card(r, 'library')).join('')
+    : '<p class="status">No matches in this investigation.</p>';
 });
 
 (async function init() {

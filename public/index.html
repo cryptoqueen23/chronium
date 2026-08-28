@@ -45,11 +45,10 @@
         <select id="investigationSelect">
           <option value="">No investigation selected</option>
         </select>
-        <button type="button" id="newInvestigationBtn">New investigation</button>
+        <button type="button" id="newInvestigationBtn" class="btn-primary">+ New investigation</button>
+        <button type="button" id="bulkImportBtn" class="btn-primary" disabled>⇧ Import Research</button>
         <button type="button" id="deleteInvestigationBtn" disabled>Delete investigation</button>
         <button type="button" id="toggleLibraryBtn" disabled aria-expanded="false" aria-controls="librarySection">My Library</button>
-        <button type="button" id="bulkImportBtn" disabled>Bulk import</button>
-        <button type="button" id="toggleReportBtn" disabled aria-expanded="false" aria-controls="reportSection">Document Report</button>
       </div>
 
       <form id="newInvestigationForm" class="workspace-form hidden">
@@ -85,22 +84,24 @@
         </div>
       </form>
 
-      <form id="bulkImportForm" class="workspace-form hidden">
-        <div>
-          <label for="bulkImportInput">Import files or a .zip export into this investigation</label>
-          <input id="bulkImportInput" type="file" multiple />
-        </div>
-        <div class="workspace-checkbox">
-          <label><input type="checkbox" id="preserveOriginalsCheckbox" /> Keep a local copy of original files in this browser</label>
-          <p class="hint">Off by default (Local Only): Chronium indexes file content and metadata but leaves originals wherever they already are. Turning this on stores a copy of each file's bytes in this browser.</p>
-        </div>
-        <div class="workspace-form-actions">
-          <button type="submit">Import</button>
+      <div id="workspaceStatus" class="status hidden" aria-live="polite"></div>
+
+      <!-- Persistent once an investigation is active - not behind a toggle. -->
+      <section id="importZone" class="import-zone hidden" aria-labelledby="importZoneTitle">
+        <div id="dropTarget" class="import-zone-inner">
+          <p class="eyebrow" id="importZoneTitle">IMPORT RESEARCH</p>
+          <h2>Drop your research here</h2>
+          <p class="import-formats">ZIP · PDF · CSV · XLSX · DOCX · TXT · EML</p>
+          <p class="hint">Drop files, folders, or a ZIP</p>
+          <div class="import-zone-actions">
+            <label class="btn-primary file-btn">Choose Files<input type="file" id="bulkImportFilesInput" multiple hidden /></label>
+            <label class="btn file-btn">Choose Folder<input type="file" id="bulkImportFolderInput" webkitdirectory hidden /></label>
+          </div>
+          <label class="import-zone-checkbox"><input type="checkbox" id="preserveOriginalsCheckbox" /> Keep a local copy of original files in this browser</label>
+          <p class="hint">Off by default (Local Only): originals stay on your device. Chronium indexes content and metadata, never uploads source bytes to Chronium cloud storage.</p>
         </div>
         <div id="bulkImportProgress" class="hint hidden" aria-live="polite"></div>
-      </form>
-
-      <div id="workspaceStatus" class="status hidden" aria-live="polite"></div>
+      </section>
 
       <section id="librarySection" class="results hidden">
         <div class="results-head">
@@ -109,11 +110,20 @@
         <div id="libraryResults" class="cards"></div>
       </section>
 
-      <section id="reportSection" class="results hidden">
+      <section id="dashboardSection" class="results hidden">
         <div class="results-head">
-          <div><p class="eyebrow">DOCUMENT REPORT</p><h2>Ingested documents</h2></div>
+          <div><p class="eyebrow">INVESTIGATION CORPUS</p><h2>Import complete</h2></div>
         </div>
-        <div id="reportSummary" class="coverage"></div>
+        <div id="dashboardSummary" class="coverage"></div>
+
+        <form id="investigationSearchForm" class="search compact" role="search">
+          <label class="sr-only" for="investigationQuery">Search this investigation</label>
+          <input id="investigationQuery" autocomplete="off" placeholder="Search this investigation…" />
+          <button type="submit">Search this investigation</button>
+        </form>
+        <div id="investigationSearchResults" class="cards"></div>
+
+        <div id="facetBar" class="facet-bar" role="tablist" aria-label="Corpus navigation"></div>
         <div id="reportList" class="report-table"></div>
       </section>
     </section>

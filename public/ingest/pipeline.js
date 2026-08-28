@@ -98,6 +98,7 @@ async function runBatch(entries, investigationId, label, onProgress, preserveOri
   let fileCount = 0, byteTotal = 0;
   const skipped = [];
   const errors = [];
+  const duplicates = [];
 
   for await (const entry of entries) {
     try {
@@ -108,6 +109,7 @@ async function runBatch(entries, investigationId, label, onProgress, preserveOri
       fileCount++;
       byteTotal += result.size;
       if (result.status === 'unsupported') skipped.push({ path: entry.path, reason: result.note || 'Unsupported file type' });
+      if (result.status === 'duplicate') duplicates.push({ path: entry.path, matchedRecordId: result.record.id, matchedTitle: result.record.title });
       onProgress?.({ processed: fileCount, byteTotal, current: entry.name, status: result.status });
     } catch (e) {
       errors.push({ path: entry.path, message: e.message });
@@ -115,17 +117,22 @@ async function runBatch(entries, investigationId, label, onProgress, preserveOri
     }
   }
 
-  return updateIngestionBatch(batch.id, { fileCount, byteTotal, skipped, errors, completedAt: new Date().toISOString() });
+  return updateIngestionBatch(batch.id, { fileCount, byteTotal, skipped, errors, duplicates, completedAt: new Date().toISOString() });
 }
 
-// Plain multi-file / folder picker input (a FileList or File[]). preserveOriginals
-// defaults to false: Local Only per docs/CANON.md - index the content, don't
-// copy the bytes into Chronium storage unless the caller opts in.
+// Plain multi-file / folder picker input, or drag-and-drop items. Each item is
+// either a File (from an <input>) or a { file, path } wrapper (from walking a
+// dropped folder's FileSystemEntry tree, which knows the real relative path).
+// preserveOriginals defaults to false: Local Only per docs/CANON.md - index
+// the content, don't copy the bytes into Chronium storage unless the caller
+// opts in.
 export async function ingestFiles(fileList, investigationId, onProgress, { label = 'Bulk file import', preserveOriginals = false } = {}) {
   async function* entries() {
-    for (const file of fileList) {
+    for (const item of fileList) {
+      const file = item instanceof File ? item : item.file;
+      const path = item instanceof File ? (file.webkitRelativePath || file.name) : (item.path || file.name);
       const bytes = new Uint8Array(await file.arrayBuffer());
-      yield { path: file.webkitRelativePath || file.name, name: file.name, bytes };
+      yield { path, name: file.name, bytes };
     }
   }
   return runBatch(entries(), investigationId, label, onProgress, preserveOriginals);

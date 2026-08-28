@@ -131,6 +131,9 @@ Division of labor:
 
 ## Storage Modes
 
+**Reference before replicate. Index before store. Cache before preserve. Preserve
+only when Chronium has a reason to own the bytes.**
+
 **User-owned files are local-first and must not be uploaded to Chronium storage by
 default.** Separate Evidence Metadata/Index (hash, extracted text, provenance —
 always kept, always small) from Evidence Bytes (the original file — kept only
