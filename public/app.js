@@ -148,7 +148,18 @@ function resultRow(x, mode) {
         ? `<button type="button" class="preview-btn" data-hash="${attr(x.fileHash)}" data-mime="${attr(x.mime)}">Preview original</button>`
         : `<span class="hint">Not stored by Chronium — original at: ${esc(x.filePath || x.title)}</span>`)
     : '';
-  return `<article class="result-row"><div class="result-when"><strong>${esc(year)}</strong>${esc(date)}</div><div><h3>${esc(x.title || x.originalUrl || 'Archived result')}</h3>${x.originalUrl ? `<div class="result-url">${esc(x.originalUrl)}</div>` : ''}${x.sourceId ? `<div class="result-url">${esc(x.sourceId)}</div>` : ''}${x.snippet ? `<p class="result-snippet">${esc(x.snippet).slice(0, 450)}</p>` : ''}${previewAction}<div class="tags"><span class="tag ${kindClass(x.sourceKind)}">${esc(kindLabel(x.sourceKind))}</span><span class="tag">${esc(x.source)}</span><span class="tag">${esc(x.matchType || 'archive')}</span>${x.mime ? `<span class="tag">${esc(x.mime)}</span>` : ''}${x.language ? `<span class="tag">${esc(x.language)}</span>` : ''}</div></div><div class="result-actions">${x.archiveUrl ? `<a class="primary" target="_blank" rel="noopener" href="${attr(x.archiveUrl)}">View source</a>` : ''}${x.originalUrl ? `<a target="_blank" rel="noopener" href="${attr(asUrl(x.originalUrl))}">Live URL</a>` : ''}${action}</div></article>`;
+  // Archive/live links are buttons, not plain <a> tags: Chronium checks the
+  // link resolves (and, for an archived copy, tries another preserved copy
+  // of the same page from a different archive) before ever navigating -
+  // never given a dead result when another working copy is available.
+  const alternates = Array.isArray(x.alternateArchiveUrls) ? x.alternateArchiveUrls : [];
+  const archiveBtn = x.archiveUrl
+    ? `<button type="button" class="link-check primary" data-link-kind="archive" data-url="${attr(x.archiveUrl)}" data-alternates="${attr(JSON.stringify(alternates))}">View archived copy</button>`
+    : '';
+  const liveBtn = x.originalUrl
+    ? `<button type="button" class="link-check" data-link-kind="live" data-url="${attr(asUrl(x.originalUrl))}">View current page</button>`
+    : '';
+  return `<article class="result-row"><div class="result-when"><strong>${esc(year)}</strong>${esc(date)}</div><div><h3>${esc(x.title || x.originalUrl || 'Archived result')}</h3>${x.originalUrl ? `<div class="result-url">${esc(x.originalUrl)}</div>` : ''}${x.sourceId ? `<div class="result-url">${esc(x.sourceId)}</div>` : ''}${x.snippet ? `<p class="result-snippet">${esc(x.snippet).slice(0, 450)}</p>` : ''}${previewAction}<div class="tags"><span class="tag ${kindClass(x.sourceKind)}">${esc(kindLabel(x.sourceKind))}</span><span class="tag">${esc(x.source)}</span><span class="tag">${esc(x.matchType || 'archive')}</span>${x.mime ? `<span class="tag">${esc(x.mime)}</span>` : ''}${x.language ? `<span class="tag">${esc(x.language)}</span>` : ''}</div></div><div class="result-actions">${archiveBtn}${liveBtn}${action}</div></article>`;
 }
 function date_(d) { return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
 
@@ -314,9 +325,42 @@ form.addEventListener('submit', async (e) => {
 sourceFilter.addEventListener('change', renderResults);
 typeFilter.addEventListener('change', renderResults);
 
+// Translates a raw connector failure into something a non-technical user can
+// read. Raw runtime errors ("The operation was aborted") never reach the UI -
+// they're implementation noise that makes a search that still returned good
+// results look broken. The real error stays available in data.connectors for
+// anyone inspecting the network response; this is just what renders.
+function humanizeConnectorError(c) {
+  if (c.skipped) return `${c.source} temporarily skipped after repeated failures — retrying automatically.`;
+  const err = c.error || '';
+  if (/aborted/i.test(err)) return `${c.source} temporarily unavailable (timed out).`;
+  if (/HTTP 429/.test(err)) return `${c.source} is rate-limiting requests right now.`;
+  if (/HTTP 403/.test(err)) return `${c.source} is blocking automated requests right now.`;
+  if (/HTTP 5\d\d/.test(err)) return `${c.source} is having server trouble right now.`;
+  return `${c.source} temporarily unavailable.`;
+}
+
 function renderCoverage(data, libraryHits) {
   const connectors = [...data.connectors, { source: 'My Library', capability: 'personal saved records', ok: true, count: libraryHits.length, note: null }];
-  coverage.innerHTML = connectors.map((c) => `<div class="source ${c.ok ? '' : 'bad'}"><strong><i class="dot" style="${c.ok ? '' : 'background:var(--danger)'}"></i>${esc(c.source)} · ${c.ok ? c.count : 'unavailable'}</strong><p>${esc(c.capability)}${c.note ? `<br>${esc(c.note)}` : ''}${c.error ? `<br>${esc(c.error)}` : ''}</p></div>`).join('');
+  const okList = connectors.filter((c) => c.ok);
+  const failedList = connectors.filter((c) => !c.ok);
+  // "All real archive connectors failed" - excludes the always-ok My Library
+  // entry, which isn't an archive. This is the only case that gets a loud
+  // banner; anything short of it is a quiet, neutral summary line.
+  const allArchivesFailed = data.connectors.length > 0 && data.connectors.every((c) => !c.ok);
+
+  const banner = allArchivesFailed
+    ? `<div class="status status-bad">All archives are temporarily unavailable right now — try again in a moment. Results below (if any) are from your saved research only.</div>`
+    : '';
+  const summary = `<p class="coverage-summary">${okList.length} of ${connectors.length} archives searched</p>`;
+  const grid = okList.length
+    ? `<div class="coverage-grid">${okList.map((c) => `<div class="source"><strong><i class="dot"></i>${esc(c.source)} · ${c.count}</strong><p>${esc(c.capability)}${c.note ? `<br>${esc(c.note)}` : ''}</p></div>`).join('')}</div>`
+    : '';
+  const details = failedList.length
+    ? `<details class="source-status"><summary>Source status</summary><ul>${failedList.map((c) => `<li>${esc(humanizeConnectorError(c))}</li>`).join('')}</ul></details>`
+    : '';
+
+  coverage.innerHTML = `${banner}${summary}${grid}${details}`;
 }
 function buildFilters(items) {
   const sources = [...new Set(items.map((x) => x.source).filter(Boolean))].sort();
@@ -350,6 +394,63 @@ document.addEventListener('click', async (e) => {
   if (!row) { showToast('Original not found in this browser (was it imported with "keep a local copy" off?).', true); return; }
   const url = URL.createObjectURL(row.blob);
   window.open(url, '_blank', 'noopener');
+});
+
+async function checkLinkRemote(target) {
+  try {
+    const res = await fetch(`/api/check-link?url=${encodeURIComponent(target)}`);
+    return await res.json();
+  } catch {
+    return { ok: false, kind: 'network-error' };
+  }
+}
+
+function showLinkUnavailable(btn, kind) {
+  const message = kind === 'archive'
+    ? 'Archived copy unavailable. Try another capture or source.'
+    : 'Current page unavailable.';
+  let note = btn.nextElementSibling;
+  if (!note || !note.classList.contains('link-unavailable-note')) {
+    note = document.createElement('p');
+    note.className = 'link-unavailable-note hint';
+    btn.insertAdjacentElement('afterend', note);
+  }
+  note.textContent = message;
+}
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.link-check');
+  if (!btn || btn.disabled) return;
+  const kind = btn.dataset.linkKind;
+  const primaryUrl = btn.dataset.url;
+  const originalLabel = btn.textContent;
+  const oldNote = btn.nextElementSibling;
+  if (oldNote?.classList.contains('link-unavailable-note')) oldNote.remove();
+
+  btn.disabled = true;
+  btn.textContent = 'Checking…';
+
+  // Never construct/guess a fallback - only try copies Chronium already has
+  // a real archiveUrl for, from another archive's successful response for
+  // this same page (server-grouped in groupSamePage(), src/index.js).
+  const candidates = [primaryUrl];
+  if (kind === 'archive') {
+    try { candidates.push(...(JSON.parse(btn.dataset.alternates || '[]')).slice(0, 2)); } catch { /* malformed data-alternates, ignore */ }
+  }
+
+  let opened = false;
+  for (const candidate of candidates) {
+    const verdict = await checkLinkRemote(candidate);
+    if (verdict.ok) {
+      window.open(verdict.finalUrl || candidate, '_blank', 'noopener');
+      opened = true;
+      break;
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = originalLabel;
+  if (!opened) showLinkUnavailable(btn, kind);
 });
 
 document.addEventListener('click', async (e) => {
