@@ -409,6 +409,7 @@ footer { border-top: 1px solid var(--border); max-width: var(--max); margin: 40p
 .stance-tag.contradicts { background: rgba(220,113,105,.15); color: var(--danger); }
 .card-delete { margin-top: 10px; }
 
+.ai-badge { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 2px 8px; border-radius: 999px; border: 1px solid #5b4a8a; color: #b6a7dd; vertical-align: middle; margin-left: 6px; }
 .gap-card { border: 1px solid #4a3a22; background: rgba(214,168,75,.06); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px; }
 .gap-card strong { display: block; font-size: 14px; color: var(--accent); }
 .gap-card p { margin: 4px 0 0; font-size: 13px; color: var(--text-secondary); }

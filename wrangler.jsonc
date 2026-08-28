@@ -13,5 +13,13 @@
       "binding": "CONNECTOR_HEALTH",
       "id": "4ed1a352be6943c8b96d10b6f374a589"
     }
-  ]
+  ],
+  "vars": {
+    // Which src/ai/index.js adapter handles Qualitative Analysis. Swapping
+    // providers is this one line, not a code change - see src/ai/provider.js.
+    // The actual credential is a secret, never a var: run
+    //   wrangler secret put ANTHROPIC_API_KEY
+    // locally to set it (never committed, never sent to the client).
+    "AI_PROVIDER": "anthropic"
+  }
 }

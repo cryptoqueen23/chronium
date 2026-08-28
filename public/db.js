@@ -5,10 +5,12 @@
 // outlines (one per investigation: research question + coverage lanes),
 // evidenceItems (excerpts pulled from a source), claims (assertions an
 // Evidence Item supports/contradicts) - the Source -> Evidence Item -> Claim
-// model from docs/RESEARCH_METHOD.md.
+// model from docs/RESEARCH_METHOD.md - and qualitativeAnalysis (the last
+// AI-assisted analysis result per investigation, so revisiting the tab
+// doesn't require re-running a paid AI call).
 
 const DB_NAME = 'chronium';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 let dbPromise = null;
 
 function openDb() {
@@ -52,6 +54,10 @@ function openDb() {
       if (!db.objectStoreNames.contains('claims')) {
         const claims = db.createObjectStore('claims', { keyPath: 'id' });
         claims.createIndex('investigationId', 'investigationId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('qualitativeAnalysis')) {
+        // One cached result per investigation - investigationId IS the key.
+        db.createObjectStore('qualitativeAnalysis', { keyPath: 'investigationId' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -422,4 +428,23 @@ export async function createClaim(investigationId, { text, links }) {
 export async function deleteClaim(claimId) {
   const db = await openDb();
   await tx(db, ['claims'], 'readwrite', (t) => t.objectStore('claims').delete(claimId));
+}
+
+// ---------------------------------------------------------------------------
+// Qualitative Analysis result cache - one per investigation, so revisiting
+// the Analysis tab shows the last AI result instantly instead of either
+// re-running a paid call or showing nothing. The server independently
+// caches by content hash too (src/index.js), so even an explicit re-run on
+// unchanged evidence is usually free within its cache window.
+// ---------------------------------------------------------------------------
+export async function getQualitativeAnalysis(investigationId) {
+  const db = await openDb();
+  return tx(db, ['qualitativeAnalysis'], 'readonly', (t) => reqToPromise(t.objectStore('qualitativeAnalysis').get(investigationId)));
+}
+
+export async function saveQualitativeAnalysis(investigationId, { result, model }) {
+  const db = await openDb();
+  const row = { investigationId, result, model: model || null, createdAt: new Date().toISOString() };
+  await tx(db, ['qualitativeAnalysis'], 'readwrite', (t) => t.objectStore('qualitativeAnalysis').put(row));
+  return row;
 }

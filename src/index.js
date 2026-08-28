@@ -1,9 +1,18 @@
 import corpus from "../data/copperas-cove/normalized.json";
+import { getAIProvider } from "./ai/index.js";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "public, max-age=60"
 };
+
+// Qualitative Analysis cost controls (docs/CANON.md Cost Principle: AI cost
+// routing is cache -> deterministic -> cheap model -> premium model, and
+// nothing calls a paid API without a real reason to).
+const AI_MIN_EVIDENCE_ITEMS = 2; // below this, deterministic "not enough evidence yet" - no AI call at all
+const AI_MAX_INPUT_CHARS = 12000; // roughly ~3000 tokens of evidence text, leaves room for the response
+const AI_MAX_TOKENS = 1200;
+const AI_CACHE_TTL_S = 1800; // 30 min - re-running analysis on unchanged evidence is free within this window
 
 const LOCAL_CORPORA = [
   { id: "copperas-cove", label: "Copperas Cove Investigation Corpus", data: corpus }
@@ -165,6 +174,20 @@ export default {
       const target = url.searchParams.get("url") || "";
       if (!/^https?:\/\//i.test(target)) return json({ ok: false, kind: "invalid" }, 400);
       return json(await checkLink(target));
+    }
+
+    // Read-only AI usage/cost visibility - the "cost per successful
+    // investigation/search" metric from docs/CANON.md's Cost Principle,
+    // at least for the AI slice of it.
+    if (url.pathname === "/api/ai/usage") {
+      const provider = getAIProvider(env);
+      const usage = await getAiUsage(env, provider.id);
+      return json({ provider: provider.id, ...usage });
+    }
+
+    if (url.pathname === "/api/analyze/qualitative") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
+      return handleQualitativeAnalysis(request, env, ctx);
     }
 
     if (url.pathname === "/api/search") {
@@ -598,6 +621,142 @@ async function checkLink(target) {
     console.error(`checkLink: ${target} -> ${e?.message || "unknown error"} (${kind})`);
     return { ok: false, status: null, finalUrl: null, kind };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Qualitative Analysis (AI-assisted) - Chronium never stores investigation
+// data server-side (it lives in the client's IndexedDB, see docs/CANON.md
+// Storage Modes), so the client sends the specific evidence/claims text to
+// analyze on each call. Quantitative analysis needs none of this - it's
+// pure counting over data the client already has, computed entirely
+// client-side in public/app.js with zero AI cost.
+// ---------------------------------------------------------------------------
+const ANALYSIS_SYSTEM_PROMPT = `You are analyzing evidence for a research investigation in Chronium, a "never lose the receipt" research tool.
+Rules:
+- Only reason over the evidence items and claims you are given. Never invent facts, names, dates, or figures that aren't present in them.
+- Every theme, pattern, or contradiction you identify must cite which evidence item id(s) (the "ev-..." ids given to you) it's based on.
+- This is AI Analysis, not Source Fact or Computed Fact (see Chronium's evidence rules) - never present your interpretation as established fact. If evidence is sparse, ambiguous, or contradictory, say so rather than overstating confidence.
+- Respond with ONLY a JSON object, no other text, no markdown fences, matching exactly this shape:
+{"themes":[{"title":string,"description":string,"evidenceIds":string[]}],"patterns":[{"description":string,"evidenceIds":string[]}],"contradictions":[{"description":string,"evidenceIds":string[]}],"synthesis":string}`;
+
+async function handleQualitativeAnalysis(request, env, ctx) {
+  let body;
+  try { body = await request.json(); } catch { return json({ error: "Invalid JSON body" }, 400); }
+
+  const researchQuestion = String(body?.researchQuestion || "").slice(0, 300);
+  const evidenceItems = Array.isArray(body?.evidenceItems) ? body.evidenceItems : [];
+  const claims = Array.isArray(body?.claims) ? body.claims : [];
+
+  if (evidenceItems.length < AI_MIN_EVIDENCE_ITEMS) {
+    // Deterministic answer, no AI call - docs/CANON.md: never call AI when
+    // deterministic analysis is enough (here: it's enough to just say no).
+    return json({ ok: true, skipped: true, reason: `Add at least ${AI_MIN_EVIDENCE_ITEMS} evidence items before running analysis.`, result: null });
+  }
+
+  const { promptBody, truncated } = buildEvidencePromptBody(evidenceItems, claims);
+  const prompt = `Research question: ${researchQuestion || "(not set)"}\n\n${promptBody}`;
+  const contentHash = hashString(ANALYSIS_SYSTEM_PROMPT + "|" + prompt);
+
+  const cacheKey = new Request(`https://cache.internal/analyze/qualitative?h=${contentHash}`);
+  const cacheHit = await caches.default.match(cacheKey);
+  if (cacheHit) return json({ ...(await cacheHit.json()), cached: true, truncated });
+
+  let provider;
+  try {
+    provider = getAIProvider(env);
+  } catch (e) {
+    return json({ ok: false, error: e.message }, 500);
+  }
+
+  const started = Date.now();
+  try {
+    const completion = await provider.complete({ system: ANALYSIS_SYSTEM_PROMPT, prompt, maxTokens: AI_MAX_TOKENS, env });
+    recordAiUsage(env, ctx, provider.id, { calls: 1, inputTokens: completion.inputTokens, outputTokens: completion.outputTokens, errors: 0 });
+
+    const result = parseAnalysisResponse(completion.text);
+    const payload = { ok: true, result, model: completion.model, tookMs: Date.now() - started };
+
+    const cacheResponse = new Response(JSON.stringify(payload), { headers: { "content-type": "application/json", "cache-control": `public, max-age=${AI_CACHE_TTL_S}` } });
+    ctx.waitUntil(caches.default.put(cacheKey, cacheResponse));
+
+    return json({ ...payload, cached: false, truncated });
+  } catch (e) {
+    recordAiUsage(env, ctx, provider.id, { calls: 1, inputTokens: 0, outputTokens: 0, errors: 1 });
+    console.error(`qualitative analysis failed: ${e.message}`);
+    return json({ ok: false, error: "AI analysis is temporarily unavailable. Try again in a moment." }, 502);
+  }
+}
+
+// Builds the evidence/claims text block for the prompt, truncating to
+// AI_MAX_INPUT_CHARS if needed rather than silently sending everything (or
+// silently dropping items without saying so).
+function buildEvidencePromptBody(evidenceItems, claims) {
+  const lines = ["Evidence items:"];
+  let truncated = false;
+  let usedItems = 0;
+  for (const item of evidenceItems) {
+    const line = `- [${item.id}] (${item.excerptType || "excerpt"}${item.location ? ", " + item.location : ""}): ${String(item.excerptText || "").slice(0, 600)}`;
+    const candidate = lines.join("\n") + "\n" + line;
+    if (candidate.length > AI_MAX_INPUT_CHARS) { truncated = true; break; }
+    lines.push(line);
+    usedItems++;
+  }
+  if (claims.length && !truncated) {
+    lines.push("\nExisting claims:");
+    for (const c of claims) {
+      const line = `- [${c.claimId || c.id}] ${String(c.text || "").slice(0, 300)}`;
+      const candidate = lines.join("\n") + "\n" + line;
+      if (candidate.length > AI_MAX_INPUT_CHARS) { truncated = true; break; }
+      lines.push(line);
+    }
+  }
+  if (truncated) lines.push(`\n(Analysis is based on the first ${usedItems} of ${evidenceItems.length} evidence items - the full set was too large for one analysis pass.)`);
+  return { promptBody: lines.join("\n"), truncated };
+}
+
+// The model is instructed to return only JSON, but never trust that
+// unconditionally - fall back to returning the raw text as the synthesis
+// rather than silently discarding an answer that didn't parse cleanly.
+function parseAnalysisResponse(text) {
+  try {
+    const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/```\s*$/, "");
+    const parsed = JSON.parse(cleaned);
+    return {
+      themes: Array.isArray(parsed.themes) ? parsed.themes : [],
+      patterns: Array.isArray(parsed.patterns) ? parsed.patterns : [],
+      contradictions: Array.isArray(parsed.contradictions) ? parsed.contradictions : [],
+      synthesis: typeof parsed.synthesis === "string" ? parsed.synthesis : "",
+      parseError: false
+    };
+  } catch {
+    return { themes: [], patterns: [], contradictions: [], synthesis: text, parseError: true };
+  }
+}
+
+// AI usage/cost tracking - reuses the CONNECTOR_HEALTH KV namespace (same
+// "small fast-changing counters" use case, no reason for a second
+// namespace) under a distinct key prefix.
+async function getAiUsage(env, providerId) {
+  if (!env?.CONNECTOR_HEALTH) return { calls: 0, inputTokens: 0, outputTokens: 0, errors: 0, lastUpdated: null };
+  const raw = await env.CONNECTOR_HEALTH.get(`ai-usage:${providerId}`, "json");
+  return raw || { calls: 0, inputTokens: 0, outputTokens: 0, errors: 0, lastUpdated: null };
+}
+
+function recordAiUsage(env, ctx, providerId, delta) {
+  if (!env?.CONNECTOR_HEALTH || !ctx) return;
+  ctx.waitUntil((async () => {
+    try {
+      const usage = await getAiUsage(env, providerId);
+      usage.calls += delta.calls || 0;
+      usage.inputTokens += delta.inputTokens || 0;
+      usage.outputTokens += delta.outputTokens || 0;
+      usage.errors += delta.errors || 0;
+      usage.lastUpdated = new Date().toISOString();
+      await env.CONNECTOR_HEALTH.put(`ai-usage:${providerId}`, JSON.stringify(usage));
+    } catch {
+      // Usage tracking is best-effort; never let it break analysis.
+    }
+  })());
 }
 
 // Sorts a fetch failure into a bucket so health tracking (and the circuit

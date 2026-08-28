@@ -294,7 +294,20 @@
           <div id="evidenceList" class="report-table"></div>
         </div>
 
-        <div id="workspacePanel-analysis" class="workspace-panel hidden" role="tabpanel"></div>
+        <div id="workspacePanel-analysis" class="workspace-panel hidden" role="tabpanel">
+          <div class="panel">
+            <h2>Quantitative</h2>
+            <p class="view-subtitle">Deterministic counts over your sources, evidence, and claims — no AI involved, always free.</p>
+            <div id="quantAnalysisGrid" class="stat-grid"></div>
+          </div>
+          <div class="panel">
+            <h2>Qualitative <span class="ai-badge">AI-assisted</span></h2>
+            <p class="view-subtitle">Themes, patterns, and contradictions across your evidence. This is AI interpretation, not established fact — every finding cites the evidence it's based on so you can check it yourself.</p>
+            <p id="qualAnalysisStatus" class="hint"></p>
+            <button type="button" id="runQualAnalysisBtn" class="btn btn-primary" style="margin-top:10px">Run AI analysis</button>
+            <div id="qualAnalysisResults" style="margin-top:18px"></div>
+          </div>
+        </div>
         <div id="workspacePanel-timeline" class="workspace-panel hidden" role="tabpanel"></div>
         <div id="workspacePanel-gaps" class="workspace-panel hidden" role="tabpanel"><div id="gapsContent"></div></div>
 

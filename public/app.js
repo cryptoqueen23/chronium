@@ -3,7 +3,8 @@ import {
   saveRecordToInvestigation, removeRecordFromInvestigation, listInvestigationRecords,
   getSavedCanonicalKeys, searchLibrary, searchInvestigation, addUserUrl, listIngestionBatches, getBlob,
   updateBibliographyDetails, getOutline, saveOutline, addOutlineLane, updateOutlineLane, deleteOutlineLane,
-  listEvidenceItems, createEvidenceItem, deleteEvidenceItem, listClaims, createClaim, deleteClaim
+  listEvidenceItems, createEvidenceItem, deleteEvidenceItem, listClaims, createClaim, deleteClaim,
+  getQualitativeAnalysis, saveQualitativeAnalysis
 } from './db.js';
 import { ingestFiles, ingestZip } from './ingest/pipeline.js';
 import { openOverlay, openMenu, confirmDialog } from './ui.js';
@@ -73,18 +74,6 @@ const WORKSPACE_TABS = [
   { id: 'claims', label: 'Claims', icon: 'icon-quote' },
   { id: 'report', label: 'Report', icon: 'icon-doc-check' }
 ];
-const DATA_DRIVEN_TABS = new Set(['overview', 'sources', 'timeline', 'outline', 'evidence', 'claims', 'gaps', 'report']);
-
-// Analysis is the one workspace section still not built: real Quantitative
-// & Qualitative analysis needs an AI call (theme extraction, trend
-// narration over free text), a separate provider/cost decision, not
-// something to fake with deterministic code.
-const COMING_SOON = {
-  analysis: {
-    title: 'Quantitative & Qualitative Analysis',
-    body: 'Not built yet. Chronium will support three analysis modes over your evidence base: Quantitative (trends, totals, variances), Qualitative (themes, rationale, chronology), and Mixed-Method (cross-checking numbers against narrative records) — always with methodology and citations preserved. This one needs an AI integration, which is a separate decision from the rest of the research pipeline.'
-  }
-};
 
 // ---------------------------------------------------------------------------
 // Small utilities
@@ -677,13 +666,6 @@ function buildWorkspaceTabStrip(activeTab) {
   strip.querySelectorAll('button[data-tab]').forEach((btn) => btn.addEventListener('click', () => { location.hash = `#/workspace/${btn.dataset.tab}`; }));
 }
 
-function buildStaticComingSoonPanels() {
-  Object.entries(COMING_SOON).forEach(([tab, { title: t, body }]) => {
-    const panel = document.querySelector(`#workspacePanel-${tab}`);
-    panel.innerHTML = `<div class="coming-soon"><svg class="coming-soon-mascot" width="40" height="40" aria-hidden="true"><use href="#icon-dragon-outline"/></svg><div><h2>${esc(t)}</h2><p>${body}</p></div></div>`;
-  });
-}
-buildStaticComingSoonPanels();
 
 async function renderWorkspaceView(tab) {
   const emptyState = document.querySelector('#workspaceEmptyState');
@@ -717,6 +699,8 @@ async function renderWorkspaceView(tab) {
     await renderGapsPanel();
   } else if (tab === 'report') {
     await renderReportPanel();
+  } else if (tab === 'analysis') {
+    await renderAnalysisPanel();
   }
 }
 
@@ -1135,6 +1119,128 @@ async function renderReportPanel() {
     }).join('');
     return `<article class="report-claim"><p class="report-claim-id">${esc(claim.claimId)}</p><h3>${esc(claim.text)}</h3>${evidenceHtml || '<p class="hint">No evidence linked to this claim yet.</p>'}</article>`;
   }).join('');
+}
+
+// ---------------------------------------------------------------------------
+// Analysis: Quantitative (deterministic, client-only, free) + Qualitative
+// (AI-assisted, explicit user action only, cached). Docs/CANON.md: AI is a
+// last resort behind cache -> deterministic code -> database/index ->
+// rules, never used for work normal code already does reliably - so
+// Quantitative never touches the network at all.
+// ---------------------------------------------------------------------------
+const MIN_EVIDENCE_FOR_ANALYSIS = 2;
+
+async function renderAnalysisPanel() {
+  const [records, outline, evidenceItems, claims] = await Promise.all([
+    listInvestigationRecords(activeInvestigationId),
+    getOutline(activeInvestigationId),
+    listEvidenceItems(activeInvestigationId),
+    listClaims(activeInvestigationId)
+  ]);
+
+  renderQuantitativeAnalysis(records, outline, evidenceItems, claims);
+  await renderQualitativeSection(evidenceItems, claims, outline);
+}
+
+function renderQuantitativeAnalysis(records, outline, evidenceItems, claims) {
+  const grid = document.querySelector('#quantAnalysisGrid');
+  const supportsCount = claims.reduce((n, c) => n + (c.links || []).filter((l) => l.stance === 'supports').length, 0);
+  const contradictsCount = claims.reduce((n, c) => n + (c.links || []).filter((l) => l.stance === 'contradicts').length, 0);
+  const typeCounts = evidenceItems.reduce((m, e) => { const k = e.excerptType || 'other'; m[k] = (m[k] || 0) + 1; return m; }, {});
+  const bySource = evidenceItems.reduce((m, e) => { m[e.sourceRecordId] = (m[e.sourceRecordId] || 0) + 1; return m; }, {});
+  const mostCitedCount = Object.values(bySource).reduce((max, n) => Math.max(max, n), 0);
+  const unlinkedClaims = claims.filter((c) => !(c.links || []).length).length;
+  const lanesWithNoEvidence = (outline.lanes || []).filter((lane) => !evidenceItems.some((e) => e.outlineLaneId === lane.id)).length;
+
+  const stats = [
+    { label: 'Sources', value: records.length },
+    { label: 'Evidence items', value: evidenceItems.length },
+    { label: 'Claims', value: claims.length },
+    { label: 'Supporting links', value: supportsCount },
+    { label: 'Contradicting links', value: contradictsCount },
+    { label: 'Claims with no evidence', value: unlinkedClaims },
+    { label: 'Most-cited source', value: mostCitedCount ? `${mostCitedCount}×` : '—' },
+    { label: 'Outline lanes with no evidence', value: lanesWithNoEvidence },
+    ...Object.entries(typeCounts).map(([k, v]) => ({ label: k, value: v }))
+  ];
+  grid.innerHTML = stats.map((s) => `<div><strong>${esc(String(s.value))}</strong><p>${esc(s.label)}</p></div>`).join('');
+}
+
+async function renderQualitativeSection(evidenceItems, claims, outline) {
+  const statusEl = document.querySelector('#qualAnalysisStatus');
+  const btn = document.querySelector('#runQualAnalysisBtn');
+  const resultsEl = document.querySelector('#qualAnalysisResults');
+
+  if (evidenceItems.length < MIN_EVIDENCE_FOR_ANALYSIS) {
+    statusEl.textContent = `Add at least ${MIN_EVIDENCE_FOR_ANALYSIS} evidence items on the Evidence tab before running analysis.`;
+    btn.disabled = true;
+  } else {
+    statusEl.textContent = '';
+    btn.disabled = false;
+  }
+
+  const cached = await getQualitativeAnalysis(activeInvestigationId);
+  if (cached?.result) {
+    renderQualitativeResult(cached.result, evidenceItems, claims);
+    btn.textContent = 'Re-run AI analysis';
+    if (!btn.disabled) statusEl.textContent = `Last analyzed ${formatDate(cached.createdAt)} (${cached.model || 'AI'}).`;
+  } else {
+    resultsEl.innerHTML = '';
+    btn.textContent = 'Run AI analysis';
+  }
+
+  btn.onclick = async () => {
+    btn.disabled = true;
+    btn.textContent = 'Analyzing…';
+    statusEl.textContent = 'Sending evidence for AI analysis…';
+    try {
+      const res = await fetch('/api/analyze/qualitative', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          researchQuestion: outline.researchQuestion || '',
+          evidenceItems: evidenceItems.map((e) => ({ id: e.id, excerptType: e.excerptType, location: e.location, excerptText: e.excerptText })),
+          claims: claims.map((c) => ({ claimId: c.claimId, text: c.text }))
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.error || 'Analysis failed.');
+      if (data.skipped) { statusEl.textContent = data.reason; return; }
+      await saveQualitativeAnalysis(activeInvestigationId, { result: data.result, model: data.model });
+      renderQualitativeResult(data.result, evidenceItems, claims);
+      statusEl.textContent = `${data.cached ? 'Loaded a recent analysis' : 'Analysis complete'} (${data.model || 'AI'}).${data.truncated ? ' Based on a subset of your evidence — the full set was too large for one pass.' : ''}`;
+      showToast('Qualitative analysis complete.');
+    } catch (err) {
+      statusEl.textContent = err.message;
+      showToast(err.message, true);
+    } finally {
+      btn.disabled = evidenceItems.length < MIN_EVIDENCE_FOR_ANALYSIS;
+      btn.textContent = 'Re-run AI analysis';
+    }
+  };
+}
+
+function renderQualitativeResult(result, evidenceItems, claims) {
+  const resultsEl = document.querySelector('#qualAnalysisResults');
+  const evById = new Map(evidenceItems.map((e) => [e.id, e]));
+  if (result.parseError) {
+    resultsEl.innerHTML = `<div class="panel"><p class="hint">The AI's response didn't come back in the expected format — showing it as-is.</p><p>${esc(result.synthesis)}</p></div>`;
+    return;
+  }
+  const citeList = (ids) => (ids || []).map((id) => evById.get(id)).filter(Boolean)
+    .map((e) => `<li>${esc(e.excerptText.slice(0, 140))}${e.excerptText.length > 140 ? '…' : ''}</li>`).join('');
+
+  const themesHtml = (result.themes || []).map((t) => `<div class="evidence-card"><p class="evidence-card-meta">Theme</p><p><strong>${esc(t.title)}</strong> — ${esc(t.description)}</p>${t.evidenceIds?.length ? `<ul class="claim-card-links">${citeList(t.evidenceIds)}</ul>` : ''}</div>`).join('');
+  const patternsHtml = (result.patterns || []).map((p) => `<div class="evidence-card"><p class="evidence-card-meta">Pattern</p><p>${esc(p.description)}</p>${p.evidenceIds?.length ? `<ul class="claim-card-links">${citeList(p.evidenceIds)}</ul>` : ''}</div>`).join('');
+  const contradictionsHtml = (result.contradictions || []).map((c) => `<div class="gap-card"><p class="evidence-card-meta">Contradiction</p><p>${esc(c.description)}</p>${c.evidenceIds?.length ? `<ul class="claim-card-links">${citeList(c.evidenceIds)}</ul>` : ''}</div>`).join('');
+
+  resultsEl.innerHTML = `
+    ${result.synthesis ? `<div class="panel"><h2>Synthesis</h2><p>${esc(result.synthesis)}</p></div>` : ''}
+    ${themesHtml ? `<h3 style="margin:18px 0 8px;font-size:14px">Themes</h3>${themesHtml}` : ''}
+    ${patternsHtml ? `<h3 style="margin:18px 0 8px;font-size:14px">Patterns</h3>${patternsHtml}` : ''}
+    ${contradictionsHtml ? `<h3 style="margin:18px 0 8px;font-size:14px">Contradictions</h3>${contradictionsHtml}` : ''}
+    ${!themesHtml && !patternsHtml && !contradictionsHtml && !result.synthesis ? '<p class="status">No findings returned.</p>' : ''}
+  `;
 }
 
 // ---------------------------------------------------------------------------
