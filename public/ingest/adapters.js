@@ -35,12 +35,20 @@ const PdfAdapter = new DocumentAdapter({
     pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.mjs';
     const doc = await pdfjsLib.getDocument({ data: bytes }).promise;
     const pages = [];
+    // pageOffsets[i] is the character offset in the final joined `text`
+    // where page i+1 begins - lets a search hit be mapped back to a page
+    // number for citations and passage-anchored "open at page" links.
+    const pageOffsets = [];
+    let offset = 0;
     for (let i = 1; i <= doc.numPages; i++) {
       const page = await doc.getPage(i);
       const content = await page.getTextContent();
-      pages.push(content.items.map((it) => it.str).join(' '));
+      const pageText = content.items.map((it) => it.str).join(' ');
+      pageOffsets.push(offset);
+      pages.push(pageText);
+      offset += pageText.length + 2; // +2 accounts for the '\n\n' joiner below
     }
-    return { text: pages.join('\n\n'), metadata: { pageCount: doc.numPages } };
+    return { text: pages.join('\n\n'), metadata: { pageCount: doc.numPages, pageOffsets } };
   }
 });
 

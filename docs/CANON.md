@@ -126,6 +126,54 @@ Search must work without AI and cover extracted text + metadata.
 
 Eventually support filters for date, organization, investigation, category, document type, entity, current/archive and version.
 
+### CANON RULE — Backup-to-the-Backup Reliability
+
+Chronium treats archives as a **redundant source pool, not independent
+buttons.** The researcher clicks one "View archived copy" button; Chronium
+is responsible for it actually opening a working page.
+
+For every historical result:
+
+```text
+Discover → Deduplicate → Validate → Rank → Open
+```
+
+If the preferred capture fails, keep trying known alternatives automatically
+until a working copy is found:
+
+```text
+Wayback → alternate Wayback capture → Arquivo.pt → Memento/other archive
+        → Common Crawl where usable → other preserved source
+```
+
+* Never knowingly send the researcher to a dead capture.
+* Validate before presenting a result as usable — checking happens at
+  click time (`/api/check-link`), not at render time for every row, but a
+  button is never allowed to open an unvalidated URL.
+* Keep multiple captures/providers behind one deduplicated result — a
+  researcher never sees three near-identical rows for the same page.
+* A provider outage must not break historical search. Failed providers
+  degrade silently unless *all* sources fail.
+* Cache successful (and short-lived negative) resolutions so Chronium never
+  repeatedly re-tests the same link.
+* Preserve which provider/capture ultimately supplied the evidence — that's
+  the provenance that matters, not whichever capture was tried first.
+* If absolutely no preserved copy works, say so plainly ("No accessible
+  archived copy found") — **never fake availability.**
+
+The UI shows the research result, not archive infrastructure: a provider
+that succeeded with zero matches, or one that's temporarily down, is not a
+result card — it's a line in "Source status," collapsed by default.
+
+**Shipped:** `groupSamePage` (`src/index.js`) does discover→dedupe→rank
+server-side, ordering each result's alternates by provider preference with
+same-provider captures first; `/api/check-link` validates and caches
+resolutions (Cache API, 10 min on success / 45s on failure); the
+`.link-check` handler (`public/app.js`) walks the whole alternates chain at
+click time, updates the row's provenance when a fallback wins, and only
+shows "No accessible archived copy found" once every known capture has
+actually been tried.
+
 ## AI
 
 AI assists research. **AI is never the source of truth.**

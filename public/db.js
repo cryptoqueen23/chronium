@@ -162,14 +162,61 @@ export async function getSavedCanonicalKeys(investigationId) {
   return new Set(rows.map((r) => r.canonicalKey));
 }
 
+// Maps a character offset in extracted text back to a 1-based page number,
+// using the PdfAdapter's pageOffsets (see public/ingest/adapters.js). Returns
+// null when the source has no page metadata (non-PDF, or extraction predates
+// this field).
+function pageForOffset(pageOffsets, offset) {
+  if (!Array.isArray(pageOffsets) || !pageOffsets.length || offset == null) return null;
+  let page = 1;
+  for (let i = 0; i < pageOffsets.length; i++) {
+    if (offset >= pageOffsets[i]) page = i + 1;
+    else break;
+  }
+  return page;
+}
+
+// Builds a passage centered on a match offset instead of returning the whole
+// document - `raw` is the exact excerpt (safe to save as Evidence verbatim),
+// `display` adds ellipsis markers when the passage was truncated (for UI only).
+function buildPassage(text, offset, termLength, radius = 180) {
+  const start = Math.max(0, offset - radius);
+  const end = Math.min(text.length, offset + termLength + radius);
+  const raw = text.slice(start, end).replace(/\s+/g, ' ').trim();
+  const display = (start > 0 ? '…' : '') + raw + (end < text.length ? '…' : '');
+  return { raw, display };
+}
+
 export async function searchInvestigation(investigationId, query, limit = 50) {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   const rows = await listInvestigationRecords(investigationId);
   if (!terms.length) return rows.slice(0, limit);
-  const matches = rows.filter((r) => {
-    const haystack = `${r.title || ''} ${r.description || r.snippet || ''} ${r.category || ''} ${r.originalUrl || ''} ${r.extractedText || ''}`.toLowerCase();
-    return terms.every((term) => haystack.includes(term));
-  });
+  const matches = [];
+  for (const r of rows) {
+    const extractedText = r.extractedText || '';
+    const haystack = `${r.title || ''} ${r.description || r.snippet || ''} ${r.category || ''} ${r.originalUrl || ''} ${extractedText}`.toLowerCase();
+    if (!terms.every((term) => haystack.includes(term))) continue;
+
+    // Find the first search term that actually hits inside the document body
+    // (not just the title/category) so the passage points at real content.
+    const textLower = extractedText.toLowerCase();
+    let matchOffset = -1, matchTerm = null;
+    for (const term of terms) {
+      const idx = textLower.indexOf(term);
+      if (idx >= 0) { matchOffset = idx; matchTerm = term; break; }
+    }
+
+    if (matchOffset < 0) { matches.push(r); continue; } // matched only title/category/url - no in-document passage to show
+    const { raw, display } = buildPassage(extractedText, matchOffset, matchTerm.length);
+    matches.push({
+      ...r,
+      matchPassage: display,
+      matchPassageRaw: raw,
+      matchOffset,
+      matchTerm,
+      matchPage: pageForOffset(r.metadata?.pageOffsets, matchOffset)
+    });
+  }
   return matches.slice(0, limit);
 }
 

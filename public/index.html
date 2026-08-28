@@ -446,6 +446,25 @@
     </div>
   </div>
 
+  <!-- ============ MODAL: Archive Viewer (render a capture in-app instead of navigating to it) ============ -->
+  <div id="archiveViewerDialog" class="overlay hidden">
+    <div class="dialog-panel dialog-panel-wide dialog-panel-viewer" role="dialog" aria-modal="true" aria-labelledby="archiveViewerTitle">
+      <div class="dialog-head">
+        <div>
+          <h2 id="archiveViewerTitle">Archived capture</h2>
+          <p id="archiveViewerMeta" class="view-subtitle"></p>
+        </div>
+        <button type="button" class="icon-btn" data-dialog-close="archiveViewerDialog" aria-label="Close"><svg width="18" height="18"><use href="#icon-close"/></svg></button>
+      </div>
+      <div id="archiveViewerBody" class="archive-viewer-body" aria-live="polite"></div>
+      <div class="dialog-actions dialog-actions-inline">
+        <button type="button" id="archiveViewerOriginalBtn" class="btn">Open original archive</button>
+        <button type="button" id="archiveViewerDownloadBtn" class="btn">Download</button>
+        <button type="button" class="btn btn-primary" data-dialog-close="archiveViewerDialog">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ Generic confirm dialog (delete, etc.) ============ -->
   <div id="confirmDialog" class="overlay hidden">
     <div class="dialog-panel dialog-panel-narrow" role="alertdialog" aria-modal="true" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogMessage">

@@ -63,6 +63,7 @@ class ArchiveProvider {
       return {
         source: this.label,
         capability: this.capabilities.join(" + "),
+        kind: "historical-archive",
         ok: false,
         skipped: true,
         error: `Temporarily skipped after repeated failures — retrying automatically in ~${retryInS}s.`,
@@ -78,7 +79,10 @@ class ArchiveProvider {
         const outcome = result.ok ? "success" : (classifyError(result.error) || "otherError");
         recordOutcome(env, ctx, this.id, outcome, Date.now() - started, result.error);
       }
-      return result;
+      // Every ArchiveProvider is, definitionally, a historical archive - the
+      // frontend must never lump this in with the researcher's own saved
+      // corpus/library when summarizing "archives searched".
+      return { kind: "historical-archive", ...result };
     } catch (e) {
       if (env && ctx) {
         recordOutcome(env, ctx, this.id, classifyError(e?.message) || "otherError", Date.now() - started, e?.message);
@@ -86,6 +90,7 @@ class ArchiveProvider {
       return {
         source: this.label,
         capability: this.capabilities.join(" + "),
+        kind: "historical-archive",
         ok: false,
         error: e?.message || "Provider failed",
         count: 0,
@@ -173,7 +178,137 @@ export default {
     if (url.pathname === "/api/check-link") {
       const target = url.searchParams.get("url") || "";
       if (!/^https?:\/\//i.test(target)) return json({ ok: false, kind: "invalid" }, 400);
-      return json(await checkLink(target));
+
+      // CANON "Backup-to-the-backup reliability": cache resolutions so a
+      // researcher paging through the same result set (or Chronium's own
+      // fallback cascade re-trying a candidate) never re-tests a link that
+      // was just checked. Successes cache longer than failures - a working
+      // capture stays working; a failure is more likely transient and
+      // shouldn't be trusted as permanently dead for long.
+      const cache = caches.default;
+      const cacheKey = new Request(`${url.origin}/api/check-link?url=${encodeURIComponent(target)}`);
+      const hit = await cache.match(cacheKey);
+      if (hit) return hit;
+
+      const verdict = await checkLink(target);
+      const response = json(verdict);
+      response.headers.set("cache-control", `public, max-age=${verdict.ok ? 600 : 45}`);
+      ctx.waitUntil(cache.put(cacheKey, response.clone()));
+      return response;
+    }
+
+    // Archive Viewer: proxies an archived capture so it can be rendered
+    // INSIDE Chronium (an iframe, a PDF embed, a text panel) instead of the
+    // browser navigating straight to the archive's own URL - which, for a
+    // PDF or a misconfigured server, can mean a forced download instead of
+    // a page the researcher can actually look at. Two modes:
+    //   (default) view  - allowlisted content-types only, HTML gets a
+    //                      <base> tag injected so relative assets still
+    //                      resolve against the real archive host, and
+    //                      Content-Disposition is always forced to
+    //                      "inline" regardless of what the origin sent.
+    //   ?download=1      - unmodified passthrough of the exact bytes
+    //                      Chronium saw (evidence integrity: the viewer is
+    //                      presentation-only, this is the real artifact),
+    //                      Content-Disposition forced to "attachment".
+    // Only known archive hosts are proxied - this endpoint is not an open
+    // proxy for arbitrary URLs.
+    if (url.pathname === "/api/view-capture") {
+      const target = url.searchParams.get("url") || "";
+      const download = url.searchParams.get("download") === "1";
+      if (!/^https?:\/\//i.test(target)) return json({ ok: false, error: "Invalid URL" }, 400);
+      if (!isKnownArchiveHost(target)) return json({ ok: false, error: "Not a recognized archive host" }, 400);
+
+      const cache = caches.default;
+      const cacheKey = new Request(`${url.origin}/api/view-capture?url=${encodeURIComponent(target)}&download=${download ? 1 : 0}`);
+      const hit = await cache.match(cacheKey);
+      if (hit) return hit;
+
+      // Arquivo.pt and Wayback Machine both replay through pywb, which
+      // serves a toolbar+frameset wrapper at the normal capture URL - the
+      // actual archived page sits in a *static* nested <iframe> at a
+      // modifier-suffixed URL (Arquivo: .../wayback/<ts>mp_/<url>, Wayback:
+      // .../web/<ts>if_/<url>). Rendering the wrapper directly (with scripts
+      // sandboxed off, as this viewer requires) would show pywb's own chrome
+      // - never the page. View mode fetches the direct-content variant;
+      // download mode still fetches the exact URL Chronium cited, unmodified,
+      // for evidence integrity.
+      const fetchTarget = download ? target : toDirectContentUrl(target);
+
+      let upstream;
+      try {
+        upstream = await fetchResilient(fetchTarget, 15000, { redirect: "follow" });
+      } catch (e) {
+        return json({ ok: false, error: `Could not reach this capture (${classifyError(e?.message) || "network error"}).` }, 502);
+      }
+      if (!upstream.ok) {
+        upstream.body?.cancel?.();
+        return json({ ok: false, error: `Capture responded with HTTP ${upstream.status}.` }, 502);
+      }
+
+      const contentType = (upstream.headers.get("content-type") || "application/octet-stream").split(";")[0].trim().toLowerCase();
+
+      if (download) {
+        // Raw, unmodified passthrough - the actual archived bytes, for
+        // evidence integrity. No content-type restriction: if it was
+        // reachable, the researcher can save it.
+        const response = new Response(upstream.body, {
+          status: 200,
+          headers: {
+            "content-type": contentType,
+            "content-disposition": `attachment; filename="${filenameForCapture(target, contentType)}"`,
+            "cache-control": "private, max-age=300"
+          }
+        });
+        ctx.waitUntil(cache.put(cacheKey, response.clone()));
+        return response;
+      }
+
+      const RENDERABLE_TYPES = new Set([
+        "text/html", "application/xhtml+xml", "application/pdf",
+        "text/plain", "application/json", "text/xml", "application/xml", "text/csv", "application/csv",
+        "image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"
+      ]);
+      if (!RENDERABLE_TYPES.has(contentType)) {
+        upstream.body?.cancel?.();
+        return json({ ok: false, error: `Chronium can't safely preview "${contentType}" content.`, unsupported: true }, 415);
+      }
+
+      const contentLength = Number(upstream.headers.get("content-length") || 0);
+      const MAX_PROXY_BYTES = 30 * 1024 * 1024;
+      if (contentLength > MAX_PROXY_BYTES) {
+        upstream.body?.cancel?.();
+        return json({ ok: false, error: "Capture is too large to preview safely.", tooLarge: true }, 413);
+      }
+
+      let response;
+      if (contentType === "text/html" || contentType === "application/xhtml+xml") {
+        const MAX_HTML_CHARS = 8 * 1024 * 1024;
+        const html = await upstream.text();
+        if (html.length > MAX_HTML_CHARS) {
+          return json({ ok: false, error: "Capture is too large to preview safely.", tooLarge: true }, 413);
+        }
+        // The HTML now comes from Chronium's own origin, but its relative
+        // (and root-relative) asset/link URLs were written to resolve
+        // against fetchTarget (the direct-content URL for pywb captures) -
+        // a <base> tag is enough to fix that for the whole document, no
+        // need to rewrite every href/src.
+        const baseTag = `<base href="${fetchTarget.replace(/"/g, "&quot;")}">`;
+        const withBase = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => `${m}${baseTag}`) : baseTag + html;
+        response = new Response(withBase, {
+          status: 200,
+          headers: { "content-type": "text/html; charset=utf-8", "content-disposition": "inline", "cache-control": "public, max-age=1800" }
+        });
+      } else {
+        // PDF/image/text - streamed straight through, never buffered, so a
+        // large PDF doesn't sit in Worker memory just to be re-sent.
+        response = new Response(upstream.body, {
+          status: 200,
+          headers: { "content-type": contentType, "content-disposition": "inline", "cache-control": "public, max-age=1800" }
+        });
+      }
+      ctx.waitUntil(cache.put(cacheKey, response.clone()));
+      return response;
     }
 
     // Read-only AI usage/cost visibility - the "cost per successful
@@ -247,8 +382,8 @@ export default {
         mode,
         tookMs: Date.now() - started,
         total: results.length,
-        connectors: payloads.map(({ source, capability, ok, error, count, note, skipped }) => ({
-          source, capability, ok, error: error || null, count: count || 0, note: note || null, skipped: !!skipped
+        connectors: payloads.map(({ source, capability, kind, ok, error, count, note, skipped }) => ({
+          source, capability, kind: kind || "historical-archive", ok, error: error || null, count: count || 0, note: note || null, skipped: !!skipped
         })),
         results
       });
@@ -491,6 +626,47 @@ function labelForArchiveHost(u) {
   return host;
 }
 
+// /api/view-capture only ever proxies known archive hosts - this is what
+// keeps it from becoming an open proxy for arbitrary URLs.
+const KNOWN_ARCHIVE_HOSTS = [
+  "web.archive.org", "archive-it.org", "nationalarchives.gov.uk", "webarchive.loc.gov", "loc.gov",
+  "arquivo.pt", "commoncrawl.org", "data.commoncrawl.org", "index.commoncrawl.org", "timetravel.mementoweb.org"
+];
+function isKnownArchiveHost(u) {
+  let host;
+  try { host = new URL(u).hostname.toLowerCase(); } catch { return false; }
+  return KNOWN_ARCHIVE_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+}
+
+// pywb (Arquivo.pt, Wayback Machine) replay URLs serve a toolbar+frameset
+// wrapper by default; appending a modifier right after the 14-digit
+// timestamp switches to direct content with no wrapper - what the
+// wrapper's own nested <iframe> points at. Only rewrites URLs that already
+// match the exact unmodified pattern, so it's a no-op (and never
+// double-applies) for anything else, including an already-modified URL.
+function toDirectContentUrl(u) {
+  try {
+    const host = new URL(u).hostname.toLowerCase();
+    if (host.endsWith("arquivo.pt") && /\/wayback\/\d{14}\//.test(u)) return u.replace(/(\/wayback\/\d{14})\//, "$1mp_/");
+    if (host.endsWith("web.archive.org") && /\/web\/\d{14}\//.test(u)) return u.replace(/(\/web\/\d{14})\//, "$1if_/");
+    return u;
+  } catch { return u; }
+}
+
+const EXT_FOR_CONTENT_TYPE = {
+  "text/html": "html", "application/xhtml+xml": "html", "application/pdf": "pdf",
+  "text/plain": "txt", "application/json": "json", "text/xml": "xml", "application/xml": "xml",
+  "text/csv": "csv", "application/csv": "csv",
+  "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/svg+xml": "svg"
+};
+function filenameForCapture(target, contentType) {
+  let last = "capture";
+  try { last = new URL(target).pathname.split("/").filter(Boolean).pop() || "capture"; } catch { /* keep default */ }
+  last = last.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "capture";
+  if (/\.[a-z0-9]{1,6}$/i.test(last)) return last;
+  return `${last}.${EXT_FOR_CONTENT_TYPE[contentType] || "bin"}`;
+}
+
 async function searchLocalCorpora(query, limit) {
   const source = LOCAL_CORPORA.map((c) => c.label).join(", ") || "Investigation corpus";
   try {
@@ -526,12 +702,12 @@ async function searchLocalCorpora(query, limit) {
       };
     });
     return {
-      source, capability: "local investigation corpus (keyword match)", ok: true,
+      source, capability: "local investigation corpus (keyword match)", kind: "my-research", ok: true,
       count: results.length, results,
       note: "Searches a locally bundled, previously harvested investigation dataset, not a live crawl."
     };
   } catch (e) {
-    return { source, capability: "local investigation corpus", ok: false, error: e.message, count: 0, results: [] };
+    return { source, capability: "local investigation corpus", kind: "my-research", ok: false, error: e.message, count: 0, results: [] };
   }
 }
 
@@ -545,11 +721,23 @@ function dedupe(items) {
   });
 }
 
+// CANON "Backup-to-the-backup reliability": the fallback order a dead
+// primary capture cascades through, most-trusted/most-complete first. Not
+// used to pick the primary (recency wins there, see below) - only to order
+// the alternates a dead link falls back through at click time.
+const PROVIDER_FALLBACK_ORDER = ["Wayback Machine", "Arquivo.pt", "Memento Aggregator", "Common Crawl"];
+function providerRank(source) {
+  const i = PROVIDER_FALLBACK_ORDER.indexOf(source);
+  return i === -1 ? PROVIDER_FALLBACK_ORDER.length : i;
+}
+
 // Collapses multiple archives' captures of the same underlying page (same
 // originalUrl) into one result row: the most recent capture is shown, the
-// rest become alternateArchiveUrls for the frontend's click-time fallback.
-// Runs after dedupe() (which only removes exact same-source repeats), so
-// this is specifically the cross-archive merge.
+// rest become alternateArchiveUrls for the frontend's click-time fallback -
+// each carrying its own source/captureDate so a fallback can report which
+// provider actually supplied the evidence (provenance), not just silently
+// swap URLs. Runs after dedupe() (which only removes exact same-source
+// repeats), so this is specifically the cross-archive merge.
 function groupSamePage(items) {
   const groups = new Map();
   for (const item of items) {
@@ -561,7 +749,22 @@ function groupSamePage(items) {
   for (const captures of groups.values()) {
     captures.sort((a, b) => String(b.captureDate || "").localeCompare(String(a.captureDate || "")));
     const [primary, ...rest] = captures;
-    const alternateArchiveUrls = [...new Set(rest.map((c) => c.archiveUrl).filter((u) => u && u !== primary.archiveUrl))];
+    // Fallback order: another capture from the SAME provider as the primary
+    // first (e.g. an older Wayback snapshot backing up the newest Wayback
+    // snapshot), then the remaining providers in preference order, and
+    // within each provider the most recent capture first.
+    const seen = new Set([primary.archiveUrl]);
+    const alternateArchiveUrls = rest
+      .filter((c) => c.archiveUrl && !seen.has(c.archiveUrl) && (seen.add(c.archiveUrl), true))
+      .sort((a, b) => {
+        const sameA = a.source === primary.source ? 0 : 1;
+        const sameB = b.source === primary.source ? 0 : 1;
+        if (sameA !== sameB) return sameA - sameB;
+        const rankDiff = providerRank(a.source) - providerRank(b.source);
+        if (rankDiff !== 0) return rankDiff;
+        return String(b.captureDate || "").localeCompare(String(a.captureDate || ""));
+      })
+      .map((c) => ({ source: c.source, archiveUrl: c.archiveUrl, captureDate: c.captureDate || null }));
     grouped.push(alternateArchiveUrls.length ? { ...primary, alternateArchiveUrls } : primary);
   }
   return grouped;

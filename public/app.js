@@ -55,6 +55,7 @@ const toast = document.querySelector('#toast');
 // State
 // ---------------------------------------------------------------------------
 let current = [];
+let lastQuery = '';
 let activeInvestigationId = localStorage.getItem('chronium.activeInvestigation') || '';
 let savedKeys = new Set();
 let activeFacet = 'documents';
@@ -104,8 +105,34 @@ function setStatus(msg, bad = false) { statusBox.textContent = msg; statusBox.cl
 function setAddResearchStatus(msg, bad = false) { addResearchStatus.textContent = msg; addResearchStatus.classList.remove('hidden'); addResearchStatus.classList.toggle('status-bad', bad); }
 
 function canonicalKeyOf(x) { return x.canonicalKey || x.originalUrl || x.archiveUrl || x.id; }
-function kindClass(k) { return k === 'investigation-corpus' ? 'kind-corpus' : k === 'personal-library' ? 'kind-library' : 'kind-connector'; }
+// Wraps the matched term in <mark> inside an already-escaped passage. Safe
+// because `passageHtml` is post-esc() and `term` only needs literal-regex
+// escaping, never HTML escaping, before matching against it.
+function highlightTerm(passageHtml, term) {
+  if (!term) return passageHtml;
+  const re = new RegExp(esc(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig');
+  return passageHtml.replace(re, (m) => `<mark>${m}</mark>`);
+}
 function kindLabel(k) { return k === 'investigation-corpus' ? 'Investigation corpus' : k === 'personal-library' ? 'My library' : 'Archive connector'; }
+function hostnameOf(u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } }
+
+// Wayback/Common Crawl are URL/capture indexes with no page-title metadata -
+// their `title` is just the raw URL again. Arquivo.pt, the corpus, and the
+// library all carry a real extracted title. Never headline a result with a
+// giant raw URL: fall back to a short label derived from the URL's last
+// path segment instead, in "Title — organization/site" shape either way.
+function displayTitle(x) {
+  const host = hostnameOf(x.originalUrl || '');
+  const hasRealTitle = x.title && x.title !== x.originalUrl && !/^https?:\/\//i.test(x.title);
+  if (hasRealTitle) return host ? `${x.title} — ${host}` : x.title;
+  if (host) {
+    const path = (() => { try { return new URL(x.originalUrl).pathname.replace(/\/+$/, ''); } catch { return ''; } })();
+    const last = path.split('/').filter(Boolean).pop();
+    const label = last ? decodeURIComponent(last).replace(/[-_]+/g, ' ') : host;
+    return `${label} — ${host}`;
+  }
+  return x.title || 'Archived result';
+}
 
 function resultRow(x, mode) {
   const d = x.captureDate ? new Date(x.captureDate) : null;
@@ -116,12 +143,22 @@ function resultRow(x, mode) {
   const action = mode === 'library'
     ? `<button type="button" class="remove-btn" data-record-id="${attr(x.id)}">Remove</button>`
     : activeInvestigationId
-      ? `<button type="button" class="save-btn" data-key="${attr(key)}" ${isSaved ? 'disabled' : ''}>${isSaved ? 'Saved' : 'Save'}</button>`
-      : `<button type="button" disabled title="Select or create an investigation first">Save</button>`;
+      ? `<button type="button" class="save-btn" data-key="${attr(key)}" ${isSaved ? 'disabled' : ''}>${isSaved ? 'Added to investigation' : '+ Add to investigation'}</button>`
+      : `<button type="button" disabled title="Select or create an investigation first">+ Add to investigation</button>`;
   const previewAction = x.sourceType === 'bulk-document'
     ? (x.storageMode === 'local-copy'
-        ? `<button type="button" class="preview-btn" data-hash="${attr(x.fileHash)}" data-mime="${attr(x.mime)}">Preview original</button>`
+        ? `<button type="button" class="preview-btn" data-hash="${attr(x.fileHash)}" data-mime="${attr(x.mime)}"${x.matchPage ? ` data-page="${attr(x.matchPage)}"` : ''}>${x.matchPage ? `Open at p.${esc(x.matchPage)}` : 'Preview original'}</button>`
         : `<span class="hint">Not stored by Chronium — original at: ${esc(x.filePath || x.title)}</span>`)
+    : '';
+  // A matched passage - from searchInvestigation's exact in-document hit, or
+  // an external connector's own full-text snippet (Arquivo.pt) - is why the
+  // researcher is looking at this result at all, so it's the second thing
+  // shown, right under the headline+date, highlighted the same way either way.
+  const passageBlock = x.matchPassage
+    ? `<p class="result-snippet result-passage">${highlightTerm(esc(x.matchPassage), x.matchTerm)}</p>`
+    : (x.snippet ? `<p class="result-snippet result-passage">${highlightTerm(esc(x.snippet).slice(0, 450), lastQuery)}</p>` : '');
+  const saveEvidenceAction = x.matchPassage
+    ? `<button type="button" class="save-evidence-btn" data-record-id="${attr(x.id)}" data-excerpt="${attr(x.matchPassageRaw || x.matchPassage)}" data-location="${attr(x.matchPage ? 'p.' + x.matchPage : '')}">Save as Evidence</button>`
     : '';
   // Archive/live links are buttons, not plain <a> tags: Chronium checks the
   // link resolves (and, for an archived copy, tries another preserved copy
@@ -129,12 +166,32 @@ function resultRow(x, mode) {
   // never given a dead result when another working copy is available.
   const alternates = Array.isArray(x.alternateArchiveUrls) ? x.alternateArchiveUrls : [];
   const archiveBtn = x.archiveUrl
-    ? `<button type="button" class="link-check primary" data-link-kind="archive" data-url="${attr(x.archiveUrl)}" data-alternates="${attr(JSON.stringify(alternates))}">View archived copy</button>`
+    ? `<button type="button" class="link-check primary" data-link-kind="archive" data-url="${attr(x.archiveUrl)}" data-source="${attr(x.source || '')}" data-key="${attr(key)}" data-date="${attr(date)}" data-alternates="${attr(JSON.stringify(alternates))}">View archived page</button>`
     : '';
   const liveBtn = x.originalUrl
     ? `<button type="button" class="link-check" data-link-kind="live" data-url="${attr(asUrl(x.originalUrl))}">View current page</button>`
     : '';
-  return `<article class="result-row"><div class="result-when"><strong>${esc(year)}</strong>${esc(date)}</div><div><h3>${esc(x.title || x.originalUrl || 'Archived result')}</h3>${x.originalUrl ? `<div class="result-url">${esc(x.originalUrl)}</div>` : ''}${x.sourceId ? `<div class="result-url">${esc(x.sourceId)}</div>` : ''}${x.snippet ? `<p class="result-snippet">${esc(x.snippet).slice(0, 450)}</p>` : ''}${previewAction}<div class="tags"><span class="tag ${kindClass(x.sourceKind)}">${esc(kindLabel(x.sourceKind))}</span><span class="tag">${esc(x.source)}</span><span class="tag">${esc(x.matchType || 'archive')}</span>${x.mime ? `<span class="tag">${esc(x.mime)}</span>` : ''}${x.language ? `<span class="tag">${esc(x.language)}</span>` : ''}</div></div><div class="result-actions">${archiveBtn}${liveBtn}${action}</div></article>`;
+  // One readable provenance line - date, archived/live, provider - replaces
+  // what used to be three separate technical tag pills. Everything more
+  // granular (raw URL, match type, mime, language, version count) is still
+  // there, just tucked behind "Details" instead of crowding every row.
+  const isArchiveLike = x.sourceKind === 'archive-connector' || x.sourceKind === 'investigation-corpus';
+  const provKind = isArchiveLike ? (x.archiveUrl ? 'Archived' : (x.originalUrl ? 'Live' : null)) : null;
+  const provenanceLine = provKind
+    ? `<p class="result-provenance">${esc(date)} · ${provKind}${x.source ? ` · ${esc(x.source)}` : ''}</p>`
+    : (x.sourceKind ? `<p class="result-provenance">${esc(date)} · ${esc(kindLabel(x.sourceKind))}</p>` : '');
+  const versionCount = 1 + alternates.length;
+  const detailsRows = [
+    x.originalUrl ? `<div>URL: ${esc(x.originalUrl)}</div>` : '',
+    x.sourceId ? `<div>Source ID: ${esc(x.sourceId)}</div>` : '',
+    x.matchType ? `<div>Match type: ${esc(x.matchType)}</div>` : '',
+    x.mime ? `<div>File type: ${esc(x.mime)}</div>` : '',
+    x.language ? `<div>Language: ${esc(x.language)}</div>` : '',
+    versionCount > 1 ? `<div>${versionCount} known captures</div>` : ''
+  ].filter(Boolean).join('');
+  const detailsBlock = detailsRows ? `<details class="result-details"><summary>Details</summary>${detailsRows}</details>` : '';
+  const urlLine = x.originalUrl ? `<div class="result-url" title="${attr(x.originalUrl)}">${esc(hostnameOf(x.originalUrl) || x.originalUrl)}</div>` : '';
+  return `<article class="result-row"><div class="result-when"><strong>${esc(year)}</strong>${esc(date)}</div><div><h3>${esc(displayTitle(x))}</h3>${provenanceLine}${passageBlock}${urlLine}${previewAction}${saveEvidenceAction}${detailsBlock}</div><div class="result-actions">${archiveBtn}${liveBtn}${action}</div></article>`;
 }
 function date_(d) { return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
 
@@ -278,6 +335,7 @@ document.querySelectorAll('[data-q]').forEach((btn) => btn.addEventListener('cli
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const q = input.value.trim(); if (!q) return;
+  lastQuery = q;
   setStatus(`Searching Chronium heads for “${q}”…`);
   resultsSection.classList.add('hidden');
   try {
@@ -317,23 +375,37 @@ function humanizeConnectorError(c) {
 }
 
 function renderCoverage(data, libraryHits) {
-  const connectors = [...data.connectors, { source: 'My Library', capability: 'personal saved records', ok: true, count: libraryHits.length, note: null }];
-  const okList = connectors.filter((c) => c.ok);
-  const failedList = connectors.filter((c) => !c.ok);
-  // "All real archive connectors failed" - excludes the always-ok My Library
-  // entry, which isn't an archive. This is the only case that gets a loud
-  // banner; anything short of it is a quiet, neutral summary line.
-  const allArchivesFailed = data.connectors.length > 0 && data.connectors.every((c) => !c.ok);
+  // "Historical archives" (Wayback, Arquivo.pt, Common Crawl, ...) and "My
+  // research" (the investigation corpus connector, plus this browser's
+  // saved library) are different kinds of source and must never be
+  // summarized together as "archives" - kind comes from the server
+  // (ArchiveProvider vs searchLocalCorpora, see src/index.js), so the
+  // frontend never has to guess by source name.
+  const archiveConnectors = data.connectors.filter((c) => c.kind !== 'my-research');
+  const myResearchConnectors = data.connectors.filter((c) => c.kind === 'my-research');
+  const myResearchHits = myResearchConnectors.reduce((sum, c) => sum + (c.count || 0), 0) + libraryHits.length;
+
+  const okWithResults = archiveConnectors.filter((c) => c.ok && c.count > 0);
+  const okZeroResults = archiveConnectors.filter((c) => c.ok && !c.count);
+  const failedList = archiveConnectors.filter((c) => !c.ok);
+  const allArchivesFailed = archiveConnectors.length > 0 && archiveConnectors.every((c) => !c.ok);
 
   const banner = allArchivesFailed
-    ? `<div class="status status-bad">All archives are temporarily unavailable right now — try again in a moment. Results below (if any) are from your saved research only.</div>`
+    ? `<div class="status status-bad">All historical archives are temporarily unavailable right now — try again in a moment. Results below (if any) are from your own research only.</div>`
     : '';
-  const summary = `<p class="coverage-summary">${okList.length} of ${connectors.length} archives searched</p>`;
-  const grid = okList.length
-    ? `<div class="coverage-grid">${okList.map((c) => `<div class="source"><strong><i class="dot"></i>${esc(c.source)} · ${c.count}</strong><p>${esc(c.capability)}${c.note ? `<br>${esc(c.note)}` : ''}</p></div>`).join('')}</div>`
+  const summary = `<p class="coverage-summary">${okWithResults.length} of ${archiveConnectors.length} historical archives returned matches${myResearchHits ? ` · ${myResearchHits} from your own research` : ''}</p>`;
+  // Only connectors that actually found something get a prominent card - a
+  // provider that succeeded but matched nothing is plumbing, not a result,
+  // and belongs in the same quiet details list as a failed one.
+  const grid = okWithResults.length
+    ? `<div class="coverage-grid">${okWithResults.map((c) => `<div class="source"><strong><i class="dot"></i>${esc(c.source)} · ${c.count}</strong><p>${esc(c.capability)}${c.note ? `<br>${esc(c.note)}` : ''}</p></div>`).join('')}</div>`
     : '';
-  const details = failedList.length
-    ? `<details class="source-status"><summary>Source status</summary><ul>${failedList.map((c) => `<li>${esc(humanizeConnectorError(c))}</li>`).join('')}</ul></details>`
+  const statusItems = [
+    ...failedList.map((c) => `<li>${esc(humanizeConnectorError(c))}</li>`),
+    ...okZeroResults.map((c) => `<li>${esc(c.source)} searched, no matches for this query.</li>`)
+  ];
+  const details = statusItems.length
+    ? `<details class="source-status"><summary>Source status</summary><ul>${statusItems.join('')}</ul></details>`
     : '';
 
   coverage.innerHTML = `${banner}${summary}${grid}${details}`;
@@ -369,29 +441,180 @@ document.addEventListener('click', async (e) => {
   const row = await getBlob(btn.dataset.hash);
   if (!row) { showToast('Original not found in this browser (was it imported with "keep a local copy" off?).', true); return; }
   const url = URL.createObjectURL(row.blob);
-  window.open(url, '_blank', 'noopener');
+  // #page=N is a standard PDF open parameter Chromium's built-in viewer
+  // honors even on blob: URLs - the closest we can get to "open at the
+  // exact match" without a bundled PDF viewer of our own.
+  const isPdf = (btn.dataset.mime || '').includes('pdf');
+  const target = isPdf && btn.dataset.page ? `${url}#page=${btn.dataset.page}` : url;
+  window.open(target, '_blank', 'noopener');
 });
 
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.save-evidence-btn');
+  if (!btn || !activeInvestigationId) return;
+  btn.disabled = true;
+  try {
+    await createEvidenceItem(activeInvestigationId, {
+      sourceRecordId: btn.dataset.recordId,
+      excerptType: 'quote',
+      location: btn.dataset.location || '',
+      outlineLaneId: null,
+      excerptText: btn.dataset.excerpt
+    });
+    btn.textContent = 'Saved to Evidence';
+    showToast('Saved this passage as Evidence — provenance and citation carried over automatically.');
+  } catch (err) {
+    btn.disabled = false;
+    showToast('Could not save this as evidence: ' + err.message, true);
+  }
+});
+
+// CANON "Backup-to-the-backup reliability": resolutions are cached so
+// Chronium never re-tests a link it already knows the answer to - this is
+// the in-memory half (instant, this page load); /api/check-link itself also
+// caches server-side so a second tab or a later session isn't cold either.
+const linkResolutionCache = new Map();
 async function checkLinkRemote(target) {
+  if (linkResolutionCache.has(target)) return linkResolutionCache.get(target);
+  let verdict;
   try {
     const res = await fetch(`/api/check-link?url=${encodeURIComponent(target)}`);
-    return await res.json();
+    verdict = await res.json();
   } catch {
-    return { ok: false, kind: 'network-error' };
+    verdict = { ok: false, kind: 'network-error' };
   }
+  linkResolutionCache.set(target, verdict);
+  return verdict;
 }
 
-function showLinkUnavailable(btn, kind) {
-  const message = kind === 'archive'
-    ? 'Archived copy unavailable. Try another capture or source.'
-    : 'Current page unavailable.';
+// Only used for the live-page link now - archive-page failures render
+// inside the Archive Viewer itself (openArchiveViewer), not as a note next
+// to the button.
+function showLinkUnavailable(btn) {
   let note = btn.nextElementSibling;
   if (!note || !note.classList.contains('link-unavailable-note')) {
     note = document.createElement('p');
     note.className = 'link-unavailable-note hint';
     btn.insertAdjacentElement('afterend', note);
   }
-  note.textContent = message;
+  note.textContent = 'The live page is unreachable right now — the archived copy above is your best bet.';
+}
+
+// ---------------------------------------------------------------------------
+// Archive Viewer - clicking "View archived page" renders the capture INSIDE
+// Chronium (iframe/PDF/text) instead of navigating straight to the
+// archive's URL, which for a PDF or a misconfigured server can mean a
+// forced download instead of a page the researcher can look at. The
+// content-type gate lives server-side (/api/view-capture, src/index.js);
+// this is presentation only - fetch, classify by the response's real
+// content-type, render, or fall through to the next known capture.
+// ---------------------------------------------------------------------------
+async function fetchCaptureForView(archiveUrl) {
+  const res = await fetch(`/api/view-capture?url=${encodeURIComponent(archiveUrl)}`);
+  const contentType = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (!res.ok) {
+    let error = `HTTP ${res.status}`;
+    try { error = (await res.json()).error || error; } catch { /* non-JSON error body, keep generic message */ }
+    return { ok: false, error };
+  }
+  if (contentType === 'application/pdf' || contentType.startsWith('image/')) return { ok: true, contentType, blob: await res.blob() };
+  return { ok: true, contentType, text: await res.text() }; // html, plain, json, xml, csv
+}
+
+function renderCaptureContent(result) {
+  const body = document.querySelector('#archiveViewerBody');
+  const ct = result.contentType;
+  body.innerHTML = '';
+  if (ct === 'text/html' || ct === 'application/xhtml+xml') {
+    const iframe = document.createElement('iframe');
+    iframe.className = 'archive-viewer-frame';
+    iframe.setAttribute('sandbox', ''); // render-only: no script execution from archived page content
+    iframe.srcdoc = result.text;
+    body.appendChild(iframe);
+  } else if (ct === 'application/pdf') {
+    const iframe = document.createElement('iframe');
+    iframe.className = 'archive-viewer-frame';
+    iframe.src = URL.createObjectURL(result.blob);
+    body.appendChild(iframe);
+  } else if (ct.startsWith('image/')) {
+    const wrap = document.createElement('div');
+    wrap.className = 'archive-viewer-image-wrap';
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(result.blob);
+    img.alt = 'Archived capture';
+    wrap.appendChild(img);
+    body.appendChild(wrap);
+  } else {
+    let text = result.text;
+    if (ct === 'application/json') { try { text = JSON.stringify(JSON.parse(text), null, 2); } catch { /* not valid JSON, show as-is */ } }
+    const pre = document.createElement('pre');
+    pre.className = 'archive-viewer-text';
+    pre.textContent = text;
+    body.appendChild(pre);
+  }
+}
+
+function triggerCaptureDownload(archiveUrl) {
+  const a = document.createElement('a');
+  a.href = `/api/view-capture?url=${encodeURIComponent(archiveUrl)}&download=1`;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+async function openArchiveViewer({ title, date, source, originalUrl, primaryUrl, primarySource, alternates, rowKey }) {
+  document.querySelector('#archiveViewerTitle').textContent = title || 'Archived capture';
+  document.querySelector('#archiveViewerMeta').textContent = [date, source, originalUrl].filter(Boolean).join(' · ');
+  document.querySelector('#archiveViewerBody').innerHTML = '<p class="status">Loading capture…</p>';
+  const origBtn = document.querySelector('#archiveViewerOriginalBtn');
+  const dlBtn = document.querySelector('#archiveViewerDownloadBtn');
+  origBtn.disabled = true;
+  dlBtn.disabled = true;
+  openDialog('archiveViewerDialog');
+
+  // Discover -> Deduplicate -> Validate -> Rank -> Open, same candidate
+  // chain as link reachability (CANON "Backup-to-the-backup reliability"),
+  // extended one step further: a candidate that resolves but can't be
+  // safely rendered (unsupported type, too large) also falls through to
+  // the next known capture before Chronium gives up.
+  const candidates = [{ source: primarySource, archiveUrl: primaryUrl }, ...alternates];
+  let lastReachable = null;
+  for (const candidate of candidates) {
+    const verdict = await checkLinkRemote(candidate.archiveUrl);
+    if (!verdict.ok) continue;
+    lastReachable = candidate;
+    const result = await fetchCaptureForView(candidate.archiveUrl).catch((e) => ({ ok: false, error: e.message }));
+    if (!result.ok) continue;
+
+    renderCaptureContent(result);
+    origBtn.disabled = false;
+    origBtn.onclick = () => window.open(candidate.archiveUrl, '_blank', 'noopener');
+    dlBtn.disabled = false;
+    dlBtn.onclick = () => triggerCaptureDownload(candidate.archiveUrl);
+
+    if (candidate.archiveUrl !== primaryUrl) {
+      const item = rowKey && current.find((r) => canonicalKeyOf(r) === rowKey);
+      if (item) { item.archiveUrl = candidate.archiveUrl; item.source = candidate.source; if (candidate.captureDate) item.captureDate = candidate.captureDate; }
+      showToast(`${primarySource}'s copy couldn't be shown — displaying the ${candidate.source} capture instead.`);
+    }
+    return;
+  }
+
+  // Nothing renderable. If at least one candidate was reachable, offer it
+  // via Open original / Download rather than a blanket failure - never
+  // fake a preview, but never hide a real (if unrenderable) copy either.
+  if (lastReachable) {
+    document.querySelector('#archiveViewerBody').innerHTML =
+      '<p class="status status-bad">Chronium reached this capture but can\'t safely preview it here. Open it directly or download the original bytes below.</p>';
+    origBtn.disabled = false;
+    origBtn.onclick = () => window.open(lastReachable.archiveUrl, '_blank', 'noopener');
+    dlBtn.disabled = false;
+    dlBtn.onclick = () => triggerCaptureDownload(lastReachable.archiveUrl);
+  } else {
+    document.querySelector('#archiveViewerBody').innerHTML =
+      '<p class="status status-bad">No accessible archived copy found. Every known capture was tried.</p>';
+  }
 }
 
 document.addEventListener('click', async (e) => {
@@ -399,34 +622,40 @@ document.addEventListener('click', async (e) => {
   if (!btn || btn.disabled) return;
   const kind = btn.dataset.linkKind;
   const primaryUrl = btn.dataset.url;
+
+  if (kind === 'archive') {
+    const row = btn.closest('.result-row');
+    let alternates = [];
+    try { alternates = JSON.parse(btn.dataset.alternates || '[]'); } catch { /* malformed data-alternates, ignore */ }
+    await openArchiveViewer({
+      title: row?.querySelector('h3')?.textContent || '',
+      date: btn.dataset.date || '',
+      source: btn.dataset.source || '',
+      originalUrl: row?.querySelector('.result-url')?.title || '',
+      primaryUrl,
+      primarySource: btn.dataset.source || 'this provider',
+      alternates,
+      rowKey: btn.dataset.key
+    });
+    return;
+  }
+
+  // Live pages have no fallback chain (there's only one "current" page) -
+  // validate then navigate directly, same as before.
   const originalLabel = btn.textContent;
   const oldNote = btn.nextElementSibling;
   if (oldNote?.classList.contains('link-unavailable-note')) oldNote.remove();
-
   btn.disabled = true;
   btn.textContent = 'Checking…';
-
-  // Never construct/guess a fallback - only try copies Chronium already has
-  // a real archiveUrl for, from another archive's successful response for
-  // this same page (server-grouped in groupSamePage(), src/index.js).
-  const candidates = [primaryUrl];
-  if (kind === 'archive') {
-    try { candidates.push(...(JSON.parse(btn.dataset.alternates || '[]')).slice(0, 2)); } catch { /* malformed data-alternates, ignore */ }
+  const verdict = await checkLinkRemote(primaryUrl);
+  if (verdict.ok) {
+    window.open(verdict.finalUrl || primaryUrl, '_blank', 'noopener');
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  } else {
+    btn.textContent = 'Current page unavailable';
+    showLinkUnavailable(btn);
   }
-
-  let opened = false;
-  for (const candidate of candidates) {
-    const verdict = await checkLinkRemote(candidate);
-    if (verdict.ok) {
-      window.open(verdict.finalUrl || candidate, '_blank', 'noopener');
-      opened = true;
-      break;
-    }
-  }
-
-  btn.disabled = false;
-  btn.textContent = originalLabel;
-  if (!opened) showLinkUnavailable(btn, kind);
 });
 
 document.addEventListener('click', async (e) => {
