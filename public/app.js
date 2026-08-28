@@ -1,7 +1,9 @@
 import {
   listInvestigations, createInvestigation, deleteInvestigation,
   saveRecordToInvestigation, removeRecordFromInvestigation, listInvestigationRecords,
-  getSavedCanonicalKeys, searchLibrary, searchInvestigation, addUserUrl, listIngestionBatches, getBlob
+  getSavedCanonicalKeys, searchLibrary, searchInvestigation, addUserUrl, listIngestionBatches, getBlob,
+  updateBibliographyDetails, getOutline, saveOutline, addOutlineLane, updateOutlineLane, deleteOutlineLane,
+  listEvidenceItems, createEvidenceItem, deleteEvidenceItem, listClaims, createClaim, deleteClaim
 } from './db.js';
 import { ingestFiles, ingestZip } from './ingest/pipeline.js';
 import { openOverlay, openMenu, confirmDialog } from './ui.js';
@@ -71,32 +73,16 @@ const WORKSPACE_TABS = [
   { id: 'claims', label: 'Claims', icon: 'icon-quote' },
   { id: 'report', label: 'Report', icon: 'icon-doc-check' }
 ];
-const DATA_DRIVEN_TABS = new Set(['overview', 'sources', 'timeline']);
+const DATA_DRIVEN_TABS = new Set(['overview', 'sources', 'timeline', 'outline', 'evidence', 'claims', 'gaps', 'report']);
 
+// Analysis is the one workspace section still not built: real Quantitative
+// & Qualitative analysis needs an AI call (theme extraction, trend
+// narration over free text), a separate provider/cost decision, not
+// something to fake with deterministic code.
 const COMING_SOON = {
-  outline: {
-    title: 'Research Outline',
-    body: 'Not built yet. Chronium will let you scope an investigation with a research question and a dynamic outline, then track evidence coverage against each lane (e.g. Budgets: 100%, Contracts: 40%) as you go.'
-  },
-  evidence: {
-    title: 'Evidence Items',
-    body: 'Not built yet. Individual paragraphs, table rows, or figures pulled from a Source that bear on your investigation will live here, each one linkable to a Claim.'
-  },
   analysis: {
     title: 'Quantitative & Qualitative Analysis',
-    body: 'Not built yet. Chronium will support three analysis modes over your evidence base: Quantitative (trends, totals, variances), Qualitative (themes, rationale, chronology), and Mixed-Method (cross-checking numbers against narrative records) — always with methodology and citations preserved.'
-  },
-  gaps: {
-    title: 'Research Gaps',
-    body: 'Not built yet. Chronium will surface a gap warning grounded in your outline’s coverage picture — e.g. "strong evidence for what was budgeted, insufficient evidence for actual project-level expenditures."'
-  },
-  claims: {
-    title: 'Claims',
-    body: 'Not built yet. A Claim is a specific factual assertion an Evidence Item supports or contradicts — the unit that findings and reports actually reason over, always traceable back to its source.'
-  },
-  report: {
-    title: 'Evidence-Backed Report',
-    body: 'Not built yet. Reports will be generated from your Claims, not directly from raw search results or AI summaries, so every finding can be walked backward: claim → evidence item → source.'
+    body: 'Not built yet. Chronium will support three analysis modes over your evidence base: Quantitative (trends, totals, variances), Qualitative (themes, rationale, chronology), and Mixed-Method (cross-checking numbers against narrative records) — always with methodology and citations preserved. This one needs an AI integration, which is a separate decision from the rest of the research pipeline.'
   }
 };
 
@@ -288,6 +274,7 @@ async function loadViewContent(route) {
   if (route.view === 'home') await renderHomeRecent();
   else if (route.view === 'investigations') await renderInvestigationsView();
   else if (route.view === 'library') await renderLibraryView();
+  else if (route.view === 'bibliography') await renderBibliographyView();
   else if (route.view === 'settings') renderSettingsView();
   else if (route.view === 'workspace') await renderWorkspaceView(route.tab);
 }
@@ -715,11 +702,21 @@ async function renderWorkspaceView(tab) {
   const panel = document.querySelector(`#workspacePanel-${tab}`) || document.querySelector('#workspacePanel-overview');
   panel.classList.remove('hidden');
 
-  if (DATA_DRIVEN_TABS.has(tab)) {
+  if (tab === 'overview' || tab === 'sources' || tab === 'timeline') {
     await refreshWorkspaceData();
     if (tab === 'overview') renderOverviewPanel();
     if (tab === 'sources') renderSourcesPanel();
     if (tab === 'timeline') renderTimelinePanel();
+  } else if (tab === 'outline') {
+    await renderOutlinePanel();
+  } else if (tab === 'evidence') {
+    await renderEvidencePanel();
+  } else if (tab === 'claims') {
+    await renderClaimsPanel();
+  } else if (tab === 'gaps') {
+    await renderGapsPanel();
+  } else if (tab === 'report') {
+    await renderReportPanel();
   }
 }
 
@@ -847,6 +844,298 @@ investigationSearchForm.addEventListener('submit', async (e) => {
   const results = await searchInvestigation(activeInvestigationId, q, 50);
   investigationSearchResults.innerHTML = results.length ? results.map((r) => resultRow(r, 'library')).join('') : '<p class="status">No matches in this investigation.</p>';
 });
+
+// ---------------------------------------------------------------------------
+// Bibliography (per active investigation)
+// ---------------------------------------------------------------------------
+async function renderBibliographyView() {
+  const emptyState = document.querySelector('#bibliographyEmptyState');
+  const listEl = document.querySelector('#bibliographyList');
+  const contextLine = document.querySelector('#bibliographyContextLine');
+  if (!activeInvestigationId) {
+    contextLine.textContent = '';
+    listEl.innerHTML = '';
+    emptyState.classList.remove('hidden');
+    emptyState.innerHTML = `<svg class="empty-state-mascot" width="48" height="48" aria-hidden="true"><use href="#icon-dragon-outline"/></svg>
+      <div><h2>No investigation open</h2><p>Bibliography details are scoped to an investigation's sources. Open or create one first.</p>
+      <div class="empty-state-actions"><a class="btn" href="#/investigations" data-route="/investigations">Browse investigations</a><button type="button" class="btn btn-primary" data-action="new-investigation">New investigation</button></div></div>`;
+    return;
+  }
+  emptyState.classList.add('hidden');
+  const investigations = await listInvestigations();
+  const inv = investigations.find((i) => i.id === activeInvestigationId);
+  contextLine.textContent = inv ? `Sources in “${inv.name}”` : '';
+  const records = await listInvestigationRecords(activeInvestigationId);
+  listEl.innerHTML = records.length ? `<table><thead><tr><th>Title</th><th>Publisher</th><th>Source type</th><th>Reliability</th><th>Notes</th><th></th></tr></thead><tbody>${
+    records.map((r) => {
+      const b = r.biblio || {};
+      return `<tr><td>${esc(r.title || r.originalUrl || 'Untitled')}</td><td>${esc(b.publisher || '—')}</td><td>${esc(b.sourceType || '—')}</td><td>${esc(b.reliability || '—')}</td><td>${esc((b.researchNotes || '').slice(0, 60))}${(b.researchNotes || '').length > 60 ? '…' : ''}</td><td><button type="button" class="mini-edit-btn" data-action="edit-bibliography" data-id="${attr(r.id)}">Edit</button></td></tr>`;
+    }).join('')
+  }</tbody></table>` : '<p class="status">No sources in this investigation yet.</p>';
+}
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="edit-bibliography"]');
+  if (!btn) return;
+  const records = await listInvestigationRecords(activeInvestigationId);
+  const record = records.find((r) => r.id === btn.dataset.id);
+  if (!record) return;
+  const b = record.biblio || {};
+  document.querySelector('#bibliographyRecordId').value = record.id;
+  document.querySelector('#bibliographyPublisher').value = b.publisher || '';
+  document.querySelector('#bibliographySourceType').value = b.sourceType || '';
+  document.querySelector('#bibliographyReliability').value = b.reliability || '';
+  document.querySelector('#bibliographyNotes').value = b.researchNotes || '';
+  document.querySelector('#bibliographyDialogTitle').textContent = `Bibliography: ${record.title || record.originalUrl || 'Untitled'}`;
+  openDialog('bibliographyDialog');
+});
+
+document.querySelector('#bibliographyForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const recordId = document.querySelector('#bibliographyRecordId').value;
+  await updateBibliographyDetails(recordId, {
+    publisher: document.querySelector('#bibliographyPublisher').value.trim(),
+    sourceType: document.querySelector('#bibliographySourceType').value,
+    reliability: document.querySelector('#bibliographyReliability').value,
+    researchNotes: document.querySelector('#bibliographyNotes').value.trim()
+  });
+  closeDialog('bibliographyDialog');
+  showToast('Saved bibliography details.');
+  await renderBibliographyView();
+});
+
+// ---------------------------------------------------------------------------
+// Research Outline
+// ---------------------------------------------------------------------------
+let currentOutline = null;
+
+async function renderOutlinePanel() {
+  currentOutline = await getOutline(activeInvestigationId);
+  document.querySelector('#outlineQuestionInput').value = currentOutline.researchQuestion || '';
+  document.querySelector('#outlineMethodSelect').value = currentOutline.method || 'mixed';
+  renderOutlineLanes(await listEvidenceItems(activeInvestigationId));
+}
+
+function renderOutlineLanes(evidenceItems) {
+  const container = document.querySelector('#outlineLanesList');
+  const lanes = currentOutline?.lanes || [];
+  if (!lanes.length) { container.innerHTML = '<p class="status">No coverage lanes yet — add one below.</p>'; return; }
+  container.innerHTML = lanes.map((lane) => {
+    const count = evidenceItems.filter((e) => e.outlineLaneId === lane.id).length;
+    const pct = lane.coveragePct;
+    const bar = pct == null ? '' : `<div class="lane-bar-track"><div class="lane-bar-fill" style="width:${pct}%"></div></div>`;
+    return `<div class="lane-row">
+      <div class="lane-row-label"><strong>${esc(lane.label)}</strong><span>${count} evidence item${count === 1 ? '' : 's'} linked</span></div>
+      ${bar}
+      <div class="lane-pct">${pct == null ? 'Not estimated' : pct + '%'}</div>
+      <button type="button" class="icon-btn" data-action="delete-lane" data-lane-id="${attr(lane.id)}" aria-label="Delete lane ${attr(lane.label)}"><svg width="16" height="16"><use href="#icon-close"/></svg></button>
+    </div>`;
+  }).join('');
+}
+
+document.querySelector('#outlineQuestionForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!activeInvestigationId) return;
+  currentOutline = await saveOutline(activeInvestigationId, {
+    researchQuestion: document.querySelector('#outlineQuestionInput').value.trim(),
+    method: document.querySelector('#outlineMethodSelect').value
+  });
+  showToast('Saved research outline.');
+});
+
+document.querySelector('#outlineLaneForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!activeInvestigationId) return;
+  const label = document.querySelector('#outlineLaneLabel').value.trim();
+  if (!label) return;
+  const coverageRaw = document.querySelector('#outlineLaneCoverage').value;
+  currentOutline = await addOutlineLane(activeInvestigationId, { label, coveragePct: coverageRaw === '' ? null : Number(coverageRaw) });
+  document.querySelector('#outlineLaneForm').reset();
+  renderOutlineLanes(await listEvidenceItems(activeInvestigationId));
+  showToast(`Added lane “${label}”.`);
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="delete-lane"]');
+  if (!btn || !activeInvestigationId) return;
+  currentOutline = await deleteOutlineLane(activeInvestigationId, btn.dataset.laneId);
+  renderOutlineLanes(await listEvidenceItems(activeInvestigationId));
+});
+
+// ---------------------------------------------------------------------------
+// Evidence Items
+// ---------------------------------------------------------------------------
+async function renderEvidencePanel() {
+  const [records, outline, items] = await Promise.all([
+    listInvestigationRecords(activeInvestigationId),
+    getOutline(activeInvestigationId),
+    listEvidenceItems(activeInvestigationId)
+  ]);
+  currentOutline = outline;
+
+  const sourceSelect = document.querySelector('#evidenceSourceSelect');
+  sourceSelect.innerHTML = records.length
+    ? records.map((r) => `<option value="${attr(r.id)}">${esc(r.title || r.originalUrl || r.id)}</option>`).join('')
+    : '<option value="">No sources in this investigation yet</option>';
+
+  const laneSelect = document.querySelector('#evidenceLaneSelect');
+  laneSelect.innerHTML = '<option value="">None</option>' + (outline.lanes || []).map((l) => `<option value="${attr(l.id)}">${esc(l.label)}</option>`).join('');
+
+  renderEvidenceList(items, records);
+}
+
+function renderEvidenceList(items, records) {
+  const container = document.querySelector('#evidenceList');
+  if (!items.length) { container.innerHTML = '<p class="status">No evidence items yet — pull a specific excerpt from a source above.</p>'; return; }
+  const byId = new Map(records.map((r) => [r.id, r]));
+  container.innerHTML = items.map((item) => {
+    const src = byId.get(item.sourceRecordId);
+    return `<article class="evidence-card">
+      <p class="evidence-card-meta">${esc(item.excerptType)}${item.location ? ' · ' + esc(item.location) : ''}</p>
+      <p>${esc(item.excerptText)}</p>
+      <p class="evidence-card-cite">From: ${src ? esc(src.title || src.originalUrl || 'Untitled source') : 'Source no longer in this investigation'}</p>
+      <button type="button" class="btn btn-small card-delete" data-action="delete-evidence" data-id="${attr(item.id)}">Delete</button>
+    </article>`;
+  }).join('');
+}
+
+document.querySelector('#evidenceForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!activeInvestigationId) return;
+  const sourceRecordId = document.querySelector('#evidenceSourceSelect').value;
+  if (!sourceRecordId) { showToast('Add a source to this investigation first.', true); return; }
+  const excerptText = document.querySelector('#evidenceExcerptInput').value.trim();
+  if (!excerptText) return;
+  await createEvidenceItem(activeInvestigationId, {
+    sourceRecordId,
+    excerptType: document.querySelector('#evidenceTypeSelect').value,
+    location: document.querySelector('#evidenceLocationInput').value,
+    outlineLaneId: document.querySelector('#evidenceLaneSelect').value || null,
+    excerptText
+  });
+  document.querySelector('#evidenceForm').reset();
+  await renderEvidencePanel();
+  showToast('Added evidence item.');
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="delete-evidence"]');
+  if (!btn) return;
+  await deleteEvidenceItem(btn.dataset.id);
+  await renderEvidencePanel();
+});
+
+// ---------------------------------------------------------------------------
+// Claims
+// ---------------------------------------------------------------------------
+async function renderClaimsPanel() {
+  const [records, items, claims] = await Promise.all([
+    listInvestigationRecords(activeInvestigationId),
+    listEvidenceItems(activeInvestigationId),
+    listClaims(activeInvestigationId)
+  ]);
+  renderClaimEvidencePicker(items);
+  renderClaimsList(claims, items, records);
+}
+
+function renderClaimEvidencePicker(items) {
+  const container = document.querySelector('#claimEvidencePicker');
+  if (!items.length) { container.innerHTML = '<p class="status" style="padding:12px;margin:0">Add evidence items first, on the Evidence tab.</p>'; return; }
+  container.innerHTML = items.map((item) => `<label class="claim-evidence-option">
+    <input type="checkbox" data-evidence-id="${attr(item.id)}" />
+    <span class="claim-evidence-option-text">${esc(item.excerptText.slice(0, 140))}${item.excerptText.length > 140 ? '…' : ''}<p>${esc(item.excerptType)}${item.location ? ' · ' + esc(item.location) : ''}</p></span>
+    <select data-stance-for="${attr(item.id)}" aria-label="Stance for this evidence item"><option value="supports">Supports</option><option value="contradicts">Contradicts</option></select>
+  </label>`).join('');
+}
+
+function renderClaimsList(claims, items, records) {
+  const container = document.querySelector('#claimsList');
+  if (!claims.length) { container.innerHTML = '<p class="status">No claims yet.</p>'; return; }
+  const evById = new Map(items.map((e) => [e.id, e]));
+  const recById = new Map(records.map((r) => [r.id, r]));
+  container.innerHTML = claims.map((claim) => {
+    const linkRows = (claim.links || []).map((l) => {
+      const ev = evById.get(l.evidenceItemId);
+      const src = ev ? recById.get(ev.sourceRecordId) : null;
+      return `<li><span class="stance-tag ${l.stance}">${l.stance}</span>${ev ? esc(ev.excerptText.slice(0, 80)) : 'Evidence item removed'}${src ? ' — ' + esc(src.title || src.originalUrl || '') : ''}</li>`;
+    }).join('');
+    return `<article class="claim-card">
+      <p class="claim-card-meta">${esc(claim.claimId)}</p>
+      <p>${esc(claim.text)}</p>
+      ${linkRows ? `<ul class="claim-card-links">${linkRows}</ul>` : ''}
+      <button type="button" class="btn btn-small card-delete" data-action="delete-claim" data-id="${attr(claim.id)}">Delete</button>
+    </article>`;
+  }).join('');
+}
+
+document.querySelector('#claimForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!activeInvestigationId) return;
+  const text = document.querySelector('#claimTextInput').value.trim();
+  if (!text) return;
+  const links = [...document.querySelectorAll('#claimEvidencePicker input[type=checkbox]:checked')].map((cb) => {
+    const id = cb.dataset.evidenceId;
+    const stanceSelect = document.querySelector(`select[data-stance-for="${id}"]`);
+    return { evidenceItemId: id, stance: stanceSelect ? stanceSelect.value : 'supports' };
+  });
+  const claim = await createClaim(activeInvestigationId, { text, links });
+  document.querySelector('#claimForm').reset();
+  await renderClaimsPanel();
+  showToast(`Added claim ${claim.claimId}.`);
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="delete-claim"]');
+  if (!btn) return;
+  await deleteClaim(btn.dataset.id);
+  await renderClaimsPanel();
+});
+
+// ---------------------------------------------------------------------------
+// Research Gaps (computed from Outline + Evidence, no separate store)
+// ---------------------------------------------------------------------------
+async function renderGapsPanel() {
+  const [outline, items] = await Promise.all([getOutline(activeInvestigationId), listEvidenceItems(activeInvestigationId)]);
+  const container = document.querySelector('#gapsContent');
+  const lanes = outline.lanes || [];
+  if (!lanes.length) {
+    container.innerHTML = `<div class="coming-soon"><svg class="coming-soon-mascot" width="40" height="40" aria-hidden="true"><use href="#icon-dragon-outline"/></svg><div><h2>No coverage lanes yet</h2><p>Research Gaps are computed from your <a href="#/workspace/outline" data-route="/workspace/outline">Outline</a>’s coverage lanes — add a few there to see gap warnings here.</p></div></div>`;
+    return;
+  }
+  const gaps = lanes
+    .map((lane) => ({ lane, count: items.filter((e) => e.outlineLaneId === lane.id).length }))
+    .filter((g) => g.count === 0 || (g.lane.coveragePct != null && g.lane.coveragePct < 50));
+  container.innerHTML = gaps.length
+    ? gaps.map(({ lane, count }) => `<div class="gap-card"><strong>${esc(lane.label)}</strong><p>${count === 0 ? 'No evidence items linked yet.' : `Only ${count} evidence item${count === 1 ? '' : 's'} linked.`}${lane.coveragePct != null ? ` Estimated coverage: ${lane.coveragePct}%.` : ''}</p></div>`).join('')
+    : '<p class="status">No gap warnings — every lane has evidence linked, and no lane is estimated below 50% coverage.</p>';
+}
+
+// ---------------------------------------------------------------------------
+// Evidence-Backed Report (generated from Claims, not stored)
+// ---------------------------------------------------------------------------
+async function renderReportPanel() {
+  const [records, items, claims] = await Promise.all([
+    listInvestigationRecords(activeInvestigationId),
+    listEvidenceItems(activeInvestigationId),
+    listClaims(activeInvestigationId)
+  ]);
+  const container = document.querySelector('#reportContent');
+  if (!claims.length) {
+    container.innerHTML = `<div class="coming-soon"><svg class="coming-soon-mascot" width="40" height="40" aria-hidden="true"><use href="#icon-dragon-outline"/></svg><div><h2>No claims yet</h2><p>A report is generated from your <a href="#/workspace/claims" data-route="/workspace/claims">Claims</a>, not from raw search results — add claims backed by evidence to build one.</p></div></div>`;
+    return;
+  }
+  const evById = new Map(items.map((e) => [e.id, e]));
+  const recById = new Map(records.map((r) => [r.id, r]));
+  container.innerHTML = claims.map((claim) => {
+    const evidenceHtml = (claim.links || []).map((l) => {
+      const ev = evById.get(l.evidenceItemId);
+      if (!ev) return '';
+      const src = recById.get(ev.sourceRecordId);
+      return `<div class="report-evidence"><span class="stance-tag ${l.stance}">${l.stance}</span>${esc(ev.excerptText)}<p>${src ? esc(src.title || src.originalUrl || 'Untitled source') : 'Source unavailable'}${ev.location ? ' · ' + esc(ev.location) : ''}</p></div>`;
+    }).join('');
+    return `<article class="report-claim"><p class="report-claim-id">${esc(claim.claimId)}</p><h3>${esc(claim.text)}</h3>${evidenceHtml || '<p class="hint">No evidence linked to this claim yet.</p>'}</article>`;
+  }).join('');
+}
 
 // ---------------------------------------------------------------------------
 // Init

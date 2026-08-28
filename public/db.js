@@ -1,10 +1,14 @@
 // Local-first investigation workspace storage. IndexedDB, no dependencies.
 // Stores: investigations, records (deduped evidence/sources), investigationRecords
 // (join), blobs (original evidence bytes, deduped by content hash),
-// ingestionBatches (one row per bulk import), meta (small counters).
+// ingestionBatches (one row per bulk import), meta (small counters),
+// outlines (one per investigation: research question + coverage lanes),
+// evidenceItems (excerpts pulled from a source), claims (assertions an
+// Evidence Item supports/contradicts) - the Source -> Evidence Item -> Claim
+// model from docs/RESEARCH_METHOD.md.
 
 const DB_NAME = 'chronium';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 let dbPromise = null;
 
 function openDb() {
@@ -35,6 +39,19 @@ function openDb() {
       }
       if (!db.objectStoreNames.contains('meta')) {
         db.createObjectStore('meta', { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains('outlines')) {
+        // One outline per investigation - investigationId IS the key.
+        db.createObjectStore('outlines', { keyPath: 'investigationId' });
+      }
+      if (!db.objectStoreNames.contains('evidenceItems')) {
+        const evidence = db.createObjectStore('evidenceItems', { keyPath: 'id' });
+        evidence.createIndex('investigationId', 'investigationId', { unique: false });
+        evidence.createIndex('sourceRecordId', 'sourceRecordId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('claims')) {
+        const claims = db.createObjectStore('claims', { keyPath: 'id' });
+        claims.createIndex('investigationId', 'investigationId', { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -256,4 +273,153 @@ export async function addUserUrl(investigationId, { url, title, note }) {
     sourceType: 'user-submitted'
   };
   return saveRecordToInvestigation(investigationId, record);
+}
+
+// ---------------------------------------------------------------------------
+// Bibliography: user-asserted metadata layered onto an existing source
+// record (Publisher, Source Type, Reliability, Research Notes - the
+// judgment-call fields from docs/RESEARCH_METHOD.md's Target Source Record
+// Shape). No new store: these are just additional fields on `records`,
+// written through the existing updateRecord().
+// ---------------------------------------------------------------------------
+export async function updateBibliographyDetails(recordId, { publisher, sourceType, reliability, researchNotes }) {
+  return updateRecord(recordId, {
+    biblio: { publisher: publisher || '', sourceType: sourceType || '', reliability: reliability || '', researchNotes: researchNotes || '' }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Research Outline: one per investigation - a research question, a method,
+// and coverage lanes. Coverage percentage is the researcher's own estimate
+// (never computed/fabricated) per CANON.md's SOURCE FACT / COMPUTED FACT /
+// AI ANALYSIS separation - Chronium only adds the real, countable evidence
+// item total per lane alongside it.
+// ---------------------------------------------------------------------------
+export async function getOutline(investigationId) {
+  const db = await openDb();
+  const existing = await tx(db, ['outlines'], 'readonly', (t) => reqToPromise(t.objectStore('outlines').get(investigationId)));
+  return existing || { investigationId, researchQuestion: '', method: 'mixed', lanes: [], updatedAt: null };
+}
+
+export async function saveOutline(investigationId, { researchQuestion, method }) {
+  const db = await openDb();
+  return tx(db, ['outlines'], 'readwrite', async (t) => {
+    const store = t.objectStore('outlines');
+    const existing = await reqToPromise(store.get(investigationId));
+    const outline = { investigationId, researchQuestion: researchQuestion ?? existing?.researchQuestion ?? '', method: method ?? existing?.method ?? 'mixed', lanes: existing?.lanes || [], updatedAt: new Date().toISOString() };
+    await reqToPromise(store.put(outline));
+    return outline;
+  });
+}
+
+export async function addOutlineLane(investigationId, { label, coveragePct }) {
+  const db = await openDb();
+  return tx(db, ['outlines'], 'readwrite', async (t) => {
+    const store = t.objectStore('outlines');
+    const existing = await reqToPromise(store.get(investigationId)) || { investigationId, researchQuestion: '', method: 'mixed', lanes: [] };
+    const lane = { id: genId('lane'), label: label.trim(), coveragePct: coveragePct == null ? null : clampPct(coveragePct), notes: '' };
+    existing.lanes = [...(existing.lanes || []), lane];
+    existing.updatedAt = new Date().toISOString();
+    await reqToPromise(store.put(existing));
+    return existing;
+  });
+}
+
+export async function updateOutlineLane(investigationId, laneId, patch) {
+  const db = await openDb();
+  return tx(db, ['outlines'], 'readwrite', async (t) => {
+    const store = t.objectStore('outlines');
+    const existing = await reqToPromise(store.get(investigationId));
+    if (!existing) return null;
+    existing.lanes = (existing.lanes || []).map((l) => l.id === laneId ? { ...l, ...patch, coveragePct: patch.coveragePct !== undefined ? (patch.coveragePct == null ? null : clampPct(patch.coveragePct)) : l.coveragePct } : l);
+    existing.updatedAt = new Date().toISOString();
+    await reqToPromise(store.put(existing));
+    return existing;
+  });
+}
+
+export async function deleteOutlineLane(investigationId, laneId) {
+  const db = await openDb();
+  return tx(db, ['outlines'], 'readwrite', async (t) => {
+    const store = t.objectStore('outlines');
+    const existing = await reqToPromise(store.get(investigationId));
+    if (!existing) return null;
+    existing.lanes = (existing.lanes || []).filter((l) => l.id !== laneId);
+    existing.updatedAt = new Date().toISOString();
+    await reqToPromise(store.put(existing));
+    return existing;
+  });
+}
+
+function clampPct(n) { return Math.min(100, Math.max(0, Math.round(Number(n) || 0))); }
+
+// ---------------------------------------------------------------------------
+// Evidence Items: a specific excerpt (paragraph/table row/figure/quote)
+// pulled from a Source that bears on the investigation. Always cites back
+// to the source record it came from - the "never lose the receipt" link.
+// ---------------------------------------------------------------------------
+export async function listEvidenceItems(investigationId) {
+  const db = await openDb();
+  const items = await tx(db, ['evidenceItems'], 'readonly', (t) =>
+    reqToPromise(t.objectStore('evidenceItems').index('investigationId').getAll(investigationId))
+  );
+  return items.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+export async function createEvidenceItem(investigationId, { sourceRecordId, excerptType, excerptText, location, outlineLaneId, notes }) {
+  const db = await openDb();
+  const item = {
+    id: genId('ev'), investigationId, sourceRecordId, excerptType: excerptType || 'paragraph',
+    excerptText: excerptText.trim(), location: (location || '').trim(), outlineLaneId: outlineLaneId || null,
+    notes: (notes || '').trim(), createdAt: new Date().toISOString()
+  };
+  await tx(db, ['evidenceItems'], 'readwrite', (t) => t.objectStore('evidenceItems').add(item));
+  return item;
+}
+
+export async function deleteEvidenceItem(evidenceItemId) {
+  const db = await openDb();
+  await tx(db, ['evidenceItems'], 'readwrite', (t) => t.objectStore('evidenceItems').delete(evidenceItemId));
+}
+
+// ---------------------------------------------------------------------------
+// Claims: a specific factual assertion an Evidence Item supports or
+// contradicts - what findings and reports actually reason over. Carries a
+// human-readable CHR-CLAIM-NNN id (parallel to Source's CHR-NNNNNN) so a
+// claim can be cited independent of any one investigation.
+// ---------------------------------------------------------------------------
+export async function getNextClaimId() {
+  const db = await openDb();
+  return tx(db, ['meta'], 'readwrite', async (t) => {
+    const store = t.objectStore('meta');
+    const row = await reqToPromise(store.get('claimIdCounter'));
+    const next = (row?.value || 0) + 1;
+    await reqToPromise(store.put({ key: 'claimIdCounter', value: next }));
+    return `CHR-CLAIM-${String(next).padStart(3, '0')}`;
+  });
+}
+
+export async function listClaims(investigationId) {
+  const db = await openDb();
+  const claims = await tx(db, ['claims'], 'readonly', (t) =>
+    reqToPromise(t.objectStore('claims').index('investigationId').getAll(investigationId))
+  );
+  return claims.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+export async function createClaim(investigationId, { text, links }) {
+  const db = await openDb();
+  const claimId = await getNextClaimId();
+  const claim = {
+    id: genId('claim'), claimId, investigationId, text: text.trim(),
+    links: (links || []).map((l) => ({ evidenceItemId: l.evidenceItemId, stance: l.stance === 'contradicts' ? 'contradicts' : 'supports' })),
+    createdAt: new Date().toISOString()
+  };
+  await tx(db, ['claims'], 'readwrite', (t) => t.objectStore('claims').add(claim));
+  return claim;
+}
+
+export async function deleteClaim(claimId) {
+  const db = await openDb();
+  await tx(db, ['claims'], 'readwrite', (t) => t.objectStore('claims').delete(claimId));
 }
