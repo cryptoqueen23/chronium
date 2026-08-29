@@ -167,25 +167,35 @@ search results or AI summaries.** This is the concrete mechanism behind "never
 lose the receipt" once reporting exists: a report can always be walked backward,
 claim → evidence item → source.
 
-## Workspace Navigation (as shipped, 2026-08-28)
+## Workspace Navigation (as shipped, 2026-08-29)
 
 The concepts below are all built. The UI groups them into 4 primary
 sections rather than one tab per concept — a first-time user shouldn't
-need to learn "Outline" or "coverage lanes" vocabulary before they can
+need to learn "Outline" or "Bibliography" vocabulary before they can
 upload a document and search it (see `docs/CLAUDE_HANDOFF.md` for the
 reasoning). The underlying data model is exactly the concept tree that
-follows; only the navigation grouping changed.
+follows; only the navigation grouping changed. Outline and Bibliography
+moved into Research/Evidence respectively this session — see the
+2026-08-29 handoff for why.
 
 ```text
 CHRONIUM MIND — Investigation Workspace
 
-RESEARCH                         (search + ingestion, one screen)
+RESEARCH                         (search + ingestion + outline, one screen)
 ├── "What are you trying to find?" search
+├── Research outline             (question, overall method, sections/
+│                                  subquestions each with their own method,
+│                                  status, and evidence/finding coverage -
+│                                  editing lives here)
 ├── My Files (bulk-ingested documents, passage + page-aware search)
 ├── Current Web / Historical Web (Arquivo.pt, Wayback, Common Crawl, Memento)
 └── Datasets / APIs                                    [not started]
 
-EVIDENCE                         (saved receipts: excerpt, source, page, provenance)
+EVIDENCE                         (sub-toggle: Evidence Items | Bibliography)
+├── Evidence Items                (saved receipts: excerpt, source, page, provenance)
+└── Bibliography                  (one card per source - Target Source Record
+                                    Shape fields; researcher-entered fields
+                                    layered onto facts Chronium already knows)
 
 FINDINGS                         (sub-tabs, one section)
 ├── Claims
@@ -193,21 +203,29 @@ FINDINGS                         (sub-tabs, one section)
 ├── Contradictions             (AI Qualitative Analysis output today;
 │                                deterministic 2-claims-conflict detector
 │                                is Phase 4, not started)
-├── Gaps                        (coverage lanes live here - a lane with no/low
-│                                linked evidence is a gap)
+├── Gaps                        (read-only - computed from the Research-tab
+│                                outline; a section with no/low evidence, or
+│                                marked answered with no evidence, is a gap)
 └── Analysis
-    ├── Research Question / Method   (feeds Qualitative Analysis)
-    ├── Quantitative Analysis        (deterministic, always free)
-    └── Qualitative Analysis         (AI-assisted, opt-in, paid)
+    ├── Quantitative overview        (deterministic counts, always free)
+    ├── Quantitative Findings        (researcher-asserted, preserves
+    │                                 formula/method/inputs)
+    ├── Qualitative Findings         (researcher-asserted, preserves
+    │                                 methodology/supporting passages)
+    ├── Mixed-method cross-validation (researcher judgment: consistent /
+    │                                  discrepancy / unclear - a discrepancy
+    │                                  is a review item, never a conclusion)
+    └── Qualitative synthesis        (AI-assisted, opt-in, paid - distinct
+                                       from the Qualitative Findings above)
 
-REPORT                           (deterministic, generated from Claims)
+REPORT                           (deterministic, built from Question -> Method
+                                   -> Outline -> Sources/Bibliography ->
+                                   Evidence -> Findings -> Gaps/Contradictions/
+                                   Review items -> Claims, skipping empty
+                                   sections)
 
 Connections (relationship graph: person ↔ company ↔ contract ↔ ...)  [not started, Phase 6]
 ```
-
-Bibliography (Publisher/Source Type/Reliability per source) is a separate
-top-level nav item, not one of the 4 workspace tabs — it's scoped to the
-active investigation's sources the same way the workspace is.
 
 ## Bulk Import UX (illustrative)
 

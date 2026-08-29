@@ -2,15 +2,20 @@
 // Stores: investigations, records (deduped evidence/sources), investigationRecords
 // (join), blobs (original evidence bytes, deduped by content hash),
 // ingestionBatches (one row per bulk import), meta (small counters),
-// outlines (one per investigation: research question + coverage lanes),
-// evidenceItems (excerpts pulled from a source), claims (assertions an
-// Evidence Item supports/contradicts) - the Source -> Evidence Item -> Claim
-// model from docs/RESEARCH_METHOD.md - and qualitativeAnalysis (the last
-// AI-assisted analysis result per investigation, so revisiting the tab
-// doesn't require re-running a paid AI call).
+// outlines (one per investigation: research question + method + sections,
+// each section with its own method/status/coverage), evidenceItems (excerpts
+// pulled from a source), claims (assertions an Evidence Item supports/
+// contradicts) - the Source -> Evidence Item -> Claim model from
+// docs/RESEARCH_METHOD.md - quantitativeFindings/qualitativeFindings
+// (researcher-asserted findings with their inputs/formula/method or
+// supporting passages/methodology preserved), crossValidations (mixed-method
+// agreement/discrepancy judgments between one of each), and
+// qualitativeAnalysis (the last AI-assisted analysis result per
+// investigation, so revisiting the tab doesn't require re-running a paid AI
+// call).
 
 const DB_NAME = 'chronium';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 let dbPromise = null;
 
 function openDb() {
@@ -58,6 +63,18 @@ function openDb() {
       if (!db.objectStoreNames.contains('qualitativeAnalysis')) {
         // One cached result per investigation - investigationId IS the key.
         db.createObjectStore('qualitativeAnalysis', { keyPath: 'investigationId' });
+      }
+      if (!db.objectStoreNames.contains('quantitativeFindings')) {
+        const qf = db.createObjectStore('quantitativeFindings', { keyPath: 'id' });
+        qf.createIndex('investigationId', 'investigationId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('qualitativeFindings')) {
+        const qlf = db.createObjectStore('qualitativeFindings', { keyPath: 'id' });
+        qlf.createIndex('investigationId', 'investigationId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('crossValidations')) {
+        const xv = db.createObjectStore('crossValidations', { keyPath: 'id' });
+        xv.createIndex('investigationId', 'investigationId', { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -330,15 +347,57 @@ export async function addUserUrl(investigationId, { url, title, note }) {
 
 // ---------------------------------------------------------------------------
 // Bibliography: user-asserted metadata layered onto an existing source
-// record (Publisher, Source Type, Reliability, Research Notes - the
+// record (Publisher/Creator, Source Class, Document Type, Publication Date,
+// Date Coverage, Reliability, Relevant-Pages Note, Research Notes - the
 // judgment-call fields from docs/RESEARCH_METHOD.md's Target Source Record
 // Shape). No new store: these are just additional fields on `records`,
-// written through the existing updateRecord().
+// written through the existing updateRecord(). Everything else in that
+// target shape (retrieval date, original location, archive/capture info,
+// version/hash, relevant pages actually cited, investigation usage,
+// preservation status) is a fact Chronium already knows or can compute from
+// `records`/`evidenceItems`/`claims` - see computeBiblioDerived() below,
+// never duplicated into stored state.
 // ---------------------------------------------------------------------------
-export async function updateBibliographyDetails(recordId, { publisher, sourceType, reliability, researchNotes }) {
+export async function updateBibliographyDetails(recordId, { publisher, sourceType, documentType, publicationDate, dateCoverage, reliability, relevantPagesNote, researchNotes }) {
   return updateRecord(recordId, {
-    biblio: { publisher: publisher || '', sourceType: sourceType || '', reliability: reliability || '', researchNotes: researchNotes || '' }
+    biblio: {
+      publisher: publisher || '',
+      sourceType: sourceType || '',
+      documentType: documentType || '',
+      publicationDate: publicationDate || '',
+      dateCoverage: dateCoverage || '',
+      reliability: reliability || '',
+      relevantPagesNote: relevantPagesNote || '',
+      researchNotes: researchNotes || ''
+    }
   });
+}
+
+// Derives the rest of the Target Source Record Shape from facts Chronium
+// already has - never asked of the researcher, never stored twice. Returns
+// null-safe strings/arrays so the UI never has to guess about a missing
+// field (CANON.md: "don't require every field when unknown").
+export function computeBiblioDerived(record, evidenceItems, claims) {
+  const items = (evidenceItems || []).filter((e) => e.sourceRecordId === record.id);
+  const evidenceLocations = [...new Set(items.map((e) => e.location).filter(Boolean))];
+  const evidenceIds = new Set(items.map((e) => e.id));
+  const citingClaims = (claims || []).filter((c) => (c.links || []).some((l) => evidenceIds.has(l.evidenceItemId)));
+  const alternates = Array.isArray(record.alternateArchiveUrls) ? record.alternateArchiveUrls : [];
+  return {
+    retrievedAt: record.addedAt || record.savedAt || null,
+    originalLocation: record.originalUrl || null,
+    archive: record.archiveUrl ? { url: record.archiveUrl, source: record.source || null, captureDate: record.captureDate || null, alternateCount: alternates.length } : null,
+    versionHash: record.fileHash || null,
+    pageCount: record.metadata?.pageCount ?? null,
+    relevantPages: evidenceLocations,
+    usage: { evidenceCount: items.length, claimCount: citingClaims.length, claimIds: citingClaims.map((c) => c.claimId) },
+    preservation: {
+      originalAvailable: !!record.originalUrl,
+      archived: !!record.archiveUrl,
+      alternateArchiveCount: alternates.length,
+      localCopy: record.storageMode === 'local-copy'
+    }
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -365,12 +424,15 @@ export async function saveOutline(investigationId, { researchQuestion, method })
   });
 }
 
-export async function addOutlineLane(investigationId, { label, coveragePct }) {
+export async function addOutlineLane(investigationId, { label, coveragePct, method, status }) {
   const db = await openDb();
   return tx(db, ['outlines'], 'readwrite', async (t) => {
     const store = t.objectStore('outlines');
     const existing = await reqToPromise(store.get(investigationId)) || { investigationId, researchQuestion: '', method: 'mixed', lanes: [] };
-    const lane = { id: genId('lane'), label: label.trim(), coveragePct: coveragePct == null ? null : clampPct(coveragePct), notes: '' };
+    const lane = {
+      id: genId('lane'), label: label.trim(), coveragePct: coveragePct == null ? null : clampPct(coveragePct), notes: '',
+      method: method || 'mixed', status: status || 'not-started'
+    };
     existing.lanes = [...(existing.lanes || []), lane];
     existing.updatedAt = new Date().toISOString();
     await reqToPromise(store.put(existing));
@@ -494,4 +556,99 @@ export async function saveQualitativeAnalysis(investigationId, { result, model }
   const row = { investigationId, result, model: model || null, createdAt: new Date().toISOString() };
   await tx(db, ['qualitativeAnalysis'], 'readwrite', (t) => t.objectStore('qualitativeAnalysis').put(row));
   return row;
+}
+
+// ---------------------------------------------------------------------------
+// Quantitative Findings: a specific numeric conclusion the researcher draws
+// from evidence, with its formula/method and the exact inputs preserved -
+// docs/RESEARCH_METHOD.md Analysis Modes: "must preserve their methodology
+// and source/evidence citations." `inputs` values are mechanically summed
+// for display (a Computed Fact per CANON.md's Evidence Rules) but the
+// `formula`/`method` text is what actually describes what was done - the
+// sum is informational, not a substitute for it.
+// ---------------------------------------------------------------------------
+export async function listQuantitativeFindings(investigationId) {
+  const db = await openDb();
+  const rows = await tx(db, ['quantitativeFindings'], 'readonly', (t) =>
+    reqToPromise(t.objectStore('quantitativeFindings').index('investigationId').getAll(investigationId))
+  );
+  return rows.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+export async function createQuantitativeFinding(investigationId, { statement, formula, method, inputs, outlineLaneId }) {
+  const db = await openDb();
+  const finding = {
+    id: genId('qf'), investigationId, statement: statement.trim(), formula: (formula || '').trim(), method: (method || '').trim(),
+    inputs: (inputs || []).map((i) => ({ label: (i.label || '').trim(), value: i.value == null || i.value === '' ? null : Number(i.value), evidenceItemId: i.evidenceItemId || null })),
+    outlineLaneId: outlineLaneId || null, createdAt: new Date().toISOString()
+  };
+  await tx(db, ['quantitativeFindings'], 'readwrite', (t) => t.objectStore('quantitativeFindings').add(finding));
+  return finding;
+}
+
+export async function deleteQuantitativeFinding(id) {
+  const db = await openDb();
+  await tx(db, ['quantitativeFindings'], 'readwrite', (t) => t.objectStore('quantitativeFindings').delete(id));
+}
+
+// ---------------------------------------------------------------------------
+// Qualitative Findings: a specific interpretive conclusion the researcher
+// draws from narrative evidence, with the supporting passages and
+// methodology preserved alongside it - distinct from the AI-assisted
+// Qualitative Analysis synthesis (qualitativeAnalysis store), which is a
+// cached AI opinion, not a researcher-asserted finding.
+// ---------------------------------------------------------------------------
+export async function listQualitativeFindings(investigationId) {
+  const db = await openDb();
+  const rows = await tx(db, ['qualitativeFindings'], 'readonly', (t) =>
+    reqToPromise(t.objectStore('qualitativeFindings').index('investigationId').getAll(investigationId))
+  );
+  return rows.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+export async function createQualitativeFinding(investigationId, { statement, methodology, evidenceItemIds, outlineLaneId }) {
+  const db = await openDb();
+  const finding = {
+    id: genId('qlf'), investigationId, statement: statement.trim(), methodology: (methodology || '').trim(),
+    evidenceItemIds: (evidenceItemIds || []).filter(Boolean), outlineLaneId: outlineLaneId || null, createdAt: new Date().toISOString()
+  };
+  await tx(db, ['qualitativeFindings'], 'readwrite', (t) => t.objectStore('qualitativeFindings').add(finding));
+  return finding;
+}
+
+export async function deleteQualitativeFinding(id) {
+  const db = await openDb();
+  await tx(db, ['qualitativeFindings'], 'readwrite', (t) => t.objectStore('qualitativeFindings').delete(id));
+}
+
+// ---------------------------------------------------------------------------
+// Mixed-method cross-validation: does a Quantitative Finding agree with a
+// Qualitative Finding? This is a researcher judgment call (like Reliability
+// in Bibliography), not a computed fact - Chronium never infers agreement
+// itself. A 'discrepancy' verdict is surfaced as a review item, never
+// auto-promoted to a Claim or a conclusion (docs/RESEARCH_METHOD.md:
+// "Never turn a correlation, discrepancy... into a factual conclusion").
+// ---------------------------------------------------------------------------
+export async function listCrossValidations(investigationId) {
+  const db = await openDb();
+  const rows = await tx(db, ['crossValidations'], 'readonly', (t) =>
+    reqToPromise(t.objectStore('crossValidations').index('investigationId').getAll(investigationId))
+  );
+  return rows.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+export async function createCrossValidation(investigationId, { quantitativeFindingId, qualitativeFindingId, verdict, note }) {
+  const db = await openDb();
+  const entry = {
+    id: genId('xv'), investigationId, quantitativeFindingId, qualitativeFindingId,
+    verdict: ['consistent', 'discrepancy', 'unclear'].includes(verdict) ? verdict : 'unclear',
+    note: (note || '').trim(), createdAt: new Date().toISOString()
+  };
+  await tx(db, ['crossValidations'], 'readwrite', (t) => t.objectStore('crossValidations').add(entry));
+  return entry;
+}
+
+export async function deleteCrossValidation(id) {
+  const db = await openDb();
+  await tx(db, ['crossValidations'], 'readwrite', (t) => t.objectStore('crossValidations').delete(id));
 }

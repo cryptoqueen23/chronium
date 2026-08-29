@@ -6,151 +6,165 @@ rewritten each time a session ends with meaningful progress, not an
 append-only log. If you're picking this up cold, read this file, then
 `docs/CANON.md` (mission, evidence rules, storage/cost principles, and
 every `CANON RULE` — these are load-bearing, not decoration), then
-`docs/ROADMAP.md` (phase status), then skim `src/index.js` and
-`public/app.js`.
+`docs/ROADMAP.md` (phase status) and `docs/RESEARCH_METHOD.md` (the
+investigation-level research loop this session completed most of), then
+skim `src/index.js` and `public/app.js`.
 
-**Last updated:** 2026-08-28, end of session. Everything below reflects
-what's actually shipped and pushed to `origin/main`, not aspiration.
+**Last updated:** 2026-08-29, end of session. Everything below reflects
+what's actually shipped, not aspiration. Nothing this session touches
+`git push` — check `git status`/`git log` before assuming anything is on
+`origin/main`.
 
 ## What Chronium Mind actually is right now
 
-Two things, merged into one engine, exactly as the original handoff
-intended — this part of the plan held up:
+Two things, merged into one engine — unchanged from the previous handoff:
 
-1. A federated **historical web search** (Arquivo.pt full-text, Wayback
-   Machine CDX, Common Crawl, a Memento aggregator) with cross-archive
-   dedup, capture-reachability validation, and an in-app **Archive
-   Viewer** so a result opens as a rendered page inside Chronium, not a
-   raw archive URL that might force a download.
-2. An **Investigation Workspace** — upload/search your own documents,
-   turn a passage into cited Evidence, build Claims, and generate a
+1. A federated **historical web search** (Arquivo.pt, Wayback CDX, Common
+   Crawl, Memento) with cross-archive dedup, capture-reachability
+   validation, an in-app **Archive Viewer**, and a **Coverage Verdict** on
+   every connector result (found / provider-unavailable /
+   no-captures-in-index / verified-gap).
+2. An **Investigation Workspace** — upload/search your own documents, turn
+   a passage into cited Evidence, build Claims, and generate a
    deterministic (free) Evidence-Backed Report. AI is a paid, opt-in,
-   last-resort layer on top (Qualitative Analysis only), never a
-   dependency of the core loop.
+   last-resort layer (Qualitative Analysis synthesis only).
 
-Copperas Cove, TX (`data/copperas-cove/normalized.json`, ~3,200 real
-government records with Wayback provenance) is still the proof corpus,
-not a special case in the code. If you find yourself writing
-Copperas-Cove-specific logic anywhere outside `data/`, stop — that breaks
-the generic-core principle in `docs/CANON.md`.
+Copperas Cove, TX is still the proof corpus, not a special case in the
+code — no Copperas-Cove-specific logic outside `data/`.
 
-## The core loop, and where it stands
+## This session's work: Research Outline + Detailed Bibliography + Findings/Report
 
-```
-SEARCH → FIND RECEIPT (exact passage + page) → SAVE EVIDENCE → FINDING → REPORT
-```
+The ask was to make the existing 4-tab loop (Research / Evidence /
+Findings / Report) genuinely useful for real research, per `docs/CANON.md`
+Build Priority P1 ("research outline, research bibliography" before
+automated reports) and `docs/RESEARCH_METHOD.md`'s already-documented
+target shape. **Explicitly out of scope and not touched:** Evidence Vault
+(Phase 2), Compare Engine (Phase 3). The 4 top-level tabs and Findings' 5
+sub-tabs are unchanged in count — nothing was exploded into new nav.
 
-This is the thing that matters most and it works end-to-end today,
-verified live (Puppeteer, real multi-page PDFs, zero console errors):
-upload a document → search a term → get the actual matched passage (not a
-stale upload-time snippet) with the source page number → open the source
-at that page → one-click "Save as Evidence" (excerpt + page/location +
-source + provenance auto-carried over, no retyping) → link evidence to a
-Claim → deterministic Report shows the claim with its exact evidence and
-citation.
+**Data model** (`public/db.js`, `DB_VERSION` 4→5):
+- Outline lanes (`outlines` store) gained `method`
+  (quantitative/qualitative/mixed) and `status`
+  (not-started/in-progress/answered) per section, alongside the existing
+  `label`/`coveragePct`.
+- Bibliography (`biblio` object on `records`) gained `documentType`,
+  `publicationDate`, `dateCoverage`, `relevantPagesNote`. Everything else
+  in the Target Source Record Shape (retrieval date, original location,
+  archive/capture info, version/hash, relevant pages from evidence,
+  investigation usage, preservation status) is **derived, never stored** —
+  new export `computeBiblioDerived(record, evidenceItems, claims)`.
+- Three new stores, all indexed by `investigationId`:
+  `quantitativeFindings` (statement/formula/method/inputs/outlineLaneId),
+  `qualitativeFindings` (statement/methodology/evidenceItemIds/
+  outlineLaneId), `crossValidations` (pairs one of each with a
+  consistent/discrepancy/unclear verdict + note).
 
-**Investigation Workspace navigation (as of this session):** 4 primary
-sections, not 9 — **Research | Evidence | Findings | Report**. Findings
-has 5 sub-tabs: Claims, Timeline, Contradictions, Gaps, Analysis. This
-was a deliberate simplification (see CANON.md-adjacent commit
-`132844a`) — a first-time user shouldn't need to understand "Outline" or
-"coverage lanes" vocabulary before they can upload a PDF and search it.
-Nothing was deleted; Outline's research-question field moved to
-Findings→Analysis (its only consumer), coverage lanes moved to
-Findings→Gaps (same reasoning), Sources/dashboard-stats moved into
-Research under a collapsed "Uploaded files & sources" disclosure.
+**Research tab**: outline authoring moved here (was split across
+Findings→Analysis and Findings→Gaps). Each section shows inline-editable
+method/status `<select>`s (`updateOutlineLane` on change — no separate
+save step), linked evidence + finding counts, a coverage bar, and a
+roll-up "X of Y sections answered" line.
 
-## What's shipped, concretely (this session, in commit order)
+**Evidence tab**: gained a sub-toggle — Evidence Items | Bibliography —
+same hash convention as Findings sub-tabs
+(`#/workspace/evidence/bibliography`). The standalone `#/bibliography`
+view/nav-link is **gone**; Bibliography now renders one card per source
+(not a table — most fields are legitimately optional) via
+`computeBiblioDerived`, with an "Edit" button opening the same dialog,
+now with 4 more fields.
 
-1. **Passage-aware search + PDF page tracking.** `PdfAdapter`
-   (`public/ingest/adapters.js`) now records per-page character offsets
-   during extraction. `searchInvestigation` (`public/db.js`) returns the
-   actual text around a match plus the page number, not a static
-   first-450-chars snippet.
-2. **CANON "Backup-to-the-Backup Reliability."** Archives are a redundant
-   pool, not independent buttons — `groupSamePage` orders alternate
-   captures by provider preference, `/api/check-link` validates and
-   caches resolutions, a dead primary capture falls back through
-   alternates automatically before ever showing failure.
-3. **Archive Viewer.** Clicking "View archived page" renders the capture
-   *inside* Chronium (`/api/view-capture`, `src/index.js`) — sandboxed
-   iframe for HTML, native PDF viewer, formatted text/JSON/XML/CSV panel
-   — instead of navigating to a URL that might force a download. Handles
-   the pywb toolbar-wrapper problem (Arquivo.pt/Wayback both wrap replay
-   pages in a frameset; the real content is a static nested `<iframe>` at
-   a `mp_`/`if_`-modified URL) by fetching the direct-content variant for
-   HTML only, not for PDFs/images (that modifier is HTML-specific).
-4. **Coverage Verdict.** CANON "Never Confuse Absence of Evidence With
-   Evidence of Absence." Every connector result now carries a `verdict`:
-   `found`, `provider-unavailable` (coverage unknown, never shown as
-   "nothing archived"), `no-captures-in-index` (this query matched
-   nothing), or `verified-gap` (cross-checked two independent ways).
-   `searchWayback` cross-checks a zero-result CDX query against the
-   Wayback Availability API before ever calling something a gap.
-5. **Investigation Workspace IA simplification** (described above).
+**Findings→Gaps**: now read-only (editing lives in Research). Gap
+criteria factored into `computeGapWarnings(outline, evidenceItems)`,
+shared with the Report. A section marked "Answered" with zero evidence
+gets its own distinct warning ("worth double-checking") rather than being
+silently trusted or silently flagged as a normal gap.
 
-## Known gaps / things the next session should verify or watch
+**Findings→Analysis**: question/method form moved out (now in Research).
+Added, between the existing free stat grid and the AI synthesis panel:
+Quantitative Findings (form + list, preserves formula/method/inputs, an
+auto-summed total is labeled as mechanical/informational only — never a
+substitute for the formula), Qualitative Findings (form + list, preserves
+methodology/supporting passages), and Mixed-method Cross-Validation (pick
+one of each, researcher sets the verdict — Chronium never infers
+agreement; a `discrepancy` renders as a visibly distinct review item, not
+a conclusion).
 
-- **`web.archive.org`'s CDX search endpoint was unreliable this session**
-  — repeatedly timed out from this dev environment (while
-  `archive.org/wayback/available`, a separate API surface, stayed fast).
-  This may be environment-specific network flakiness or a real upstream
-  issue; Coverage Verdict correctly reports it as `provider-unavailable`
-  either way, but if search results for Wayback still look thin, check
-  `/api/health/connectors` before assuming it's a real coverage gap.
-- **Archive Viewer's PDF-in-iframe path is implemented and code-reviewed
-  but not verified live end-to-end in a browser** — the HTML render path
-  *was* verified live (real Arquivo.pt capture, real title/content
-  rendered). PDF verification was blocked by the same CDX/replay-host
-  flakiness above when trying to fetch a real archived PDF. Worth an
-  explicit test with a working network path before relying on it.
-- **"+ Add Web Source" and "+ Add Files"** (Research tab) both open the
-  same combined Add-Research dialog (it already has both a URL form and a
-  file-drop zone) — this was a deliberate reuse, not an oversight, but if
-  the product direction wants genuinely separate flows later, that's a
-  real gap.
-- **Common Crawl connector only searches the 3 most recent monthly
-  indexes** by design (documented MVP scope in its own `note` field, see
-  `src/index.js`) — it will never surface older Common Crawl coverage
-  even though CC has indexes back to 2008. Not a bug; a known scope
-  limit worth revisiting if deeper historical coverage becomes a
-  priority.
-- Three commits from this session (`593adbd` investigation P0 + Archive
-  Viewer, `a8ac226` pywb modifier fix, `46d551c` Coverage Verdict,
-  `132844a` workspace IA) are all pushed to `origin/main`. Nothing is
-  sitting local-only as of this handoff.
+**Report tab**: `renderReportPanel` rewritten to assemble, in order,
+skipping empty sections: Question & Method → Outline → Sources/
+Bibliography → Evidence (summary) → Quantitative Findings → Qualitative
+Findings → Gaps/Contradictions/Review items → Claims. Entirely
+client-side/deterministic — no AI call anywhere in this path.
+
+## Verified this session (live, Puppeteer against `wrangler dev`)
+
+Full walkthrough with zero console errors: create investigation → set
+research question + method → add 2 outline sections with different
+method/status → add a URL source → save an evidence item against it →
+confirm Bibliography card shows the derived fields (retrieved date,
+original location, relevant pages pulled from the evidence item's
+location, investigation usage) → add a Quantitative Finding and a
+Qualitative Finding → cross-validate them as a discrepancy → confirm Gaps
+reflects both the low-coverage and no-evidence sections → confirm Report
+renders all sections in the right order, correctly citing the
+discrepancy as "needs human review, not a conclusion." Screenshots taken
+at each step (not committed — this was verification, not fixtures).
+
+Also checked per the user's ask: `/api/health/connectors` responds fine;
+Wayback still shows `"lastError":"The operation was aborted"` (timeouts)
+in this dev environment, consistent with the prior handoff's note — this
+is unrelated to this session's work and was **not** redesigned around.
+Archive Viewer PDF-in-iframe path was not re-verified this session (no
+code in that path changed); still carries the same "implemented,
+code-reviewed, not live-PDF-verified" caveat as the previous handoff.
+
+## Known gaps / things the next session should watch
+
+- Same Wayback CDX flakiness as last session — check
+  `/api/health/connectors` before assuming a thin Wayback result is a
+  real coverage gap.
+- Archive Viewer PDF path still wants an explicit live test with a
+  working archived PDF, whenever the CDX/replay-host flakiness above
+  isn't in the way.
+- Quantitative Finding inputs currently support one numeric value per
+  evidence item, summed with plain addition — fine for "total/sum"
+  formulas, not a general expression evaluator. If a real investigation
+  needs something more (weighted sums, subtraction), that's a future
+  ask, not assumed now.
+- Cross-validation is 1 quantitative finding ↔ 1 qualitative finding per
+  entry — no many-to-many, no bulk view beyond the list under Analysis
+  and the Report's Gaps/Contradictions/Review-items section. Fine for the
+  scale this was built for; revisit only if a real investigation needs
+  more.
 
 ## Development constraints (still true, unchanged)
 
 - Bootstrap / free-tier-first. Cloudflare-friendly. Avoid paid APIs
   beyond the one opt-in AI provider call.
-- No unnecessary framework migration — this is still vanilla JS + one
-  Cloudflare Worker, no build step, no framework. Keep it that way unless
-  there's a concrete reason.
+- No unnecessary framework migration — vanilla JS + one Cloudflare
+  Worker, no build step, no framework.
 - Preserve working code where reasonable; consolidate UX, don't delete
   functionality wholesale.
 - Responsive and accessible UI (WCAG 2.2 AA — see the user's global
-  CLAUDE.md rules, which apply to every project including this one).
+  CLAUDE.md rules).
 - Data-driven generic rendering — no Copperas-Cove-specific logic outside
   `data/`.
 - Source provenance is mandatory, on every result, always.
-- Never call an AI inference a source fact — see CANON.md's Evidence
-  Rules (Source Fact / Computed Fact / AI Analysis).
+- Never call an AI inference a source fact — CANON.md's Evidence Rules
+  (Source Fact / Computed Fact / AI Analysis) now has a concrete home in
+  Quantitative Findings' mechanical sum vs. its formula/method text, and
+  in Cross-Validation's researcher-asserted verdict.
 - AI is a last resort behind cache → deterministic code → index/search →
-  rules (CANON RULE "AI/Agents Are Last Resort") — never required for the
-  core loop to work.
+  rules — never required for the core loop, including the new Findings
+  and Report sections (all client-side/free).
 - Do not imply that a changed page/document is wrongdoing. Present
   evidence neutrally.
 
 ## Where to look next
 
-`docs/ROADMAP.md` has the phased build order and current status per
-phase — Phase 0 (Reliability) and most of Phase 1 (Investigation
-Workspace) are shipped; Phase 2 (Evidence Vault / SHA-256 preservation)
-and Phase 3 (Compare Engine / Then-vs-Now) are the next logical P1 work,
-per the CANON.md Build Priority. Nothing past Phase 1 gets built until
-it's explicitly requested by the user — don't self-direct into Phase 2+
-without being asked.
+`docs/ROADMAP.md` Phase 1 is now fully done including this session's
+work. Phase 2 (Evidence Vault) and Phase 3 (Compare Engine) are next per
+CANON.md's Build Priority — **do not start either without being
+explicitly asked**, same rule as last session.
 
 ## Product language
 

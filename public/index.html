@@ -59,7 +59,6 @@
         <p class="nav-group-title">Tools</p>
         <button type="button" class="nav-link" data-action="research-search"><svg class="nav-icon" width="18" height="18"><use href="#icon-search"/></svg>Research Search</button>
         <button type="button" class="nav-link" data-action="historical-web"><svg class="nav-icon" width="18" height="18"><use href="#icon-clock"/></svg>Historical Web</button>
-        <a class="nav-link" href="#/bibliography" data-route="/bibliography"><svg class="nav-icon" width="18" height="18"><use href="#icon-list"/></svg>Bibliography</a>
       </div>
 
       <div class="nav-group" id="navWorkspaceGroup" hidden>
@@ -161,16 +160,6 @@
       <div id="libraryResults" class="result-list"></div>
     </section>
 
-    <!-- ============ BIBLIOGRAPHY ============ -->
-    <section id="view-bibliography" class="view hidden" data-view="bibliography" tabindex="-1">
-      <div class="view-head">
-        <div><h1>Bibliography</h1><p id="bibliographyContextLine" class="view-subtitle"></p></div>
-      </div>
-      <p class="hint" style="margin-bottom:16px">Publisher, source type, and reliability are your own judgment calls, not something Chronium infers — add them per source below.</p>
-      <div id="bibliographyEmptyState" class="empty-state hidden"></div>
-      <div id="bibliographyList" class="report-table"></div>
-    </section>
-
     <!-- ============ SETTINGS & HELP ============ -->
     <section id="view-settings" class="view hidden" data-view="settings" tabindex="-1">
       <div class="view-head"><h1>Settings &amp; Help</h1></div>
@@ -246,6 +235,32 @@
           </div>
           <div id="investigationSearchResults" class="result-list"></div>
 
+          <div class="panel" id="outlinePanel">
+            <h2>Research outline</h2>
+            <p class="view-subtitle">A dynamic outline tied to your research question — break it into sections or subquestions, track how each is being researched, and see what's answered and what's still open.</p>
+            <form id="outlineQuestionForm" class="dialog-form dialog-form-compact">
+              <div class="field"><label for="outlineQuestionInput">What are you trying to find out?</label><input id="outlineQuestionInput" maxlength="300" placeholder="e.g. Where did road funding go since 2016?" /></div>
+              <div class="field">
+                <label for="outlineMethodSelect">Overall research method</label>
+                <select id="outlineMethodSelect"><option value="quantitative">Quantitative</option><option value="qualitative">Qualitative</option><option value="mixed">Mixed methods</option></select>
+              </div>
+              <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-primary">Save</button></div>
+            </form>
+
+            <p id="outlineProgressLine" class="view-subtitle" style="margin-top:18px"></p>
+            <div id="outlineLanesList"></div>
+            <form id="outlineLaneForm" class="dialog-form dialog-form-compact" style="margin-top:16px">
+              <p class="field-group-label">Add a section / subquestion</p>
+              <div class="field"><label for="outlineLaneLabel">Section</label><input id="outlineLaneLabel" placeholder="e.g. Budgets" maxlength="120" /></div>
+              <div class="field-row">
+                <div class="field"><label for="outlineLaneMethodSelect">Method</label><select id="outlineLaneMethodSelect"><option value="quantitative">Quantitative</option><option value="qualitative">Qualitative</option><option value="mixed" selected>Mixed</option></select></div>
+                <div class="field"><label for="outlineLaneStatusSelect">Status</label><select id="outlineLaneStatusSelect"><option value="not-started" selected>Not started</option><option value="in-progress">In progress</option><option value="answered">Answered</option></select></div>
+                <div class="field"><label for="outlineLaneCoverage">Coverage % (optional)</label><input id="outlineLaneCoverage" type="number" min="0" max="100" /></div>
+              </div>
+              <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn">Add section</button></div>
+            </form>
+          </div>
+
           <details class="research-sources-details" open>
             <summary>Uploaded files &amp; sources</summary>
             <div id="dashboardSummary" class="stat-grid"></div>
@@ -255,21 +270,30 @@
         </div>
 
         <div id="workspacePanel-evidence" class="workspace-panel hidden" role="tabpanel">
-          <p class="view-subtitle">Your saved receipts — the exact passages that back your findings, each with its source, page/location, date, and provenance already attached.</p>
-          <details class="research-sources-details">
-            <summary>Add evidence manually</summary>
-            <form id="evidenceForm" class="dialog-form dialog-form-compact">
-              <div class="field"><label for="evidenceSourceSelect">Source</label><select id="evidenceSourceSelect" required></select></div>
-              <div class="field-row">
-                <div class="field"><label for="evidenceTypeSelect">Type</label><select id="evidenceTypeSelect"><option value="paragraph">Paragraph</option><option value="table-row">Table row</option><option value="figure">Figure</option><option value="quote">Quote</option></select></div>
-                <div class="field"><label for="evidenceLocationInput">Location (optional)</label><input id="evidenceLocationInput" placeholder="e.g. p.143" maxlength="60" /></div>
-              </div>
-              <div class="field"><label for="evidenceLaneSelect">Coverage lane (optional)</label><select id="evidenceLaneSelect"><option value="">None</option></select></div>
-              <div class="field"><label for="evidenceExcerptInput">Excerpt</label><textarea id="evidenceExcerptInput" rows="3" required maxlength="1000" placeholder="Paste the specific paragraph, table row, or figure that bears on your investigation"></textarea></div>
-              <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-primary">Add evidence item</button></div>
-            </form>
-          </details>
-          <div id="evidenceList" class="report-table"></div>
+          <div class="tab-strip tab-strip-sub" role="tablist" aria-label="Evidence sections" id="evidenceSubTabStrip"></div>
+
+          <div id="evidencePanel-items" class="evidence-subpanel">
+            <p class="view-subtitle">Your saved receipts — the exact passages that back your findings, each with its source, page/location, date, and provenance already attached.</p>
+            <details class="research-sources-details">
+              <summary>Add evidence manually</summary>
+              <form id="evidenceForm" class="dialog-form dialog-form-compact">
+                <div class="field"><label for="evidenceSourceSelect">Source</label><select id="evidenceSourceSelect" required></select></div>
+                <div class="field-row">
+                  <div class="field"><label for="evidenceTypeSelect">Type</label><select id="evidenceTypeSelect"><option value="paragraph">Paragraph</option><option value="table-row">Table row</option><option value="figure">Figure</option><option value="quote">Quote</option></select></div>
+                  <div class="field"><label for="evidenceLocationInput">Location (optional)</label><input id="evidenceLocationInput" placeholder="e.g. p.143" maxlength="60" /></div>
+                </div>
+                <div class="field"><label for="evidenceLaneSelect">Outline section (optional)</label><select id="evidenceLaneSelect"><option value="">None</option></select></div>
+                <div class="field"><label for="evidenceExcerptInput">Excerpt</label><textarea id="evidenceExcerptInput" rows="3" required maxlength="1000" placeholder="Paste the specific paragraph, table row, or figure that bears on your investigation"></textarea></div>
+                <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-primary">Add evidence item</button></div>
+              </form>
+            </details>
+            <div id="evidenceList" class="report-table"></div>
+          </div>
+
+          <div id="evidencePanel-bibliography" class="evidence-subpanel hidden">
+            <p class="view-subtitle">A detailed record per source — title, publisher, class, dates, archive/capture info, version, relevant pages, how it's been used, and preservation status. Fields Chronium already knows are filled in automatically; anything else is your own judgment call and stays blank until you add it.</p>
+            <div id="bibliographyList"></div>
+          </div>
         </div>
 
         <div id="workspacePanel-findings" class="workspace-panel hidden" role="tabpanel">
@@ -292,40 +316,68 @@
           <div id="findingsPanel-contradictions" class="findings-subpanel hidden"><div id="contradictionsContent"></div></div>
 
           <div id="findingsPanel-gaps" class="findings-subpanel hidden">
+            <p class="view-subtitle">Computed from your <a href="#/workspace/research" data-route="/workspace/research">research outline</a> — a section with no evidence, low estimated coverage, or a status that isn't "Answered" shows up here.</p>
             <div id="gapsContent"></div>
-            <div class="panel">
-              <h2>Coverage lanes</h2>
-              <p class="view-subtitle">Evidence categories you're tracking against your research question. Coverage % is your own estimate — Chronium only adds the real, counted evidence total alongside it.</p>
-              <div id="outlineLanesList"></div>
-              <form id="outlineLaneForm" class="dialog-form dialog-form-compact" style="margin-top:16px">
-                <div class="field-row">
-                  <div class="field"><label for="outlineLaneLabel">New lane</label><input id="outlineLaneLabel" placeholder="e.g. Budgets" maxlength="120" /></div>
-                  <div class="field"><label for="outlineLaneCoverage">Coverage % (optional)</label><input id="outlineLaneCoverage" type="number" min="0" max="100" /></div>
-                </div>
-                <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn">Add lane</button></div>
-              </form>
-            </div>
           </div>
 
           <div id="findingsPanel-analysis" class="findings-subpanel hidden">
             <div class="panel">
-              <h2>Research question</h2>
-              <form id="outlineQuestionForm" class="dialog-form dialog-form-compact">
-                <div class="field"><label for="outlineQuestionInput">What are you trying to find out?</label><input id="outlineQuestionInput" maxlength="300" placeholder="e.g. Where did road funding go since 2016?" /></div>
-                <div class="field">
-                  <label for="outlineMethodSelect">Research method</label>
-                  <select id="outlineMethodSelect"><option value="quantitative">Quantitative</option><option value="qualitative">Qualitative</option><option value="mixed">Mixed methods</option></select>
-                </div>
-                <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-primary">Save</button></div>
-              </form>
-            </div>
-            <div class="panel">
-              <h2>Quantitative</h2>
+              <h2>Quantitative overview</h2>
               <p class="view-subtitle">Deterministic counts over your sources, evidence, and claims — no AI involved, always free.</p>
               <div id="quantAnalysisGrid" class="stat-grid"></div>
             </div>
+
             <div class="panel">
-              <h2>Qualitative <span class="ai-badge">AI-assisted</span></h2>
+              <h2>Quantitative findings</h2>
+              <p class="view-subtitle">A specific numeric conclusion, with the exact inputs, formula, and method preserved — never just a number on its own.</p>
+              <form id="quantFindingForm" class="dialog-form dialog-form-compact">
+                <div class="field"><label for="quantFindingStatement">Finding</label><input id="quantFindingStatement" required maxlength="300" placeholder="e.g. Total road paving expenditure 2016–2024" /></div>
+                <div class="field-row">
+                  <div class="field"><label for="quantFindingFormula">Formula</label><input id="quantFindingFormula" maxlength="200" placeholder="e.g. SUM(annual road-paving line items)" /></div>
+                  <div class="field"><label for="quantFindingOutlineSelect">Outline section (optional)</label><select id="quantFindingOutlineSelect"><option value="">None</option></select></div>
+                </div>
+                <div class="field"><label for="quantFindingMethod">Method</label><textarea id="quantFindingMethod" rows="2" maxlength="500" placeholder="What you actually did to get this number"></textarea></div>
+                <div class="field"><label id="quantFindingInputsLabel">Inputs (evidence + value)</label><div id="quantFindingInputsPicker" class="claim-evidence-picker" role="group" aria-labelledby="quantFindingInputsLabel"></div></div>
+                <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-primary">Add quantitative finding</button></div>
+              </form>
+              <div id="quantFindingsList"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Qualitative findings</h2>
+              <p class="view-subtitle">A specific interpretive conclusion, with its supporting passages and methodology preserved — distinct from the free-form AI synthesis below.</p>
+              <form id="qualFindingForm" class="dialog-form dialog-form-compact">
+                <div class="field"><label for="qualFindingStatement">Finding</label><input id="qualFindingStatement" required maxlength="300" placeholder="e.g. Council minutes consistently cite drainage, not traffic, as the reason for delays" /></div>
+                <div class="field-row">
+                  <div class="field"><label for="qualFindingMethodology">Methodology</label><input id="qualFindingMethodology" maxlength="300" placeholder="e.g. Close reading of meeting minutes 2019–2024" /></div>
+                  <div class="field"><label for="qualFindingOutlineSelect">Outline section (optional)</label><select id="qualFindingOutlineSelect"><option value="">None</option></select></div>
+                </div>
+                <div class="field"><label id="qualFindingPickerLabel">Supporting passages</label><div id="qualFindingPicker" class="claim-evidence-picker" role="group" aria-labelledby="qualFindingPickerLabel"></div></div>
+                <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-primary">Add qualitative finding</button></div>
+              </form>
+              <div id="qualFindingsList"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Mixed-method cross-validation</h2>
+              <p class="view-subtitle">Does a quantitative finding agree with a qualitative one? This is your own judgment call — Chronium never infers agreement. A discrepancy becomes a review item, not a conclusion.</p>
+              <form id="crossValidationForm" class="dialog-form dialog-form-compact">
+                <div class="field-row">
+                  <div class="field"><label for="crossValQuantSelect">Quantitative finding</label><select id="crossValQuantSelect" required></select></div>
+                  <div class="field"><label for="crossValQualSelect">Qualitative finding</label><select id="crossValQualSelect" required></select></div>
+                </div>
+                <div class="field">
+                  <label for="crossValVerdictSelect">Verdict</label>
+                  <select id="crossValVerdictSelect"><option value="consistent">Consistent</option><option value="discrepancy">Discrepancy</option><option value="unclear">Unclear</option></select>
+                </div>
+                <div class="field"><label for="crossValNote">Note</label><textarea id="crossValNote" rows="2" maxlength="500" placeholder="What did you compare, and why does it agree or not?"></textarea></div>
+                <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-primary">Add cross-validation</button></div>
+              </form>
+              <div id="crossValidationsList"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Qualitative synthesis <span class="ai-badge">AI-assisted</span></h2>
               <p class="view-subtitle">Themes, patterns, and contradictions across your evidence. This is AI interpretation, not established fact — every finding cites the evidence it's based on so you can check it yourself.</p>
               <p id="qualAnalysisStatus" class="hint"></p>
               <button type="button" id="runQualAnalysisBtn" class="btn btn-primary" style="margin-top:10px">Run AI analysis</button>
@@ -422,19 +474,47 @@
       <form id="bibliographyForm" class="dialog-form">
         <input type="hidden" id="bibliographyRecordId" />
         <div class="field">
-          <label for="bibliographyPublisher">Publisher</label>
+          <label for="bibliographyPublisher">Publisher / creator</label>
           <input id="bibliographyPublisher" maxlength="200" />
         </div>
-        <div class="field">
-          <label for="bibliographySourceType">Source type</label>
-          <select id="bibliographySourceType">
-            <option value="">Not set</option>
-            <option value="Primary Government Record">Primary Government Record</option>
-            <option value="Secondary/News">Secondary / News</option>
-            <option value="Academic">Academic</option>
-            <option value="Public Records Request">Public Records Request</option>
-            <option value="Other">Other</option>
-          </select>
+        <div class="field-row">
+          <div class="field">
+            <label for="bibliographySourceType">Source class</label>
+            <select id="bibliographySourceType">
+              <option value="">Not set</option>
+              <option value="Primary Government Record">Primary Government Record</option>
+              <option value="Secondary/News">Secondary / News</option>
+              <option value="Academic">Academic</option>
+              <option value="Public Records Request">Public Records Request</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="bibliographyDocumentType">Document type</label>
+            <select id="bibliographyDocumentType">
+              <option value="">Not set</option>
+              <option value="Budget">Budget</option>
+              <option value="Meeting Minutes">Meeting Minutes</option>
+              <option value="Agenda">Agenda</option>
+              <option value="Contract">Contract</option>
+              <option value="Correspondence">Correspondence</option>
+              <option value="Dataset">Dataset</option>
+              <option value="News Article">News Article</option>
+              <option value="Legal Filing">Legal Filing</option>
+              <option value="Report">Report</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="bibliographyPublicationDate">Publication date</label>
+            <input id="bibliographyPublicationDate" maxlength="60" placeholder="e.g. September 2025" />
+          </div>
+          <div class="field">
+            <label for="bibliographyDateCoverage">Date coverage</label>
+            <input id="bibliographyDateCoverage" maxlength="60" placeholder="e.g. FY2025-26" />
+          </div>
         </div>
         <div class="field">
           <label for="bibliographyReliability">Reliability</label>
@@ -444,6 +524,10 @@
             <option value="SECONDARY / DISCOVERY">Secondary / Discovery</option>
             <option value="UNVERIFIED">Unverified</option>
           </select>
+        </div>
+        <div class="field">
+          <label for="bibliographyRelevantPages">Relevant pages/passages (additional notes)</label>
+          <input id="bibliographyRelevantPages" maxlength="200" placeholder="e.g. 143-151, 287 (beyond what's linked via Evidence)" />
         </div>
         <div class="field">
           <label for="bibliographyNotes">Research notes</label>

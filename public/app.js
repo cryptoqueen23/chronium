@@ -2,9 +2,12 @@ import {
   listInvestigations, createInvestigation, deleteInvestigation,
   saveRecordToInvestigation, removeRecordFromInvestigation, listInvestigationRecords,
   getSavedCanonicalKeys, searchLibrary, searchInvestigation, addUserUrl, listIngestionBatches, getBlob,
-  updateBibliographyDetails, getOutline, saveOutline, addOutlineLane, updateOutlineLane, deleteOutlineLane,
+  updateBibliographyDetails, computeBiblioDerived, getOutline, saveOutline, addOutlineLane, updateOutlineLane, deleteOutlineLane,
   listEvidenceItems, createEvidenceItem, deleteEvidenceItem, listClaims, createClaim, deleteClaim,
-  getQualitativeAnalysis, saveQualitativeAnalysis
+  getQualitativeAnalysis, saveQualitativeAnalysis,
+  listQuantitativeFindings, createQuantitativeFinding, deleteQuantitativeFinding,
+  listQualitativeFindings, createQualitativeFinding, deleteQualitativeFinding,
+  listCrossValidations, createCrossValidation, deleteCrossValidation
 } from './db.js';
 import { ingestFiles, ingestZip } from './ingest/pipeline.js';
 import { openOverlay, openMenu, confirmDialog } from './ui.js';
@@ -85,6 +88,15 @@ const FINDINGS_SUBTABS = [
   { id: 'gaps', label: 'Gaps' },
   { id: 'analysis', label: 'Analysis' }
 ];
+// Evidence tab sub-toggle: saved receipts vs. the detailed per-source
+// bibliography record - same hash convention as FINDINGS_SUBTABS
+// (#/workspace/evidence/:subtab), not a 5th top-level workspace tab.
+const EVIDENCE_SUBTABS = [
+  { id: 'items', label: 'Evidence Items' },
+  { id: 'bibliography', label: 'Bibliography' }
+];
+const METHOD_LABEL = { quantitative: 'Quantitative', qualitative: 'Qualitative', mixed: 'Mixed' };
+const STATUS_LABEL = { 'not-started': 'Not started', 'in-progress': 'In progress', answered: 'Answered' };
 
 // ---------------------------------------------------------------------------
 // Small utilities
@@ -296,13 +308,13 @@ document.addEventListener('click', async (e) => {
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
-const VIEW_TITLES = { home: 'Chronium Mind', investigations: 'Investigations', library: 'My Library', bibliography: 'Bibliography', settings: 'Settings & Help', workspace: 'Workspace' };
+const VIEW_TITLES = { home: 'Chronium Mind', investigations: 'Investigations', library: 'My Library', settings: 'Settings & Help', workspace: 'Workspace' };
 
 function parseHash() {
   const path = (location.hash || '#/').slice(1) || '/';
   const parts = path.split('/').filter(Boolean);
   if (parts[0] === 'workspace') return { view: 'workspace', tab: parts[1] || 'research', subtab: parts[2] || null };
-  if (['investigations', 'library', 'bibliography', 'settings'].includes(parts[0])) return { view: parts[0] };
+  if (['investigations', 'library', 'settings'].includes(parts[0])) return { view: parts[0] };
   return { view: 'home' };
 }
 
@@ -330,7 +342,6 @@ async function loadViewContent(route) {
   if (route.view === 'home') await renderHomeRecent();
   else if (route.view === 'investigations') await renderInvestigationsView();
   else if (route.view === 'library') await renderLibraryView();
-  else if (route.view === 'bibliography') await renderBibliographyView();
   else if (route.view === 'settings') renderSettingsView();
   else if (route.view === 'workspace') await renderWorkspaceView(route.tab, route.subtab);
 }
@@ -922,12 +933,16 @@ async function setActiveInvestigation(id) {
 // Workspace
 // ---------------------------------------------------------------------------
 let lastFindingsSubtab = 'claims';
+let lastEvidenceSubtab = 'items';
 
 function buildWorkspaceTabStrip(activeTab) {
   const strip = document.querySelector('#workspaceTabStrip');
   strip.innerHTML = WORKSPACE_TABS.map((t) => `<button type="button" id="tab-${t.id}" role="tab" aria-selected="${t.id === activeTab}" aria-controls="workspacePanel-${t.id}" data-tab="${t.id}"><svg width="15" height="15" style="vertical-align:-3px;margin-right:6px"><use href="#${t.icon}"/></svg>${t.label}</button>`).join('');
   strip.querySelectorAll('button[data-tab]').forEach((btn) => btn.addEventListener('click', () => {
-    location.hash = btn.dataset.tab === 'findings' ? `#/workspace/findings/${lastFindingsSubtab}` : `#/workspace/${btn.dataset.tab}`;
+    const id = btn.dataset.tab;
+    location.hash = id === 'findings' ? `#/workspace/findings/${lastFindingsSubtab}`
+      : id === 'evidence' ? `#/workspace/evidence/${lastEvidenceSubtab}`
+      : `#/workspace/${id}`;
   }));
 }
 
@@ -935,6 +950,12 @@ function buildFindingsSubTabStrip(activeSubtab) {
   const strip = document.querySelector('#findingsSubTabStrip');
   strip.innerHTML = FINDINGS_SUBTABS.map((t) => `<button type="button" role="tab" aria-selected="${t.id === activeSubtab}" aria-controls="findingsPanel-${t.id}" data-subtab="${t.id}">${t.label}</button>`).join('');
   strip.querySelectorAll('button[data-subtab]').forEach((btn) => btn.addEventListener('click', () => { location.hash = `#/workspace/findings/${btn.dataset.subtab}`; }));
+}
+
+function buildEvidenceSubTabStrip(activeSubtab) {
+  const strip = document.querySelector('#evidenceSubTabStrip');
+  strip.innerHTML = EVIDENCE_SUBTABS.map((t) => `<button type="button" role="tab" aria-selected="${t.id === activeSubtab}" aria-controls="evidencePanel-${t.id}" data-evidence-subtab="${t.id}">${t.label}</button>`).join('');
+  strip.querySelectorAll('button[data-evidence-subtab]').forEach((btn) => btn.addEventListener('click', () => { location.hash = `#/workspace/evidence/${btn.dataset.evidenceSubtab}`; }));
 }
 
 async function renderWorkspaceView(tab, subtab) {
@@ -958,8 +979,15 @@ async function renderWorkspaceView(tab, subtab) {
     await refreshWorkspaceData();
     renderOverviewPanel();
     renderSourcesPanel();
+    await renderOutlinePanel();
   } else if (tab === 'evidence') {
+    const activeSubtab = EVIDENCE_SUBTABS.some((t) => t.id === subtab) ? subtab : 'items';
+    lastEvidenceSubtab = activeSubtab;
+    buildEvidenceSubTabStrip(activeSubtab);
+    document.querySelectorAll('.evidence-subpanel').forEach((p) => p.classList.add('hidden'));
+    document.querySelector(`#evidencePanel-${activeSubtab}`).classList.remove('hidden');
     await renderEvidencePanel();
+    if (activeSubtab === 'bibliography') await renderBibliographyPanel();
   } else if (tab === 'findings') {
     const activeSubtab = FINDINGS_SUBTABS.some((t) => t.id === subtab) ? subtab : 'claims';
     lastFindingsSubtab = activeSubtab;
@@ -970,8 +998,8 @@ async function renderWorkspaceView(tab, subtab) {
     if (activeSubtab === 'claims') await renderClaimsPanel();
     else if (activeSubtab === 'timeline') renderTimelinePanel();
     else if (activeSubtab === 'contradictions') await renderContradictionsPanel();
-    else if (activeSubtab === 'gaps') { await renderOutlinePanel(); await renderGapsPanel(); }
-    else if (activeSubtab === 'analysis') { await renderOutlinePanel(); await renderAnalysisPanel(); }
+    else if (activeSubtab === 'gaps') await renderGapsPanel();
+    else if (activeSubtab === 'analysis') await renderAnalysisPanel();
   } else if (tab === 'report') {
     await renderReportPanel();
   }
@@ -1103,32 +1131,61 @@ investigationSearchForm.addEventListener('submit', async (e) => {
 });
 
 // ---------------------------------------------------------------------------
-// Bibliography (per active investigation)
+// Bibliography (Evidence tab subpanel, per active investigation). Each
+// source renders as a card, not a dense table - most Target Source Record
+// Shape fields (docs/RESEARCH_METHOD.md) are optional per source, so a wide
+// table gets mostly-empty columns fast. Everything computable
+// (computeBiblioDerived, db.js) is never re-entered by the researcher.
 // ---------------------------------------------------------------------------
-async function renderBibliographyView() {
-  const emptyState = document.querySelector('#bibliographyEmptyState');
-  const listEl = document.querySelector('#bibliographyList');
-  const contextLine = document.querySelector('#bibliographyContextLine');
-  if (!activeInvestigationId) {
-    contextLine.textContent = '';
-    listEl.innerHTML = '';
-    emptyState.classList.remove('hidden');
-    emptyState.innerHTML = `<svg class="empty-state-mascot" width="48" height="48" aria-hidden="true"><use href="#icon-dragon-outline"/></svg>
-      <div><h2>No investigation open</h2><p>Bibliography details are scoped to an investigation's sources. Open or create one first.</p>
-      <div class="empty-state-actions"><a class="btn" href="#/investigations" data-route="/investigations">Browse investigations</a><button type="button" class="btn btn-primary" data-action="new-investigation">New investigation</button></div></div>`;
-    return;
-  }
-  emptyState.classList.add('hidden');
-  const investigations = await listInvestigations();
-  const inv = investigations.find((i) => i.id === activeInvestigationId);
-  contextLine.textContent = inv ? `Sources in “${inv.name}”` : '';
-  const records = await listInvestigationRecords(activeInvestigationId);
-  listEl.innerHTML = records.length ? `<table><thead><tr><th>Title</th><th>Publisher</th><th>Source type</th><th>Reliability</th><th>Notes</th><th></th></tr></thead><tbody>${
-    records.map((r) => {
-      const b = r.biblio || {};
-      return `<tr><td>${esc(r.title || r.originalUrl || 'Untitled')}</td><td>${esc(b.publisher || '—')}</td><td>${esc(b.sourceType || '—')}</td><td>${esc(b.reliability || '—')}</td><td>${esc((b.researchNotes || '').slice(0, 60))}${(b.researchNotes || '').length > 60 ? '…' : ''}</td><td><button type="button" class="mini-edit-btn" data-action="edit-bibliography" data-id="${attr(r.id)}">Edit</button></td></tr>`;
-    }).join('')
-  }</tbody></table>` : '<p class="status">No sources in this investigation yet.</p>';
+async function renderBibliographyPanel() {
+  const container = document.querySelector('#bibliographyList');
+  if (!activeInvestigationId) { container.innerHTML = ''; return; }
+  const [records, evidenceItems, claims] = await Promise.all([
+    listInvestigationRecords(activeInvestigationId),
+    listEvidenceItems(activeInvestigationId),
+    listClaims(activeInvestigationId)
+  ]);
+  container.innerHTML = records.length
+    ? records.map((r) => biblioCardHtml(r, evidenceItems, claims)).join('')
+    : '<p class="status">No sources in this investigation yet.</p>';
+}
+
+function biblioCardHtml(record, evidenceItems, claims) {
+  const b = record.biblio || {};
+  const derived = computeBiblioDerived(record, evidenceItems, claims);
+  const relevantPages = [...derived.relevantPages, ...(b.relevantPagesNote ? [b.relevantPagesNote] : [])];
+  const preservation = [
+    `Original: ${derived.preservation.originalAvailable ? 'available' : 'unknown'}`,
+    `Archived copy: ${derived.preservation.archived ? 'yes' : 'no'}${derived.preservation.alternateArchiveCount ? ` (+${derived.preservation.alternateArchiveCount} alternate${derived.preservation.alternateArchiveCount === 1 ? '' : 's'})` : ''}`,
+    `Local copy: ${derived.preservation.localCopy ? 'kept' : 'not kept'}`
+  ].join(' · ');
+  const archiveLine = derived.archive
+    ? `${esc(derived.archive.source || 'Archived')}${derived.archive.captureDate ? ' · ' + esc(formatDate(derived.archive.captureDate)) : ''}${derived.archive.alternateCount ? ` (+${derived.archive.alternateCount} alternate${derived.archive.alternateCount === 1 ? '' : 's'})` : ''}`
+    : 'Not archived';
+  const versionLine = [
+    derived.versionHash ? `<span title="${attr(derived.versionHash)}">${esc(derived.versionHash.slice(0, 12))}…</span>` : '—',
+    derived.pageCount ? `${derived.pageCount} pages` : ''
+  ].filter(Boolean).join(' · ');
+  const usageLine = `${derived.usage.evidenceCount} evidence item${derived.usage.evidenceCount === 1 ? '' : 's'}, ${derived.usage.claimCount} claim${derived.usage.claimCount === 1 ? '' : 's'}${derived.usage.claimIds.length ? ' (' + esc(derived.usage.claimIds.join(', ')) + ')' : ''}`;
+  return `<article class="evidence-card biblio-card">
+    <p class="evidence-card-meta">${esc(b.sourceType || 'Source class not set')}${b.documentType ? ' · ' + esc(b.documentType) : ''}</p>
+    <p class="biblio-title">${esc(record.title || record.originalUrl || 'Untitled source')}</p>
+    <dl class="biblio-fields">
+      <div><dt>Publisher / creator</dt><dd>${esc(b.publisher || '—')}</dd></div>
+      <div><dt>Publication date</dt><dd>${esc(b.publicationDate || '—')}</dd></div>
+      <div><dt>Date coverage</dt><dd>${esc(b.dateCoverage || '—')}</dd></div>
+      <div><dt>Retrieved</dt><dd>${derived.retrievedAt ? esc(formatDate(derived.retrievedAt)) : '—'}</dd></div>
+      <div><dt>Original location</dt><dd>${derived.originalLocation ? esc(derived.originalLocation) : '—'}</dd></div>
+      <div><dt>Archive / capture</dt><dd>${archiveLine}</dd></div>
+      <div><dt>Version / hash</dt><dd>${versionLine}</dd></div>
+      <div><dt>Relevant pages/passages</dt><dd>${relevantPages.length ? esc(relevantPages.join(', ')) : '—'}</dd></div>
+      <div><dt>Investigation usage</dt><dd>${usageLine}</dd></div>
+      <div><dt>Preservation</dt><dd>${esc(preservation)}</dd></div>
+      <div><dt>Reliability</dt><dd>${esc(b.reliability || '—')}</dd></div>
+      <div><dt>Research notes</dt><dd>${esc(b.researchNotes || '—')}</dd></div>
+    </dl>
+    <button type="button" class="mini-edit-btn" data-action="edit-bibliography" data-id="${attr(record.id)}">Edit</button>
+  </article>`;
 }
 
 document.addEventListener('click', async (e) => {
@@ -1141,7 +1198,11 @@ document.addEventListener('click', async (e) => {
   document.querySelector('#bibliographyRecordId').value = record.id;
   document.querySelector('#bibliographyPublisher').value = b.publisher || '';
   document.querySelector('#bibliographySourceType').value = b.sourceType || '';
+  document.querySelector('#bibliographyDocumentType').value = b.documentType || '';
+  document.querySelector('#bibliographyPublicationDate').value = b.publicationDate || '';
+  document.querySelector('#bibliographyDateCoverage').value = b.dateCoverage || '';
   document.querySelector('#bibliographyReliability').value = b.reliability || '';
+  document.querySelector('#bibliographyRelevantPages').value = b.relevantPagesNote || '';
   document.querySelector('#bibliographyNotes').value = b.researchNotes || '';
   document.querySelector('#bibliographyDialogTitle').textContent = `Bibliography: ${record.title || record.originalUrl || 'Untitled'}`;
   openDialog('bibliographyDialog');
@@ -1153,39 +1214,83 @@ document.querySelector('#bibliographyForm').addEventListener('submit', async (e)
   await updateBibliographyDetails(recordId, {
     publisher: document.querySelector('#bibliographyPublisher').value.trim(),
     sourceType: document.querySelector('#bibliographySourceType').value,
+    documentType: document.querySelector('#bibliographyDocumentType').value,
+    publicationDate: document.querySelector('#bibliographyPublicationDate').value.trim(),
+    dateCoverage: document.querySelector('#bibliographyDateCoverage').value.trim(),
     reliability: document.querySelector('#bibliographyReliability').value,
+    relevantPagesNote: document.querySelector('#bibliographyRelevantPages').value.trim(),
     researchNotes: document.querySelector('#bibliographyNotes').value.trim()
   });
   closeDialog('bibliographyDialog');
   showToast('Saved bibliography details.');
-  await renderBibliographyView();
+  await renderBibliographyPanel();
 });
 
 // ---------------------------------------------------------------------------
-// Research Outline
+// Research Outline (Research tab) - a research question + overall method,
+// broken into sections/subquestions each with their own method, status, and
+// evidence/finding coverage, per docs/RESEARCH_METHOD.md "Research Outline &
+// Coverage." Editing lives here; Findings->Gaps (renderGapsPanel) only reads
+// it, read-only.
 // ---------------------------------------------------------------------------
 let currentOutline = null;
 
 async function renderOutlinePanel() {
-  currentOutline = await getOutline(activeInvestigationId);
+  const [outline, evidenceItems, quantFindings, qualFindings] = await Promise.all([
+    getOutline(activeInvestigationId),
+    listEvidenceItems(activeInvestigationId),
+    listQuantitativeFindings(activeInvestigationId),
+    listQualitativeFindings(activeInvestigationId)
+  ]);
+  currentOutline = outline;
   document.querySelector('#outlineQuestionInput').value = currentOutline.researchQuestion || '';
   document.querySelector('#outlineMethodSelect').value = currentOutline.method || 'mixed';
-  renderOutlineLanes(await listEvidenceItems(activeInvestigationId));
+  renderOutlineLanes(evidenceItems, quantFindings, qualFindings);
 }
 
-function renderOutlineLanes(evidenceItems) {
+async function refreshOutlineLanes() {
+  const [evidenceItems, quantFindings, qualFindings] = await Promise.all([
+    listEvidenceItems(activeInvestigationId),
+    listQuantitativeFindings(activeInvestigationId),
+    listQualitativeFindings(activeInvestigationId)
+  ]);
+  renderOutlineLanes(evidenceItems, quantFindings, qualFindings);
+}
+
+function renderOutlineLanes(evidenceItems, quantFindings = [], qualFindings = []) {
   const container = document.querySelector('#outlineLanesList');
+  const progressLine = document.querySelector('#outlineProgressLine');
   const lanes = currentOutline?.lanes || [];
-  if (!lanes.length) { container.innerHTML = '<p class="status">No coverage lanes yet — add one below.</p>'; return; }
+  if (progressLine) {
+    const answered = lanes.filter((l) => l.status === 'answered').length;
+    progressLine.textContent = lanes.length ? `${answered} of ${lanes.length} section${lanes.length === 1 ? '' : 's'} answered.` : '';
+  }
+  if (!lanes.length) { container.innerHTML = '<p class="status">No outline sections yet — add one below.</p>'; return; }
   container.innerHTML = lanes.map((lane) => {
     const count = evidenceItems.filter((e) => e.outlineLaneId === lane.id).length;
+    const findingCount = quantFindings.filter((f) => f.outlineLaneId === lane.id).length + qualFindings.filter((f) => f.outlineLaneId === lane.id).length;
     const pct = lane.coveragePct;
     const bar = pct == null ? '' : `<div class="lane-bar-track"><div class="lane-bar-fill" style="width:${pct}%"></div></div>`;
+    const method = lane.method || 'mixed';
+    const status = lane.status || 'not-started';
     return `<div class="lane-row">
-      <div class="lane-row-label"><strong>${esc(lane.label)}</strong><span>${count} evidence item${count === 1 ? '' : 's'} linked</span></div>
+      <div class="lane-row-label">
+        <strong>${esc(lane.label)}</strong>
+        <span>${count} evidence item${count === 1 ? '' : 's'} · ${findingCount} finding${findingCount === 1 ? '' : 's'} linked</span>
+      </div>
+      <select class="lane-inline-select" data-lane-field="method" data-lane-id="${attr(lane.id)}" aria-label="Method for ${attr(lane.label)}">
+        <option value="quantitative"${method === 'quantitative' ? ' selected' : ''}>Quantitative</option>
+        <option value="qualitative"${method === 'qualitative' ? ' selected' : ''}>Qualitative</option>
+        <option value="mixed"${method === 'mixed' ? ' selected' : ''}>Mixed</option>
+      </select>
+      <select class="lane-inline-select" data-lane-field="status" data-lane-id="${attr(lane.id)}" aria-label="Status for ${attr(lane.label)}">
+        <option value="not-started"${status === 'not-started' ? ' selected' : ''}>Not started</option>
+        <option value="in-progress"${status === 'in-progress' ? ' selected' : ''}>In progress</option>
+        <option value="answered"${status === 'answered' ? ' selected' : ''}>Answered</option>
+      </select>
       ${bar}
       <div class="lane-pct">${pct == null ? 'Not estimated' : pct + '%'}</div>
-      <button type="button" class="icon-btn" data-action="delete-lane" data-lane-id="${attr(lane.id)}" aria-label="Delete lane ${attr(lane.label)}"><svg width="16" height="16"><use href="#icon-close"/></svg></button>
+      <button type="button" class="icon-btn" data-action="delete-lane" data-lane-id="${attr(lane.id)}" aria-label="Delete section ${attr(lane.label)}"><svg width="16" height="16"><use href="#icon-close"/></svg></button>
     </div>`;
   }).join('');
 }
@@ -1206,17 +1311,27 @@ document.querySelector('#outlineLaneForm').addEventListener('submit', async (e) 
   const label = document.querySelector('#outlineLaneLabel').value.trim();
   if (!label) return;
   const coverageRaw = document.querySelector('#outlineLaneCoverage').value;
-  currentOutline = await addOutlineLane(activeInvestigationId, { label, coveragePct: coverageRaw === '' ? null : Number(coverageRaw) });
+  const method = document.querySelector('#outlineLaneMethodSelect').value;
+  const status = document.querySelector('#outlineLaneStatusSelect').value;
+  currentOutline = await addOutlineLane(activeInvestigationId, { label, coveragePct: coverageRaw === '' ? null : Number(coverageRaw), method, status });
   document.querySelector('#outlineLaneForm').reset();
-  renderOutlineLanes(await listEvidenceItems(activeInvestigationId));
-  showToast(`Added lane “${label}”.`);
+  await refreshOutlineLanes();
+  showToast(`Added section “${label}”.`);
 });
 
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-action="delete-lane"]');
   if (!btn || !activeInvestigationId) return;
   currentOutline = await deleteOutlineLane(activeInvestigationId, btn.dataset.laneId);
-  renderOutlineLanes(await listEvidenceItems(activeInvestigationId));
+  await refreshOutlineLanes();
+});
+
+document.addEventListener('change', async (e) => {
+  const sel = e.target.closest('.lane-inline-select');
+  if (!sel || !activeInvestigationId) return;
+  currentOutline = await updateOutlineLane(activeInvestigationId, sel.dataset.laneId, { [sel.dataset.laneField]: sel.value });
+  await refreshOutlineLanes();
+  showToast('Updated outline section.');
 });
 
 // ---------------------------------------------------------------------------
@@ -1349,49 +1464,144 @@ document.addEventListener('click', async (e) => {
 });
 
 // ---------------------------------------------------------------------------
-// Research Gaps (computed from Outline + Evidence, no separate store)
+// Research Gaps (computed from Outline + Evidence, no separate store).
+// Editing the outline happens on the Research tab - this is read-only.
+// computeGapWarnings is also reused by the Report tab so gap criteria only
+// live in one place.
 // ---------------------------------------------------------------------------
+function computeGapWarnings(outline, evidenceItems) {
+  return (outline.lanes || []).map((lane) => {
+    const count = evidenceItems.filter((e) => e.outlineLaneId === lane.id).length;
+    const status = lane.status || 'not-started';
+    if (status === 'answered') return count === 0 ? { lane, count, reason: 'unconfirmed-answered' } : null;
+    if (count === 0) return { lane, count, reason: 'no-evidence' };
+    if (lane.coveragePct != null && lane.coveragePct < 50) return { lane, count, reason: 'low-coverage' };
+    return null;
+  }).filter(Boolean);
+}
+
 async function renderGapsPanel() {
   const [outline, items] = await Promise.all([getOutline(activeInvestigationId), listEvidenceItems(activeInvestigationId)]);
   const container = document.querySelector('#gapsContent');
   const lanes = outline.lanes || [];
   if (!lanes.length) {
-    container.innerHTML = `<div class="coming-soon"><svg class="coming-soon-mascot" width="40" height="40" aria-hidden="true"><use href="#icon-dragon-outline"/></svg><div><h2>No coverage lanes yet</h2><p>Research Gaps are computed from your coverage lanes — add a few below to see gap warnings here.</p></div></div>`;
+    container.innerHTML = `<div class="coming-soon"><svg class="coming-soon-mascot" width="40" height="40" aria-hidden="true"><use href="#icon-dragon-outline"/></svg><div><h2>No outline sections yet</h2><p>Research Gaps are computed from your <a href="#/workspace/research" data-route="/workspace/research">research outline</a> — add a few sections there to see gap warnings here.</p></div></div>`;
     return;
   }
-  const gaps = lanes
-    .map((lane) => ({ lane, count: items.filter((e) => e.outlineLaneId === lane.id).length }))
-    .filter((g) => g.count === 0 || (g.lane.coveragePct != null && g.lane.coveragePct < 50));
+  const gaps = computeGapWarnings(outline, items);
   container.innerHTML = gaps.length
-    ? gaps.map(({ lane, count }) => `<div class="gap-card"><strong>${esc(lane.label)}</strong><p>${count === 0 ? 'No evidence items linked yet.' : `Only ${count} evidence item${count === 1 ? '' : 's'} linked.`}${lane.coveragePct != null ? ` Estimated coverage: ${lane.coveragePct}%.` : ''}</p></div>`).join('')
-    : '<p class="status">No gap warnings — every lane has evidence linked, and no lane is estimated below 50% coverage.</p>';
+    ? gaps.map(({ lane, count, reason }) => {
+        const status = lane.status || 'not-started';
+        const message = reason === 'unconfirmed-answered'
+          ? 'Marked “Answered” but has no evidence items linked yet — worth double-checking.'
+          : count === 0 ? 'No evidence items linked yet.' : `Only ${count} evidence item${count === 1 ? '' : 's'} linked, estimated coverage ${lane.coveragePct}%.`;
+        return `<div class="gap-card"><div class="gap-card-head"><strong>${esc(lane.label)}</strong><span class="status-badge status-${esc(status)}">${esc(STATUS_LABEL[status])}</span></div><p>${message}</p></div>`;
+      }).join('')
+    : '<p class="status">No gap warnings — every section is marked answered or has adequate evidence linked.</p>';
 }
 
 // ---------------------------------------------------------------------------
-// Evidence-Backed Report (generated from Claims, not stored)
+// Evidence-Backed Report - built strictly from structured research state,
+// in the order docs/RESEARCH_METHOD.md's Current Research Flow lays out:
+// Question -> Method -> Outline -> Sources/Bibliography -> Evidence ->
+// Quantitative/Qualitative Findings -> Gaps/Contradictions -> Claims. Every
+// section is generated live from IndexedDB (deterministic, free, no AI
+// required) and skipped silently when there's nothing in it yet.
 // ---------------------------------------------------------------------------
 async function renderReportPanel() {
-  const [records, items, claims] = await Promise.all([
+  const [outline, records, evidenceItems, claims, quantFindings, qualFindings, crossValidations, cachedAnalysis] = await Promise.all([
+    getOutline(activeInvestigationId),
     listInvestigationRecords(activeInvestigationId),
     listEvidenceItems(activeInvestigationId),
-    listClaims(activeInvestigationId)
+    listClaims(activeInvestigationId),
+    listQuantitativeFindings(activeInvestigationId),
+    listQualitativeFindings(activeInvestigationId),
+    listCrossValidations(activeInvestigationId),
+    getQualitativeAnalysis(activeInvestigationId)
   ]);
   const container = document.querySelector('#reportContent');
-  if (!claims.length) {
-    container.innerHTML = `<div class="coming-soon"><svg class="coming-soon-mascot" width="40" height="40" aria-hidden="true"><use href="#icon-dragon-outline"/></svg><div><h2>No claims yet</h2><p>A report is generated from your <a href="#/workspace/findings/claims" data-route="/workspace/findings">Claims</a>, not from raw search results — add claims backed by evidence to build one.</p></div></div>`;
+
+  const hasAnything = outline.researchQuestion || (outline.lanes || []).length || records.length || claims.length || quantFindings.length || qualFindings.length;
+  if (!hasAnything) {
+    container.innerHTML = `<div class="coming-soon"><svg class="coming-soon-mascot" width="40" height="40" aria-hidden="true"><use href="#icon-dragon-outline"/></svg><div><h2>Nothing to report yet</h2><p>A report is built from your structured research state, not raw search results. Start with a question on the <a href="#/workspace/research" data-route="/workspace/research">Research tab</a>, save some evidence, and add claims.</p></div></div>`;
     return;
   }
-  const evById = new Map(items.map((e) => [e.id, e]));
-  const recById = new Map(records.map((r) => [r.id, r]));
-  container.innerHTML = claims.map((claim) => {
-    const evidenceHtml = (claim.links || []).map((l) => {
-      const ev = evById.get(l.evidenceItemId);
-      if (!ev) return '';
-      const src = recById.get(ev.sourceRecordId);
-      return `<div class="report-evidence"><span class="stance-tag ${l.stance}">${l.stance}</span>${esc(ev.excerptText)}<p>${src ? esc(src.title || src.originalUrl || 'Untitled source') : 'Source unavailable'}${ev.location ? ' · ' + esc(ev.location) : ''}</p></div>`;
+
+  const sections = [];
+
+  // 1-2. Question, Method & Outline
+  if (outline.researchQuestion || outline.method) {
+    sections.push(`<section class="report-section"><h2>Research question</h2><p class="report-question">${esc(outline.researchQuestion || 'Not yet defined.')}</p><p class="hint">Overall method: ${esc(METHOD_LABEL[outline.method] || 'Mixed')}</p></section>`);
+  }
+  if ((outline.lanes || []).length) {
+    const rows = outline.lanes.map((lane) => {
+      const count = evidenceItems.filter((e) => e.outlineLaneId === lane.id).length;
+      const status = lane.status || 'not-started';
+      const method = lane.method || 'mixed';
+      return `<li><strong>${esc(lane.label)}</strong> — ${esc(STATUS_LABEL[status])} · ${esc(METHOD_LABEL[method])} · ${count} evidence item${count === 1 ? '' : 's'}${lane.coveragePct != null ? ` · ~${lane.coveragePct}% coverage` : ''}</li>`;
     }).join('');
-    return `<article class="report-claim"><p class="report-claim-id">${esc(claim.claimId)}</p><h3>${esc(claim.text)}</h3>${evidenceHtml || '<p class="hint">No evidence linked to this claim yet.</p>'}</article>`;
-  }).join('');
+    sections.push(`<section class="report-section"><h2>Outline</h2><ul class="report-list">${rows}</ul></section>`);
+  }
+
+  // 3. Sources / Bibliography
+  if (records.length) {
+    const rows = records.map((r) => {
+      const b = r.biblio || {};
+      const derived = computeBiblioDerived(r, evidenceItems, claims);
+      const preserved = derived.preservation.archived || derived.preservation.originalAvailable ? 'preserved' : 'preservation unconfirmed';
+      return `<li><strong>${esc(r.title || r.originalUrl || 'Untitled source')}</strong>${b.publisher ? ' — ' + esc(b.publisher) : ''}${b.sourceType ? ' · ' + esc(b.sourceType) : ''}${b.documentType ? ' · ' + esc(b.documentType) : ''} · ${preserved}</li>`;
+    }).join('');
+    sections.push(`<section class="report-section"><h2>Sources</h2><ul class="report-list">${rows}</ul></section>`);
+  }
+
+  // 4. Evidence (summary only - full excerpts already appear under Findings/Claims below)
+  if (evidenceItems.length) {
+    const sourceCount = new Set(evidenceItems.map((e) => e.sourceRecordId)).size;
+    sections.push(`<section class="report-section"><h2>Evidence</h2><p>${evidenceItems.length} evidence item${evidenceItems.length === 1 ? '' : 's'} collected across ${sourceCount} source${sourceCount === 1 ? '' : 's'}.</p></section>`);
+  }
+
+  // 5-6. Quantitative & Qualitative Findings
+  if (quantFindings.length) {
+    const items = quantFindings.map((f) => `<div class="report-evidence"><p><strong>${esc(f.statement)}</strong></p>${f.formula ? `<p>Formula: ${esc(f.formula)}</p>` : ''}${f.method ? `<p>Method: ${esc(f.method)}</p>` : ''}</div>`).join('');
+    sections.push(`<section class="report-section"><h2>Quantitative findings</h2>${items}</section>`);
+  }
+  if (qualFindings.length) {
+    const items = qualFindings.map((f) => `<div class="report-evidence"><p><strong>${esc(f.statement)}</strong></p>${f.methodology ? `<p>Methodology: ${esc(f.methodology)}</p>` : ''}</div>`).join('');
+    sections.push(`<section class="report-section"><h2>Qualitative findings</h2>${items}</section>`);
+  }
+
+  // 7. Gaps / Contradictions / Review items - open questions, never conclusions
+  const gapWarnings = computeGapWarnings(outline, evidenceItems);
+  const contradictions = cachedAnalysis?.result?.contradictions || [];
+  const discrepancies = crossValidations.filter((c) => c.verdict === 'discrepancy');
+  if (gapWarnings.length || contradictions.length || discrepancies.length) {
+    const qById = new Map(quantFindings.map((f) => [f.id, f]));
+    const qlById = new Map(qualFindings.map((f) => [f.id, f]));
+    const gapItems = gapWarnings.map((g) => `<li>Gap — ${esc(g.lane.label)}: ${g.reason === 'unconfirmed-answered' ? 'marked answered but no evidence linked' : g.count === 0 ? 'no evidence linked yet' : 'estimated coverage below 50%'}.</li>`).join('');
+    const contraItems = contradictions.map((c) => `<li>Contradiction (AI-flagged, unverified): ${esc(c.description)}</li>`).join('');
+    const discItems = discrepancies.map((d) => `<li>Review item — “${esc(qById.get(d.quantitativeFindingId)?.statement || 'quantitative finding removed')}” vs. “${esc(qlById.get(d.qualitativeFindingId)?.statement || 'qualitative finding removed')}”${d.note ? ': ' + esc(d.note) : ''} — needs human review, not a conclusion.</li>`).join('');
+    sections.push(`<section class="report-section"><h2>Gaps, contradictions &amp; review items</h2><p class="hint">These are open questions the research hasn't resolved yet — never treat them as findings.</p><ul class="report-list">${gapItems}${contraItems}${discItems}</ul></section>`);
+  }
+
+  // 8. Claims (the reasoning unit reports are actually built from)
+  const evById = new Map(evidenceItems.map((e) => [e.id, e]));
+  const recById = new Map(records.map((r) => [r.id, r]));
+  if (claims.length) {
+    const claimsHtml = claims.map((claim) => {
+      const evidenceHtml = (claim.links || []).map((l) => {
+        const ev = evById.get(l.evidenceItemId);
+        if (!ev) return '';
+        const src = recById.get(ev.sourceRecordId);
+        return `<div class="report-evidence"><span class="stance-tag ${l.stance}">${l.stance}</span>${esc(ev.excerptText)}<p>${src ? esc(src.title || src.originalUrl || 'Untitled source') : 'Source unavailable'}${ev.location ? ' · ' + esc(ev.location) : ''}</p></div>`;
+      }).join('');
+      return `<article class="report-claim"><p class="report-claim-id">${esc(claim.claimId)}</p><h3>${esc(claim.text)}</h3>${evidenceHtml || '<p class="hint">No evidence linked to this claim yet.</p>'}</article>`;
+    }).join('');
+    sections.push(`<section class="report-section"><h2>Claims</h2>${claimsHtml}</section>`);
+  } else {
+    sections.push(`<section class="report-section"><h2>Claims</h2><p class="hint">No claims yet — add claims backed by evidence on the <a href="#/workspace/findings/claims" data-route="/workspace/findings">Findings</a> tab.</p></section>`);
+  }
+
+  container.innerHTML = sections.join('');
 }
 
 // ---------------------------------------------------------------------------
@@ -1402,18 +1612,219 @@ async function renderReportPanel() {
 // Quantitative never touches the network at all.
 // ---------------------------------------------------------------------------
 const MIN_EVIDENCE_FOR_ANALYSIS = 2;
+let analysisEvidenceItems = []; // last-rendered list, so the finding forms below can resolve a checked evidence-item id without a second query
 
 async function renderAnalysisPanel() {
-  const [records, outline, evidenceItems, claims] = await Promise.all([
+  const [records, outline, evidenceItems, claims, quantFindings, qualFindings, crossValidations] = await Promise.all([
     listInvestigationRecords(activeInvestigationId),
     getOutline(activeInvestigationId),
     listEvidenceItems(activeInvestigationId),
-    listClaims(activeInvestigationId)
+    listClaims(activeInvestigationId),
+    listQuantitativeFindings(activeInvestigationId),
+    listQualitativeFindings(activeInvestigationId),
+    listCrossValidations(activeInvestigationId)
   ]);
+  currentOutline = outline;
+  analysisEvidenceItems = evidenceItems;
 
   renderQuantitativeAnalysis(records, outline, evidenceItems, claims);
+
+  const outlineOptions = '<option value="">None</option>' + (outline.lanes || []).map((l) => `<option value="${attr(l.id)}">${esc(l.label)}</option>`).join('');
+  document.querySelector('#quantFindingOutlineSelect').innerHTML = outlineOptions;
+  document.querySelector('#qualFindingOutlineSelect').innerHTML = outlineOptions;
+
+  renderQuantFindingInputsPicker(evidenceItems);
+  renderQuantFindingsList(quantFindings, evidenceItems);
+  renderQualFindingPicker(evidenceItems);
+  renderQualFindingsList(qualFindings, evidenceItems);
+  renderCrossValidationSelects(quantFindings, qualFindings);
+  renderCrossValidationsList(crossValidations, quantFindings, qualFindings);
+
   await renderQualitativeSection(evidenceItems, claims, outline);
 }
+
+// ---------------------------------------------------------------------------
+// Quantitative Findings: a specific numeric conclusion with its formula,
+// method, and exact inputs preserved (docs/RESEARCH_METHOD.md Analysis
+// Modes). The numeric sum shown is a mechanically Computed Fact, not a
+// substitute for the formula/method text describing what was actually done.
+// ---------------------------------------------------------------------------
+function renderQuantFindingInputsPicker(evidenceItems) {
+  const container = document.querySelector('#quantFindingInputsPicker');
+  if (!evidenceItems.length) { container.innerHTML = '<p class="status" style="padding:12px;margin:0">Add evidence items first, on the Evidence tab.</p>'; return; }
+  container.innerHTML = evidenceItems.map((item) => `<label class="claim-evidence-option">
+    <input type="checkbox" data-quant-input-id="${attr(item.id)}" />
+    <span class="claim-evidence-option-text">${esc(item.excerptText.slice(0, 140))}${item.excerptText.length > 140 ? '…' : ''}<p>${esc(item.excerptType)}${item.location ? ' · ' + esc(item.location) : ''}</p></span>
+    <input type="number" step="any" class="claim-evidence-option-value" data-quant-value-for="${attr(item.id)}" placeholder="Value" aria-label="Value contributed by this evidence item" />
+  </label>`).join('');
+}
+
+function renderQuantFindingsList(findings, evidenceItems) {
+  const container = document.querySelector('#quantFindingsList');
+  if (!findings.length) { container.innerHTML = '<p class="status">No quantitative findings yet.</p>'; return; }
+  const byId = new Map(evidenceItems.map((e) => [e.id, e]));
+  container.innerHTML = findings.map((f) => {
+    const rows = (f.inputs || []).map((i) => {
+      const ev = i.evidenceItemId ? byId.get(i.evidenceItemId) : null;
+      const label = ev ? esc(ev.excerptText.slice(0, 100)) + (ev.excerptText.length > 100 ? '…' : '') : esc(i.label || 'Evidence item removed');
+      return `<li>${i.value != null ? `<strong>${esc(String(i.value))}</strong> — ` : ''}${label}</li>`;
+    }).join('');
+    const numericValues = (f.inputs || []).map((i) => i.value).filter((v) => typeof v === 'number' && !isNaN(v));
+    const sum = numericValues.length ? numericValues.reduce((a, b) => a + b, 0) : null;
+    return `<article class="evidence-card">
+      <p class="evidence-card-meta">Quantitative finding</p>
+      <p><strong>${esc(f.statement)}</strong></p>
+      ${f.formula ? `<p class="hint">Formula: ${esc(f.formula)}</p>` : ''}
+      ${f.method ? `<p class="hint">Method: ${esc(f.method)}</p>` : ''}
+      ${rows ? `<ul class="claim-card-links">${rows}</ul>` : ''}
+      ${sum != null ? `<p class="hint">Mechanical sum of numeric inputs: ${sum} — informational only, not a substitute for the formula/method above.</p>` : ''}
+      <button type="button" class="btn btn-small card-delete" data-action="delete-quant-finding" data-id="${attr(f.id)}">Delete</button>
+    </article>`;
+  }).join('');
+}
+
+document.querySelector('#quantFindingForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!activeInvestigationId) return;
+  const statement = document.querySelector('#quantFindingStatement').value.trim();
+  if (!statement) return;
+  const byId = new Map(analysisEvidenceItems.map((it) => [it.id, it]));
+  const inputs = [...document.querySelectorAll('#quantFindingInputsPicker input[type=checkbox]:checked')].map((cb) => {
+    const id = cb.dataset.quantInputId;
+    const valueInput = document.querySelector(`input[data-quant-value-for="${id}"]`);
+    const item = byId.get(id);
+    return { label: item ? item.excerptText.slice(0, 100) : '', value: valueInput?.value, evidenceItemId: id };
+  });
+  await createQuantitativeFinding(activeInvestigationId, {
+    statement,
+    formula: document.querySelector('#quantFindingFormula').value.trim(),
+    method: document.querySelector('#quantFindingMethod').value.trim(),
+    inputs,
+    outlineLaneId: document.querySelector('#quantFindingOutlineSelect').value || null
+  });
+  document.querySelector('#quantFindingForm').reset();
+  await renderAnalysisPanel();
+  showToast('Added quantitative finding.');
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="delete-quant-finding"]');
+  if (!btn) return;
+  await deleteQuantitativeFinding(btn.dataset.id);
+  await renderAnalysisPanel();
+});
+
+// ---------------------------------------------------------------------------
+// Qualitative Findings: a specific interpretive conclusion with its
+// supporting passages and methodology preserved - distinct from the
+// free-form AI Qualitative Analysis synthesis below (renderQualitativeSection),
+// which is a cached AI opinion, not a researcher-asserted finding.
+// ---------------------------------------------------------------------------
+function renderQualFindingPicker(evidenceItems) {
+  const container = document.querySelector('#qualFindingPicker');
+  if (!evidenceItems.length) { container.innerHTML = '<p class="status" style="padding:12px;margin:0">Add evidence items first, on the Evidence tab.</p>'; return; }
+  container.innerHTML = evidenceItems.map((item) => `<label class="claim-evidence-option">
+    <input type="checkbox" data-qual-input-id="${attr(item.id)}" />
+    <span class="claim-evidence-option-text">${esc(item.excerptText.slice(0, 140))}${item.excerptText.length > 140 ? '…' : ''}<p>${esc(item.excerptType)}${item.location ? ' · ' + esc(item.location) : ''}</p></span>
+  </label>`).join('');
+}
+
+function renderQualFindingsList(findings, evidenceItems) {
+  const container = document.querySelector('#qualFindingsList');
+  if (!findings.length) { container.innerHTML = '<p class="status">No qualitative findings yet.</p>'; return; }
+  const byId = new Map(evidenceItems.map((e) => [e.id, e]));
+  container.innerHTML = findings.map((f) => {
+    const passages = (f.evidenceItemIds || []).map((id) => byId.get(id)).filter(Boolean)
+      .map((e) => `<li>${esc(e.excerptText.slice(0, 140))}${e.excerptText.length > 140 ? '…' : ''}</li>`).join('');
+    return `<article class="evidence-card">
+      <p class="evidence-card-meta">Qualitative finding</p>
+      <p><strong>${esc(f.statement)}</strong></p>
+      ${f.methodology ? `<p class="hint">Methodology: ${esc(f.methodology)}</p>` : ''}
+      ${passages ? `<ul class="claim-card-links">${passages}</ul>` : ''}
+      <button type="button" class="btn btn-small card-delete" data-action="delete-qual-finding" data-id="${attr(f.id)}">Delete</button>
+    </article>`;
+  }).join('');
+}
+
+document.querySelector('#qualFindingForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!activeInvestigationId) return;
+  const statement = document.querySelector('#qualFindingStatement').value.trim();
+  if (!statement) return;
+  const evidenceItemIds = [...document.querySelectorAll('#qualFindingPicker input[type=checkbox]:checked')].map((cb) => cb.dataset.qualInputId);
+  await createQualitativeFinding(activeInvestigationId, {
+    statement,
+    methodology: document.querySelector('#qualFindingMethodology').value.trim(),
+    evidenceItemIds,
+    outlineLaneId: document.querySelector('#qualFindingOutlineSelect').value || null
+  });
+  document.querySelector('#qualFindingForm').reset();
+  await renderAnalysisPanel();
+  showToast('Added qualitative finding.');
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="delete-qual-finding"]');
+  if (!btn) return;
+  await deleteQualitativeFinding(btn.dataset.id);
+  await renderAnalysisPanel();
+});
+
+// ---------------------------------------------------------------------------
+// Mixed-method cross-validation: does a Quantitative Finding agree with a
+// Qualitative Finding? A researcher judgment call, never inferred by
+// Chronium - a 'discrepancy' verdict is a review item, not a conclusion
+// (docs/RESEARCH_METHOD.md: "Never turn a ... discrepancy ... into a
+// factual conclusion").
+// ---------------------------------------------------------------------------
+function renderCrossValidationSelects(quantFindings, qualFindings) {
+  const qSel = document.querySelector('#crossValQuantSelect');
+  const qlSel = document.querySelector('#crossValQualSelect');
+  qSel.innerHTML = quantFindings.length ? quantFindings.map((f) => `<option value="${attr(f.id)}">${esc(f.statement.slice(0, 70))}</option>`).join('') : '<option value="">Add a quantitative finding first</option>';
+  qlSel.innerHTML = qualFindings.length ? qualFindings.map((f) => `<option value="${attr(f.id)}">${esc(f.statement.slice(0, 70))}</option>`).join('') : '<option value="">Add a qualitative finding first</option>';
+}
+
+function renderCrossValidationsList(entries, quantFindings, qualFindings) {
+  const container = document.querySelector('#crossValidationsList');
+  if (!entries.length) { container.innerHTML = '<p class="status">No cross-validations yet.</p>'; return; }
+  const qById = new Map(quantFindings.map((f) => [f.id, f]));
+  const qlById = new Map(qualFindings.map((f) => [f.id, f]));
+  const VERDICT_LABEL = { consistent: 'Consistent', discrepancy: 'Discrepancy — review item', unclear: 'Unclear' };
+  container.innerHTML = entries.map((entry) => {
+    const qf = qById.get(entry.quantitativeFindingId);
+    const qlf = qlById.get(entry.qualitativeFindingId);
+    return `<article class="${entry.verdict === 'discrepancy' ? 'gap-card' : 'evidence-card'}">
+      <p class="evidence-card-meta">${esc(VERDICT_LABEL[entry.verdict] || entry.verdict)}</p>
+      <p>Quant: ${qf ? esc(qf.statement) : 'Finding removed'}</p>
+      <p>Qual: ${qlf ? esc(qlf.statement) : 'Finding removed'}</p>
+      ${entry.note ? `<p>${esc(entry.note)}</p>` : ''}
+      <button type="button" class="btn btn-small card-delete" data-action="delete-cross-validation" data-id="${attr(entry.id)}">Delete</button>
+    </article>`;
+  }).join('');
+}
+
+document.querySelector('#crossValidationForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!activeInvestigationId) return;
+  const quantitativeFindingId = document.querySelector('#crossValQuantSelect').value;
+  const qualitativeFindingId = document.querySelector('#crossValQualSelect').value;
+  if (!quantitativeFindingId || !qualitativeFindingId) { showToast('Add at least one quantitative and one qualitative finding first.', true); return; }
+  await createCrossValidation(activeInvestigationId, {
+    quantitativeFindingId, qualitativeFindingId,
+    verdict: document.querySelector('#crossValVerdictSelect').value,
+    note: document.querySelector('#crossValNote').value.trim()
+  });
+  document.querySelector('#crossValNote').value = '';
+  await renderAnalysisPanel();
+  showToast('Added cross-validation.');
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="delete-cross-validation"]');
+  if (!btn) return;
+  await deleteCrossValidation(btn.dataset.id);
+  await renderAnalysisPanel();
+});
 
 function renderQuantitativeAnalysis(records, outline, evidenceItems, claims) {
   const grid = document.querySelector('#quantAnalysisGrid');

@@ -368,10 +368,10 @@ professional tools, teams, and enterprise capabilities.
 
 Free should be good enough that someone can conduct and prove a real
 investigation from beginning to end. Notably, everything in "Free includes"
-above except deterministic quantitative analysis and deterministic reports
-is **already built** (Sources/Evidence/Claims/Gaps/Timeline/Bibliography,
-2026-08-28) — this list is a real, mostly-shipped baseline to hold the line
-on, not just an aspiration.
+above is **already built** (Sources/Evidence/Claims/Gaps/Timeline/
+Bibliography/deterministic Quantitative & Qualitative Findings/deterministic
+evidence-backed Reports, 2026-08-29) — this list is a real, mostly-shipped
+baseline to hold the line on, not just an aspiration.
 
 ## Cost Principle
 

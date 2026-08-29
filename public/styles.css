@@ -442,12 +442,41 @@ footer { border-top: 1px solid var(--border); max-width: var(--max); margin: 40p
 .gap-card { border: 1px solid #4a3a22; background: rgba(214,168,75,.06); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px; }
 .gap-card strong { display: block; font-size: 14px; color: var(--accent); }
 .gap-card p { margin: 4px 0 0; font-size: 13px; color: var(--text-secondary); }
+.gap-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gap-card-head strong { display: inline; }
 
 .report-claim { border-left: 2px solid var(--accent); padding: 4px 0 4px 16px; margin-bottom: 22px; }
 .report-claim-id { font-size: 11px; color: var(--text-secondary); letter-spacing: .04em; }
 .report-claim h3 { margin: 4px 0 10px; font-size: 16px; font-weight: 700; }
 .report-evidence { border: 1px solid var(--border); background: var(--surface); border-radius: 7px; padding: 10px 12px; margin: 8px 0; font-size: 13px; }
 .report-evidence p { margin: 4px 0 0; color: var(--text-secondary); }
+.report-section { margin-bottom: 28px; }
+.report-section h2 { margin: 0 0 12px; font-size: 16px; }
+.report-question { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+.report-list { margin: 0; padding-left: 18px; color: var(--text-secondary); font-size: 13.5px; line-height: 1.8; }
+.report-list li { margin: 2px 0; }
+.report-list strong { color: var(--text); }
+
+/* ---------- Outline sections: inline method/status selects ---------- */
+.lane-row { flex-wrap: wrap; }
+.lane-inline-select { min-height: 44px; flex: 0 0 auto; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; font-size: 12px; }
+.lane-inline-select:focus-visible { border-color: var(--accent); }
+.status-badge { display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 2px 7px; border-radius: 4px; }
+.status-badge.status-not-started { background: var(--surface-raised); color: var(--text-secondary); }
+.status-badge.status-in-progress { background: rgba(214,168,75,.15); color: var(--accent); }
+.status-badge.status-answered { background: rgba(101,184,138,.15); color: var(--success); }
+
+/* ---------- Evidence-item picker with a per-row numeric value (Quantitative Findings) ---------- */
+.claim-evidence-option-value { min-height: 44px; width: 96px; flex: 0 0 96px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; font-size: 12.5px; }
+.claim-evidence-option-value:focus-visible { border-color: var(--accent); }
+
+/* ---------- Bibliography cards (Evidence tab subpanel) ---------- */
+.biblio-title { font-size: 15px; font-weight: 700; margin: 0 0 10px; }
+.biblio-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 10px 16px; margin: 0; }
+.biblio-fields > div { min-width: 0; }
+.biblio-fields dt { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text-secondary); margin: 0; }
+.biblio-fields dd { margin: 2px 0 0; font-size: 13px; color: var(--text); word-break: break-word; }
+.biblio-card .mini-edit-btn { margin-top: 14px; }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 760px) {
