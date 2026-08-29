@@ -11,10 +11,11 @@ investigation-level research loop this session completed most of), then
 skim `src/index.js` and `public/app.js`.
 
 **Last updated:** 2026-08-29, end of session. Everything below reflects
-what's actually shipped, not aspiration. This session's work is committed
-as `8b22ea5` ("feat: complete evidence-backed research methodology
-workflow") and pushed to `origin/main` — nothing is local-only as of this
-handoff.
+what's actually shipped, not aspiration. The code change this session is
+committed as `8b22ea5` ("feat: complete evidence-backed research
+methodology workflow") and pushed to `origin/main`. The AI-assisted
+verification described below happened after that push and changed no
+code — see that section for what it confirmed.
 
 ## What Chronium Mind actually is right now
 
@@ -117,6 +118,33 @@ is unrelated to this session's work and was **not** redesigned around.
 Archive Viewer PDF-in-iframe path was not re-verified this session (no
 code in that path changed); still carries the same "implemented,
 code-reviewed, not live-PDF-verified" caveat as the previous handoff.
+
+## AI-assisted analysis: confirmed working against production secrets
+
+After the Research Methodology milestone was pushed, the user asked to
+confirm Qualitative Analysis (the one AI-assisted, paid, opt-in feature)
+actually works, not just that its code exists. Confirmed on both ends:
+
+- **Secret is configured**: `wrangler secret list` shows `ANTHROPIC_API_KEY`
+  already set on the deployed Worker.
+- **Backend confirmed for real**: ran `wrangler dev --remote` (real
+  Cloudflare bindings/secrets, not local `.dev.vars` — there is no
+  `.dev.vars` file in this repo, so a plain local `wrangler dev` cannot
+  exercise this path) and called `/api/analyze/qualitative` directly with
+  synthetic evidence. Got a real `200` from Anthropic: valid
+  themes/patterns/contradictions/synthesis JSON, each citing real evidence
+  IDs, model `claude-haiku-4-5-20251001`, ~4.3s.
+- **Full UI path confirmed too**: same remote-mode server, driven with
+  Puppeteer — created an investigation, added 2 evidence items, clicked
+  "Run AI analysis" on Findings→Analysis, got a real rendered result
+  (Synthesis + 2 Themes + 1 Pattern + a correct "1 contradiction — see the
+  Contradictions tab" cross-link). Zero console errors.
+
+Nothing code-side changed for this check — it's a verification note, not
+a shipped change. If a future session needs to exercise this path via
+plain `wrangler dev` (not `--remote`), it'll need a local `.dev.vars` with
+`ANTHROPIC_API_KEY=...` — ask the user for that key rather than assuming
+one exists locally.
 
 ## Known gaps / things the next session should watch
 
