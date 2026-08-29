@@ -64,16 +64,26 @@ let toastTimer = null;
 let closeNav = null;
 const activeCloses = {};
 
+// P0 "Make Investigation Workspace User-Friendly": 4 primary sections
+// instead of 9 - a first-time user shouldn't need to understand Sources,
+// Outline, Gaps, etc. to upload a document and search it. The visible
+// workflow is SEARCH -> FIND RECEIPT -> SAVE EVIDENCE -> FINDING -> REPORT.
+// Nothing underneath was deleted - Outline's research question and Gaps'
+// coverage lanes moved to the Findings sub-tabs that actually use them
+// (see FINDINGS_SUBTABS), and Sources' facet/table browsing moved into
+// Research under a "Details"-style disclosure.
 const WORKSPACE_TABS = [
-  { id: 'overview', label: 'Overview', icon: 'icon-grid' },
-  { id: 'outline', label: 'Outline', icon: 'icon-list' },
-  { id: 'sources', label: 'Sources', icon: 'icon-file' },
+  { id: 'research', label: 'Research', icon: 'icon-search' },
   { id: 'evidence', label: 'Evidence', icon: 'icon-flag' },
-  { id: 'analysis', label: 'Analysis', icon: 'icon-bar' },
-  { id: 'timeline', label: 'Timeline', icon: 'icon-timeline' },
-  { id: 'gaps', label: 'Gaps', icon: 'icon-gap' },
-  { id: 'claims', label: 'Claims', icon: 'icon-quote' },
+  { id: 'findings', label: 'Findings', icon: 'icon-bar' },
   { id: 'report', label: 'Report', icon: 'icon-doc-check' }
+];
+const FINDINGS_SUBTABS = [
+  { id: 'claims', label: 'Claims' },
+  { id: 'timeline', label: 'Timeline' },
+  { id: 'contradictions', label: 'Contradictions' },
+  { id: 'gaps', label: 'Gaps' },
+  { id: 'analysis', label: 'Analysis' }
 ];
 
 // ---------------------------------------------------------------------------
@@ -291,7 +301,7 @@ const VIEW_TITLES = { home: 'Chronium Mind', investigations: 'Investigations', l
 function parseHash() {
   const path = (location.hash || '#/').slice(1) || '/';
   const parts = path.split('/').filter(Boolean);
-  if (parts[0] === 'workspace') return { view: 'workspace', tab: parts[1] || 'overview' };
+  if (parts[0] === 'workspace') return { view: 'workspace', tab: parts[1] || 'research', subtab: parts[2] || null };
   if (['investigations', 'library', 'bibliography', 'settings'].includes(parts[0])) return { view: parts[0] };
   return { view: 'home' };
 }
@@ -322,7 +332,7 @@ async function loadViewContent(route) {
   else if (route.view === 'library') await renderLibraryView();
   else if (route.view === 'bibliography') await renderBibliographyView();
   else if (route.view === 'settings') renderSettingsView();
-  else if (route.view === 'workspace') await renderWorkspaceView(route.tab);
+  else if (route.view === 'workspace') await renderWorkspaceView(route.tab, route.subtab);
 }
 
 window.addEventListener('hashchange', renderRoute);
@@ -692,7 +702,7 @@ async function investigationCardHtml(inv) {
   const records = await listInvestigationRecords(inv.id);
   const n = records.length;
   return `<div class="investigation-card">
-    <a class="investigation-card-link" href="#/workspace/overview" data-open-investigation="${attr(inv.id)}">${esc(inv.name)}</a>
+    <a class="investigation-card-link" href="#/workspace/research" data-open-investigation="${attr(inv.id)}">${esc(inv.name)}</a>
     ${inv.description ? `<p class="investigation-card-desc">${esc(inv.description)}</p>` : ''}
     <p class="investigation-card-meta">${n} source${n === 1 ? '' : 's'} · updated ${esc(formatDate(inv.updatedAt))}</p>
     <div class="menu-wrap">
@@ -719,7 +729,7 @@ document.addEventListener('click', async (e) => {
   if (!link) return;
   e.preventDefault();
   await setActiveInvestigation(link.dataset.openInvestigation);
-  location.hash = '#/workspace/overview';
+  location.hash = '#/workspace/research';
 });
 
 async function renderHomeRecent() {
@@ -790,7 +800,7 @@ newInvestigationForm.addEventListener('submit', async (e) => {
   newInvestigationForm.reset();
   closeDialog('newInvestigationDialog');
   showToast(`Created investigation “${investigation.name}”.`);
-  location.hash = '#/workspace/overview';
+  location.hash = '#/workspace/research';
   await openAddResearchDialogFor(investigation.id);
 });
 
@@ -881,7 +891,11 @@ async function runImport(items) {
     setAddResearchStatus(`Imported ${batch.fileCount} file${batch.fileCount === 1 ? '' : 's'} (${formatBytes(batch.byteTotal)}). ${batch.duplicates.length} duplicates, ${batch.skipped.length + batch.errors.length} need attention.`);
     showToast(`Imported ${batch.fileCount} file${batch.fileCount === 1 ? '' : 's'} into your investigation.`);
     closeDialog('addResearchDialog');
-    location.hash = '#/workspace/sources';
+    // Setting a hash that's already current doesn't fire hashchange (the
+    // Research tab is where "Add Files"/"Add Web Source" are triggered
+    // from), so re-render directly rather than relying on the router.
+    location.hash = '#/workspace/research';
+    await renderWorkspaceView('research');
   } catch (err) {
     setAddResearchStatus(`Import failed: ${err.message}`, true);
   }
@@ -907,14 +921,23 @@ async function setActiveInvestigation(id) {
 // ---------------------------------------------------------------------------
 // Workspace
 // ---------------------------------------------------------------------------
+let lastFindingsSubtab = 'claims';
+
 function buildWorkspaceTabStrip(activeTab) {
   const strip = document.querySelector('#workspaceTabStrip');
   strip.innerHTML = WORKSPACE_TABS.map((t) => `<button type="button" id="tab-${t.id}" role="tab" aria-selected="${t.id === activeTab}" aria-controls="workspacePanel-${t.id}" data-tab="${t.id}"><svg width="15" height="15" style="vertical-align:-3px;margin-right:6px"><use href="#${t.icon}"/></svg>${t.label}</button>`).join('');
-  strip.querySelectorAll('button[data-tab]').forEach((btn) => btn.addEventListener('click', () => { location.hash = `#/workspace/${btn.dataset.tab}`; }));
+  strip.querySelectorAll('button[data-tab]').forEach((btn) => btn.addEventListener('click', () => {
+    location.hash = btn.dataset.tab === 'findings' ? `#/workspace/findings/${lastFindingsSubtab}` : `#/workspace/${btn.dataset.tab}`;
+  }));
 }
 
+function buildFindingsSubTabStrip(activeSubtab) {
+  const strip = document.querySelector('#findingsSubTabStrip');
+  strip.innerHTML = FINDINGS_SUBTABS.map((t) => `<button type="button" role="tab" aria-selected="${t.id === activeSubtab}" aria-controls="findingsPanel-${t.id}" data-subtab="${t.id}">${t.label}</button>`).join('');
+  strip.querySelectorAll('button[data-subtab]').forEach((btn) => btn.addEventListener('click', () => { location.hash = `#/workspace/findings/${btn.dataset.subtab}`; }));
+}
 
-async function renderWorkspaceView(tab) {
+async function renderWorkspaceView(tab, subtab) {
   const emptyState = document.querySelector('#workspaceEmptyState');
   const body = document.querySelector('#workspaceBody');
   if (!activeInvestigationId) { emptyState.classList.remove('hidden'); body.classList.add('hidden'); return; }
@@ -928,26 +951,29 @@ async function renderWorkspaceView(tab) {
 
   buildWorkspaceTabStrip(tab);
   document.querySelectorAll('.workspace-panel').forEach((p) => p.classList.add('hidden'));
-  const panel = document.querySelector(`#workspacePanel-${tab}`) || document.querySelector('#workspacePanel-overview');
+  const panel = document.querySelector(`#workspacePanel-${tab}`) || document.querySelector('#workspacePanel-research');
   panel.classList.remove('hidden');
 
-  if (tab === 'overview' || tab === 'sources' || tab === 'timeline') {
+  if (tab === 'research') {
     await refreshWorkspaceData();
-    if (tab === 'overview') renderOverviewPanel();
-    if (tab === 'sources') renderSourcesPanel();
-    if (tab === 'timeline') renderTimelinePanel();
-  } else if (tab === 'outline') {
-    await renderOutlinePanel();
+    renderOverviewPanel();
+    renderSourcesPanel();
   } else if (tab === 'evidence') {
     await renderEvidencePanel();
-  } else if (tab === 'claims') {
-    await renderClaimsPanel();
-  } else if (tab === 'gaps') {
-    await renderGapsPanel();
+  } else if (tab === 'findings') {
+    const activeSubtab = FINDINGS_SUBTABS.some((t) => t.id === subtab) ? subtab : 'claims';
+    lastFindingsSubtab = activeSubtab;
+    buildFindingsSubTabStrip(activeSubtab);
+    document.querySelectorAll('.findings-subpanel').forEach((p) => p.classList.add('hidden'));
+    document.querySelector(`#findingsPanel-${activeSubtab}`).classList.remove('hidden');
+    await refreshWorkspaceData(); // Timeline reads lastDashboardData
+    if (activeSubtab === 'claims') await renderClaimsPanel();
+    else if (activeSubtab === 'timeline') renderTimelinePanel();
+    else if (activeSubtab === 'contradictions') await renderContradictionsPanel();
+    else if (activeSubtab === 'gaps') { await renderOutlinePanel(); await renderGapsPanel(); }
+    else if (activeSubtab === 'analysis') { await renderOutlinePanel(); await renderAnalysisPanel(); }
   } else if (tab === 'report') {
     await renderReportPanel();
-  } else if (tab === 'analysis') {
-    await renderAnalysisPanel();
   }
 }
 
@@ -1037,7 +1063,7 @@ function renderAttentionTable(skipped, errors) {
 }
 
 function renderTimelinePanel() {
-  const panel = document.querySelector('#workspacePanel-timeline');
+  const panel = document.querySelector('#findingsPanel-timeline');
   const records = lastDashboardData?.records || [];
   const yearCounts = new Map();
   records.forEach((r) => {
@@ -1330,7 +1356,7 @@ async function renderGapsPanel() {
   const container = document.querySelector('#gapsContent');
   const lanes = outline.lanes || [];
   if (!lanes.length) {
-    container.innerHTML = `<div class="coming-soon"><svg class="coming-soon-mascot" width="40" height="40" aria-hidden="true"><use href="#icon-dragon-outline"/></svg><div><h2>No coverage lanes yet</h2><p>Research Gaps are computed from your <a href="#/workspace/outline" data-route="/workspace/outline">Outline</a>’s coverage lanes — add a few there to see gap warnings here.</p></div></div>`;
+    container.innerHTML = `<div class="coming-soon"><svg class="coming-soon-mascot" width="40" height="40" aria-hidden="true"><use href="#icon-dragon-outline"/></svg><div><h2>No coverage lanes yet</h2><p>Research Gaps are computed from your coverage lanes — add a few below to see gap warnings here.</p></div></div>`;
     return;
   }
   const gaps = lanes
@@ -1352,7 +1378,7 @@ async function renderReportPanel() {
   ]);
   const container = document.querySelector('#reportContent');
   if (!claims.length) {
-    container.innerHTML = `<div class="coming-soon"><svg class="coming-soon-mascot" width="40" height="40" aria-hidden="true"><use href="#icon-dragon-outline"/></svg><div><h2>No claims yet</h2><p>A report is generated from your <a href="#/workspace/claims" data-route="/workspace/claims">Claims</a>, not from raw search results — add claims backed by evidence to build one.</p></div></div>`;
+    container.innerHTML = `<div class="coming-soon"><svg class="coming-soon-mascot" width="40" height="40" aria-hidden="true"><use href="#icon-dragon-outline"/></svg><div><h2>No claims yet</h2><p>A report is generated from your <a href="#/workspace/findings/claims" data-route="/workspace/findings">Claims</a>, not from raw search results — add claims backed by evidence to build one.</p></div></div>`;
     return;
   }
   const evById = new Map(items.map((e) => [e.id, e]));
@@ -1479,15 +1505,39 @@ function renderQualitativeResult(result, evidenceItems, claims) {
 
   const themesHtml = (result.themes || []).map((t) => `<div class="evidence-card"><p class="evidence-card-meta">Theme</p><p><strong>${esc(t.title)}</strong> — ${esc(t.description)}</p>${t.evidenceIds?.length ? `<ul class="claim-card-links">${citeList(t.evidenceIds)}</ul>` : ''}</div>`).join('');
   const patternsHtml = (result.patterns || []).map((p) => `<div class="evidence-card"><p class="evidence-card-meta">Pattern</p><p>${esc(p.description)}</p>${p.evidenceIds?.length ? `<ul class="claim-card-links">${citeList(p.evidenceIds)}</ul>` : ''}</div>`).join('');
-  const contradictionsHtml = (result.contradictions || []).map((c) => `<div class="gap-card"><p class="evidence-card-meta">Contradiction</p><p>${esc(c.description)}</p>${c.evidenceIds?.length ? `<ul class="claim-card-links">${citeList(c.evidenceIds)}</ul>` : ''}</div>`).join('');
-
+  // Contradictions get their own Findings sub-tab (renderContradictionsPanel,
+  // reading this same cached result) rather than being repeated here too.
   resultsEl.innerHTML = `
     ${result.synthesis ? `<div class="panel"><h2>Synthesis</h2><p>${esc(result.synthesis)}</p></div>` : ''}
     ${themesHtml ? `<h3 style="margin:18px 0 8px;font-size:14px">Themes</h3>${themesHtml}` : ''}
     ${patternsHtml ? `<h3 style="margin:18px 0 8px;font-size:14px">Patterns</h3>${patternsHtml}` : ''}
-    ${contradictionsHtml ? `<h3 style="margin:18px 0 8px;font-size:14px">Contradictions</h3>${contradictionsHtml}` : ''}
-    ${!themesHtml && !patternsHtml && !contradictionsHtml && !result.synthesis ? '<p class="status">No findings returned.</p>' : ''}
+    ${result.contradictions?.length ? `<p class="hint" style="margin-top:14px">This evidence also has ${result.contradictions.length} contradiction${result.contradictions.length === 1 ? '' : 's'} — see the <a href="#/workspace/findings/contradictions" data-route="/workspace/findings">Contradictions</a> tab.</p>` : ''}
+    ${!themesHtml && !patternsHtml && !result.synthesis ? '<p class="status">No findings returned.</p>' : ''}
   `;
+}
+
+// ---------------------------------------------------------------------------
+// Contradictions (Findings sub-tab) - a focused view of the same
+// contradictions AI Qualitative Analysis already finds (renderQualitativeResult
+// above), so a researcher doesn't have to dig through the combined Analysis
+// panel to see just the tensions in their evidence. No new data - just its
+// own screen for data the AI provider already returns.
+// ---------------------------------------------------------------------------
+async function renderContradictionsPanel() {
+  const container = document.querySelector('#contradictionsContent');
+  const [cached, evidenceItems] = await Promise.all([
+    getQualitativeAnalysis(activeInvestigationId),
+    listEvidenceItems(activeInvestigationId)
+  ]);
+  const contradictions = cached?.result?.contradictions || [];
+  if (!contradictions.length) {
+    container.innerHTML = `<div class="coming-soon"><svg class="coming-soon-mascot" width="40" height="40" aria-hidden="true"><use href="#icon-dragon-outline"/></svg><div><h2>No contradictions found yet</h2><p>Contradictions come from AI Qualitative Analysis. Run it on the <a href="#/workspace/findings/analysis" data-route="/workspace/findings">Analysis</a> tab to check your evidence for tensions.</p></div></div>`;
+    return;
+  }
+  const evById = new Map(evidenceItems.map((e) => [e.id, e]));
+  const citeList = (ids) => (ids || []).map((id) => evById.get(id)).filter(Boolean)
+    .map((e) => `<li>${esc(e.excerptText.slice(0, 140))}${e.excerptText.length > 140 ? '…' : ''}</li>`).join('');
+  container.innerHTML = contradictions.map((c) => `<div class="gap-card"><p class="evidence-card-meta">Contradiction</p><p>${esc(c.description)}</p>${c.evidenceIds?.length ? `<ul class="claim-card-links">${citeList(c.evidenceIds)}</ul>` : ''}</div>`).join('');
 }
 
 // ---------------------------------------------------------------------------

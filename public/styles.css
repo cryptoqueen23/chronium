@@ -319,6 +319,16 @@ kbd { background: var(--surface-raised); border: 1px solid var(--border); border
 .search.compact input { font-size: 14px; padding: 10px 0; }
 .search.compact button { padding: 0 16px; }
 
+/* Research tab (workspace P0): the search prompt is the prominent, first
+   thing on screen - "SEARCH -> FIND RECEIPT -> SAVE EVIDENCE" starts here. */
+.research-hero { padding: 22px 24px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 18px; }
+.research-hero h2 { margin: 0 0 12px; font-size: 18px; }
+.research-hero .search.compact { max-width: none; margin: 0 0 14px; }
+.research-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.research-sources-details { margin-top: 22px; border-top: 1px solid var(--border); padding-top: 16px; }
+.research-sources-details summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 700; font-size: 14px; color: var(--text); }
+.research-sources-details[open] summary { margin-bottom: 6px; }
+
 .import-zone-inner { border: 1px dashed var(--border); border-radius: var(--radius-lg); padding: 32px 22px; text-align: center; background: var(--bg); transition: border-color .15s, background .15s; }
 .import-zone-inner.dragover { border-color: var(--accent); background: var(--surface); }
 .import-formats { color: var(--text-secondary); font-size: 12.5px; letter-spacing: .02em; margin: 0 0 4px; }

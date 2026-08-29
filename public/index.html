@@ -64,14 +64,9 @@
 
       <div class="nav-group" id="navWorkspaceGroup" hidden>
         <p class="nav-group-title" id="navWorkspaceTitle">Workspace</p>
-        <a class="nav-link" href="#/workspace/overview" data-route="/workspace/overview"><svg class="nav-icon" width="18" height="18"><use href="#icon-grid"/></svg>Overview</a>
-        <a class="nav-link" href="#/workspace/outline" data-route="/workspace/outline"><svg class="nav-icon" width="18" height="18"><use href="#icon-list"/></svg>Outline</a>
-        <a class="nav-link" href="#/workspace/sources" data-route="/workspace/sources"><svg class="nav-icon" width="18" height="18"><use href="#icon-file"/></svg>Sources</a>
+        <a class="nav-link" href="#/workspace/research" data-route="/workspace/research"><svg class="nav-icon" width="18" height="18"><use href="#icon-search"/></svg>Research</a>
         <a class="nav-link" href="#/workspace/evidence" data-route="/workspace/evidence"><svg class="nav-icon" width="18" height="18"><use href="#icon-flag"/></svg>Evidence</a>
-        <a class="nav-link" href="#/workspace/analysis" data-route="/workspace/analysis"><svg class="nav-icon" width="18" height="18"><use href="#icon-bar"/></svg>Analysis</a>
-        <a class="nav-link" href="#/workspace/timeline" data-route="/workspace/timeline"><svg class="nav-icon" width="18" height="18"><use href="#icon-timeline"/></svg>Timeline</a>
-        <a class="nav-link" href="#/workspace/gaps" data-route="/workspace/gaps"><svg class="nav-icon" width="18" height="18"><use href="#icon-gap"/></svg>Gaps</a>
-        <a class="nav-link" href="#/workspace/claims" data-route="/workspace/claims"><svg class="nav-icon" width="18" height="18"><use href="#icon-quote"/></svg>Claims</a>
+        <a class="nav-link" href="#/workspace/findings/claims" data-route="/workspace/findings"><svg class="nav-icon" width="18" height="18"><use href="#icon-bar"/></svg>Findings</a>
         <a class="nav-link" href="#/workspace/report" data-route="/workspace/report"><svg class="nav-icon" width="18" height="18"><use href="#icon-doc-check"/></svg>Report</a>
       </div>
     </div>
@@ -235,92 +230,108 @@
 
         <div class="tab-strip" role="tablist" aria-label="Investigation workspace sections" id="workspaceTabStrip"></div>
 
-        <div id="workspacePanel-overview" class="workspace-panel" role="tabpanel">
-          <div id="dashboardSummary" class="stat-grid"></div>
-          <form id="investigationSearchForm" class="search compact" role="search">
-            <label class="sr-only" for="investigationQuery">Search this investigation</label>
-            <svg class="search-icon" width="16" height="16" aria-hidden="true"><use href="#icon-search"/></svg>
-            <input id="investigationQuery" autocomplete="off" placeholder="Search this investigation…" />
-            <button type="submit">Search</button>
-          </form>
+        <div id="workspacePanel-research" class="workspace-panel" role="tabpanel">
+          <div class="research-hero">
+            <h2>What are you trying to find?</h2>
+            <form id="investigationSearchForm" class="search compact" role="search">
+              <label class="sr-only" for="investigationQuery">Search this investigation</label>
+              <svg class="search-icon" width="16" height="16" aria-hidden="true"><use href="#icon-search"/></svg>
+              <input id="investigationQuery" autocomplete="off" placeholder="Search this investigation…" />
+              <button type="submit">Search</button>
+            </form>
+            <div class="research-actions">
+              <button type="button" class="btn btn-primary" data-action="import-research"><svg width="16" height="16"><use href="#icon-upload"/></svg>+ Add Files</button>
+              <button type="button" class="btn" data-action="import-research"><svg width="16" height="16"><use href="#icon-plus"/></svg>+ Add Web Source</button>
+            </div>
+          </div>
           <div id="investigationSearchResults" class="result-list"></div>
-        </div>
 
-        <div id="workspacePanel-outline" class="workspace-panel hidden" role="tabpanel">
-          <div class="panel">
-            <h2>Research question</h2>
-            <form id="outlineQuestionForm" class="dialog-form dialog-form-compact">
-              <div class="field"><label for="outlineQuestionInput">What are you trying to find out?</label><input id="outlineQuestionInput" maxlength="300" placeholder="e.g. Where did road funding go since 2016?" /></div>
-              <div class="field">
-                <label for="outlineMethodSelect">Research method</label>
-                <select id="outlineMethodSelect"><option value="quantitative">Quantitative</option><option value="qualitative">Qualitative</option><option value="mixed">Mixed methods</option></select>
-              </div>
-              <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-primary">Save</button></div>
-            </form>
-          </div>
-          <div class="panel">
-            <h2>Coverage lanes</h2>
-            <p class="view-subtitle">Evidence categories you're tracking against this question. Coverage % is your own estimate — Chronium only adds the real, counted evidence total alongside it.</p>
-            <div id="outlineLanesList"></div>
-            <form id="outlineLaneForm" class="dialog-form dialog-form-compact" style="margin-top:16px">
-              <div class="field-row">
-                <div class="field"><label for="outlineLaneLabel">New lane</label><input id="outlineLaneLabel" placeholder="e.g. Budgets" maxlength="120" /></div>
-                <div class="field"><label for="outlineLaneCoverage">Coverage % (optional)</label><input id="outlineLaneCoverage" type="number" min="0" max="100" /></div>
-              </div>
-              <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn">Add lane</button></div>
-            </form>
-          </div>
-        </div>
-
-        <div id="workspacePanel-sources" class="workspace-panel hidden" role="tabpanel">
-          <div id="facetBar" class="tab-strip tab-strip-sub" role="tablist" aria-label="Source facets"></div>
-          <div id="reportList" class="report-table"></div>
+          <details class="research-sources-details" open>
+            <summary>Uploaded files &amp; sources</summary>
+            <div id="dashboardSummary" class="stat-grid"></div>
+            <div id="facetBar" class="tab-strip tab-strip-sub" role="tablist" aria-label="Source facets"></div>
+            <div id="reportList" class="report-table"></div>
+          </details>
         </div>
 
         <div id="workspacePanel-evidence" class="workspace-panel hidden" role="tabpanel">
-          <div class="panel">
-            <h2>Add evidence</h2>
+          <p class="view-subtitle">Your saved receipts — the exact passages that back your findings, each with its source, page/location, date, and provenance already attached.</p>
+          <details class="research-sources-details">
+            <summary>Add evidence manually</summary>
             <form id="evidenceForm" class="dialog-form dialog-form-compact">
               <div class="field"><label for="evidenceSourceSelect">Source</label><select id="evidenceSourceSelect" required></select></div>
               <div class="field-row">
                 <div class="field"><label for="evidenceTypeSelect">Type</label><select id="evidenceTypeSelect"><option value="paragraph">Paragraph</option><option value="table-row">Table row</option><option value="figure">Figure</option><option value="quote">Quote</option></select></div>
                 <div class="field"><label for="evidenceLocationInput">Location (optional)</label><input id="evidenceLocationInput" placeholder="e.g. p.143" maxlength="60" /></div>
               </div>
-              <div class="field"><label for="evidenceLaneSelect">Outline lane (optional)</label><select id="evidenceLaneSelect"><option value="">None</option></select></div>
+              <div class="field"><label for="evidenceLaneSelect">Coverage lane (optional)</label><select id="evidenceLaneSelect"><option value="">None</option></select></div>
               <div class="field"><label for="evidenceExcerptInput">Excerpt</label><textarea id="evidenceExcerptInput" rows="3" required maxlength="1000" placeholder="Paste the specific paragraph, table row, or figure that bears on your investigation"></textarea></div>
               <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-primary">Add evidence item</button></div>
             </form>
-          </div>
+          </details>
           <div id="evidenceList" class="report-table"></div>
         </div>
 
-        <div id="workspacePanel-analysis" class="workspace-panel hidden" role="tabpanel">
-          <div class="panel">
-            <h2>Quantitative</h2>
-            <p class="view-subtitle">Deterministic counts over your sources, evidence, and claims — no AI involved, always free.</p>
-            <div id="quantAnalysisGrid" class="stat-grid"></div>
-          </div>
-          <div class="panel">
-            <h2>Qualitative <span class="ai-badge">AI-assisted</span></h2>
-            <p class="view-subtitle">Themes, patterns, and contradictions across your evidence. This is AI interpretation, not established fact — every finding cites the evidence it's based on so you can check it yourself.</p>
-            <p id="qualAnalysisStatus" class="hint"></p>
-            <button type="button" id="runQualAnalysisBtn" class="btn btn-primary" style="margin-top:10px">Run AI analysis</button>
-            <div id="qualAnalysisResults" style="margin-top:18px"></div>
-          </div>
-        </div>
-        <div id="workspacePanel-timeline" class="workspace-panel hidden" role="tabpanel"></div>
-        <div id="workspacePanel-gaps" class="workspace-panel hidden" role="tabpanel"><div id="gapsContent"></div></div>
+        <div id="workspacePanel-findings" class="workspace-panel hidden" role="tabpanel">
+          <div class="tab-strip tab-strip-sub" role="tablist" aria-label="Findings sections" id="findingsSubTabStrip"></div>
 
-        <div id="workspacePanel-claims" class="workspace-panel hidden" role="tabpanel">
-          <div class="panel">
-            <h2>Add claim</h2>
-            <form id="claimForm" class="dialog-form dialog-form-compact">
-              <div class="field"><label for="claimTextInput">Claim</label><textarea id="claimTextInput" rows="2" required maxlength="500" placeholder="A specific factual assertion an evidence item supports or contradicts"></textarea></div>
-              <div class="field"><label id="claimEvidencePickerLabel">Supporting / contradicting evidence</label><div id="claimEvidencePicker" class="claim-evidence-picker" role="group" aria-labelledby="claimEvidencePickerLabel"></div></div>
-              <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-primary">Add claim</button></div>
-            </form>
+          <div id="findingsPanel-claims" class="findings-subpanel">
+            <div class="panel">
+              <h2>Add claim</h2>
+              <form id="claimForm" class="dialog-form dialog-form-compact">
+                <div class="field"><label for="claimTextInput">Claim</label><textarea id="claimTextInput" rows="2" required maxlength="500" placeholder="A specific factual assertion an evidence item supports or contradicts"></textarea></div>
+                <div class="field"><label id="claimEvidencePickerLabel">Supporting / contradicting evidence</label><div id="claimEvidencePicker" class="claim-evidence-picker" role="group" aria-labelledby="claimEvidencePickerLabel"></div></div>
+                <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-primary">Add claim</button></div>
+              </form>
+            </div>
+            <div id="claimsList"></div>
           </div>
-          <div id="claimsList"></div>
+
+          <div id="findingsPanel-timeline" class="findings-subpanel hidden"></div>
+
+          <div id="findingsPanel-contradictions" class="findings-subpanel hidden"><div id="contradictionsContent"></div></div>
+
+          <div id="findingsPanel-gaps" class="findings-subpanel hidden">
+            <div id="gapsContent"></div>
+            <div class="panel">
+              <h2>Coverage lanes</h2>
+              <p class="view-subtitle">Evidence categories you're tracking against your research question. Coverage % is your own estimate — Chronium only adds the real, counted evidence total alongside it.</p>
+              <div id="outlineLanesList"></div>
+              <form id="outlineLaneForm" class="dialog-form dialog-form-compact" style="margin-top:16px">
+                <div class="field-row">
+                  <div class="field"><label for="outlineLaneLabel">New lane</label><input id="outlineLaneLabel" placeholder="e.g. Budgets" maxlength="120" /></div>
+                  <div class="field"><label for="outlineLaneCoverage">Coverage % (optional)</label><input id="outlineLaneCoverage" type="number" min="0" max="100" /></div>
+                </div>
+                <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn">Add lane</button></div>
+              </form>
+            </div>
+          </div>
+
+          <div id="findingsPanel-analysis" class="findings-subpanel hidden">
+            <div class="panel">
+              <h2>Research question</h2>
+              <form id="outlineQuestionForm" class="dialog-form dialog-form-compact">
+                <div class="field"><label for="outlineQuestionInput">What are you trying to find out?</label><input id="outlineQuestionInput" maxlength="300" placeholder="e.g. Where did road funding go since 2016?" /></div>
+                <div class="field">
+                  <label for="outlineMethodSelect">Research method</label>
+                  <select id="outlineMethodSelect"><option value="quantitative">Quantitative</option><option value="qualitative">Qualitative</option><option value="mixed">Mixed methods</option></select>
+                </div>
+                <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-primary">Save</button></div>
+              </form>
+            </div>
+            <div class="panel">
+              <h2>Quantitative</h2>
+              <p class="view-subtitle">Deterministic counts over your sources, evidence, and claims — no AI involved, always free.</p>
+              <div id="quantAnalysisGrid" class="stat-grid"></div>
+            </div>
+            <div class="panel">
+              <h2>Qualitative <span class="ai-badge">AI-assisted</span></h2>
+              <p class="view-subtitle">Themes, patterns, and contradictions across your evidence. This is AI interpretation, not established fact — every finding cites the evidence it's based on so you can check it yourself.</p>
+              <p id="qualAnalysisStatus" class="hint"></p>
+              <button type="button" id="runQualAnalysisBtn" class="btn btn-primary" style="margin-top:10px">Run AI analysis</button>
+              <div id="qualAnalysisResults" style="margin-top:18px"></div>
+            </div>
+          </div>
         </div>
 
         <div id="workspacePanel-report" class="workspace-panel hidden" role="tabpanel"><div id="reportContent"></div></div>
