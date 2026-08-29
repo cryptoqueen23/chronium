@@ -77,11 +77,15 @@ INVESTIGATION
 
 An investigation is more than a flat bag of saved records: sources carry evidence,
 evidence supports (or contradicts) specific claims, and claims are what a
-timeline/report/gap-analysis actually reasons over. **Claims, contradictions, gaps,
-and generated timelines/reports are not built yet** — the Investigation Workspace
-today covers `INVESTIGATION → SOURCES/BIBLIOGRAPHY` only. This structure is the
-target shape the rest builds toward, so the source/record schema should not paint
-itself into a corner before those layers exist.
+timeline/report/gap-analysis actually reasons over. **This structure is shipped**
+as of 2026-08-28 — Sources, Evidence, Claims, Timeline, Gaps, and a deterministic
+Evidence-Backed Report all exist. Contradictions currently comes from AI
+Qualitative Analysis' output (opt-in, paid) rather than a deterministic
+two-Claims-that-can't-both-be-true detector — that deterministic version is
+still ahead (`docs/ROADMAP.md` Phase 4). The Investigation Workspace's visible
+navigation groups this into 4 sections (Research / Evidence / Findings / Report)
+rather than one tab per concept — see `docs/CLAUDE_HANDOFF.md` for the current
+shape — but the underlying data model below is unchanged by that grouping.
 
 ## Analysis Modes
 
@@ -163,49 +167,47 @@ search results or AI summaries.** This is the concrete mechanism behind "never
 lose the receipt" once reporting exists: a report can always be walked backward,
 claim → evidence item → source.
 
-## Workspace Navigation (illustrative)
+## Workspace Navigation (as shipped, 2026-08-28)
 
-A later sketch of how the investigation tree could be organized in the UI —
-directional, not yet built beyond Sources/My Files/Bibliography-as-records:
+The concepts below are all built. The UI groups them into 4 primary
+sections rather than one tab per concept — a first-time user shouldn't
+need to learn "Outline" or "coverage lanes" vocabulary before they can
+upload a document and search it (see `docs/CLAUDE_HANDOFF.md` for the
+reasoning). The underlying data model is exactly the concept tree that
+follows; only the navigation grouping changed.
 
 ```text
-CHRONIUM MIND
-Research Intelligence Workspace
+CHRONIUM MIND — Investigation Workspace
 
-[ New Investigation ]
+RESEARCH                         (search + ingestion, one screen)
+├── "What are you trying to find?" search
+├── My Files (bulk-ingested documents, passage + page-aware search)
+├── Current Web / Historical Web (Arquivo.pt, Wayback, Common Crawl, Memento)
+└── Datasets / APIs                                    [not started]
 
-Research Question:
-[ Where did Copperas Cove road funding go since 2016? ]
+EVIDENCE                         (saved receipts: excerpt, source, page, provenance)
 
-Research Method
-[ Quantitative ] [ Qualitative ] [ Mixed Methods ]
-
-INVESTIGATION
-├── Research Outline
-├── Sources
-│   ├── My Files
-│   ├── Current Web
-│   ├── Historical Web
-│   │   ├── Arquivo.pt
-│   │   ├── Wayback
-│   │   └── Common Crawl
-│   └── Datasets / APIs
-│
-├── Bibliography
-├── Evidence
-├── Quantitative Analysis
-├── Qualitative Analysis
-├── Timeline
-├── Connections
-├── Contradictions
-├── Research Gaps
+FINDINGS                         (sub-tabs, one section)
 ├── Claims
-└── Report
+├── Timeline
+├── Contradictions             (AI Qualitative Analysis output today;
+│                                deterministic 2-claims-conflict detector
+│                                is Phase 4, not started)
+├── Gaps                        (coverage lanes live here - a lane with no/low
+│                                linked evidence is a gap)
+└── Analysis
+    ├── Research Question / Method   (feeds Qualitative Analysis)
+    ├── Quantitative Analysis        (deterministic, always free)
+    └── Qualitative Analysis         (AI-assisted, opt-in, paid)
+
+REPORT                           (deterministic, generated from Claims)
+
+Connections (relationship graph: person ↔ company ↔ contract ↔ ...)  [not started, Phase 6]
 ```
 
-Today's Investigation Workspace covers `Sources → My Files` (bulk-ingested
-documents) and the equivalent of `Current Web`/`Historical Web` (the federated
-search merge). The rest of the tree is the target shape, not yet built.
+Bibliography (Publisher/Source Type/Reliability per source) is a separate
+top-level nav item, not one of the 4 workspace tabs — it's scoped to the
+active investigation's sources the same way the workspace is.
 
 ## Bulk Import UX (illustrative)
 

@@ -1,44 +1,61 @@
-# Chronium Mind — Current Project Snapshot v0.2
+# Chronium Mind
 
 **Search the Internet through time. Connect the evidence.**
 
-Chronium Mind is becoming a reusable historical-web and public-record intelligence aggregator. It is **not** a Copperas Cove-only site. Copperas Cove, Texas is the first real investigation dataset and stress test.
+Chronium Mind is a reusable historical-web and public-record intelligence
+aggregator with a real Investigation Workspace on top. It is **not** a
+Copperas Cove-only site. Copperas Cove, Texas (`data/copperas-cove/`,
+~3,200 real government records) is the proof dataset and stress test —
+no city-specific logic belongs anywhere outside `data/`.
 
-## What is already working
+## What's working today
 
-The original MVP remains intact and runnable:
+**Federated historical search:** topic search via Arquivo.pt full-text;
+URL/domain history via Arquivo.pt, Wayback CDX, Common Crawl, and a
+Memento aggregator. Cross-archive dedup, capture-reachability validation
+with automatic fallback to an alternate archive, and an in-app **Archive
+Viewer** that renders a capture inside Chronium (sandboxed HTML iframe,
+native PDF viewer, formatted text panel) instead of navigating to a URL
+that might force a download. Every connector result carries a *Coverage
+Verdict* distinguishing "found" from "provider unavailable" from
+"verified gap" — never conflates a connector failure with confirmed
+absence of history.
 
-- Cloudflare Worker serves API + static frontend.
-- Topic search via Arquivo.pt full-text historical search.
-- URL/domain history via Arquivo.pt, Wayback CDX, and Common Crawl.
-- Normalized archive search results.
-- Provenance links back to archive/original source.
-- Source/content filters.
-- Edge cache.
-- No database or paid API required for the basic historical search layer.
+**Investigation Workspace:** the real product. Upload documents or save
+web sources into an investigation, then **Research → Evidence → Findings
+→ Report**:
 
-## What has been added to this snapshot
+- **Research** — search returns the actual matched passage (not a stale
+  preview), the source page number for PDFs, and one-click "Save as
+  Evidence" that carries over excerpt/location/provenance automatically.
+- **Evidence** — your saved receipts: excerpt, source, page/location,
+  date, citation.
+- **Findings** — Claims, Timeline, Contradictions, Gaps, and Analysis
+  (deterministic Quantitative, always free; AI-assisted Qualitative,
+  opt-in and paid) as sub-tabs of one section.
+- **Report** — a deterministic, evidence-backed report generated from
+  Claims. Free. An AI-enhanced report is a future paid tier, not built
+  yet.
 
-This ZIP now also contains the current Copperas Cove proof-of-concept data harvested from public/archived city records:
-
-- `data/copperas-cove/copperas-cove-phase2-investigation-dataset.csv`
-- `data/copperas-cove/copperas-cove-phase2-HIGH-priority.csv`
-- `reference/copperas-cove-data.js`
-- `reference/copperas-cove-data-full-replacement.js`
-
-These are **reference/proof datasets**, not the permanent Chronium schema.
+No database or paid API is required for the core search + investigation
+loop — IndexedDB in the browser, one Cloudflare Worker, Cache API for
+archive resolutions. The one opt-in paid call is Qualitative Analysis
+(Anthropic Claude Haiku today, provider-agnostic router — see `src/ai/`).
 
 ## Product direction
 
-Chronium should become a reusable engine with five major layers:
+Chronium is a reusable engine with five major layers:
 
 1. **Connectors / ingestion** — archives, live sites, government document centers, RSS/sitemaps, uploaded records.
 2. **Normalization** — convert sources into one provenance-first record model.
 3. **Index / search** — keyword/entity/date/organization/category filtering.
-4. **Analysis** — Then vs Now, version diffs, timelines, connections, computed facts.
-5. **Investigation workspace** — saved records, notes, searches, comparisons and evidence collections.
+4. **Investigation workspace** — Research → Evidence → Findings → Report, described above.
+5. **Analysis** — Then vs Now, version diffs, deeper AI-reasoning layers, connections, computed facts. Mostly ahead, see `docs/ROADMAP.md`.
 
-See `docs/CLAUDE_HANDOFF.md` and `docs/ARCHITECTURE.md` before changing the code.
+See `docs/CLAUDE_HANDOFF.md` (current state + known gaps, rewritten each
+session) and `docs/CANON.md` (mission, evidence rules, every CANON RULE —
+these are load-bearing) before changing the code. `docs/ROADMAP.md` has
+the phased build order and what's actually shipped vs. not started.
 
 ## Non-negotiable trust rule
 
@@ -77,14 +94,11 @@ Deploy:
 npm run deploy
 ```
 
-## Immediate next engineering milestone
+## Current status
 
-Do **not** build a giant rewrite. The next useful milestone is:
-
-1. Define the normalized Chronium record/version schema.
-2. Add a local Copperas Cove dataset adapter using the included CSV.
-3. Search archive connectors + local investigation records from the same UI.
-4. Add a record detail view with original source, exact archive capture, history, category, dates and provenance.
-5. Add two-version selection for a first Then vs Now diff.
-
-That proves the aggregator architecture before adding accounts, billing, AI, or large infrastructure.
+Reliability (Phase 0) and the Investigation Workspace P0 (Phase 1) are
+shipped — see `docs/ROADMAP.md` for the full phase table and
+`docs/CLAUDE_HANDOFF.md` for what's outstanding within those phases and
+known gaps to verify. Nothing past Phase 1 (Evidence Vault, Compare
+Engine, Contradiction Detector, Research Agent, ...) gets built until
+it's explicitly requested — don't self-direct into later phases.
