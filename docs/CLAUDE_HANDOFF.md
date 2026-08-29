@@ -11,9 +11,10 @@ investigation-level research loop this session completed most of), then
 skim `src/index.js` and `public/app.js`.
 
 **Last updated:** 2026-08-29, end of session. Everything below reflects
-what's actually shipped, not aspiration. Nothing this session touches
-`git push` — check `git status`/`git log` before assuming anything is on
-`origin/main`.
+what's actually shipped, not aspiration. This session's work is committed
+as `8b22ea5` ("feat: complete evidence-backed research methodology
+workflow") and pushed to `origin/main` — nothing is local-only as of this
+handoff.
 
 ## What Chronium Mind actually is right now
 
@@ -162,9 +163,13 @@ code-reviewed, not live-PDF-verified" caveat as the previous handoff.
 ## Where to look next
 
 `docs/ROADMAP.md` Phase 1 is now fully done including this session's
-work. Phase 2 (Evidence Vault) and Phase 3 (Compare Engine) are next per
-CANON.md's Build Priority — **do not start either without being
-explicitly asked**, same rule as last session.
+work — this is a coherent, verified milestone, not experimental. The
+user has explicitly said the next development priorities will come from
+running a real-world Chronium investigation through this workflow, not
+from speculative feature expansion. **Do not self-direct into Phase 2
+(Evidence Vault), Phase 3 (Compare Engine), or any other roadmap item
+without being explicitly asked** — wait for what an actual investigation
+surfaces as missing.
 
 ## Product language
 
