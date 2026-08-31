@@ -273,6 +273,36 @@
 > Fix the research experience.
 >
 > Adaptive research depth. Chronium adapts its responses to the user's requested depth, not the user's identity. Same verified evidence, multiple views, Quick answer, explain, research, professional. Users can ask naturally, explain like I'm 12, give me the executive summary, show every source, generate a report. Evidence and provenance remain constant. Only the presentation changes.
+>
+> 
+> Leverage Before Build
+
+Chronium should connect first and build last.
+
+If another legitimate service already provides infrastructure or capability better or cheaper, Chronium should use that service through a connector rather than recreate it and bear the infrastructure cost.
+
+Default order:
+
+Free/public infrastructure → user-owned service/account → external connector → Chronium-built infrastructure only when necessary.
+
+Examples:
+
+Historical web: use Wayback, Common Crawl, Arquivo.pt rather than storing the historical internet.
+Storage: keep files local or use user-owned/cloud storage rather than Chronium storing everything.
+Video/audio/podcasts: connect to services such as NotebookLM or other compatible providers rather than building our own generation infrastructure.
+Public data: query authoritative APIs/datasets rather than copying entire databases.
+Media: reference or retrieve from the original host when appropriate rather than duplicating large files.
+AI: use AI only when needed; prefer user-provided/free access where legitimately available rather than making paid AI a core Chronium expense.
+
+UX rule: The connector should be invisible whenever technically and legally possible. The user stays inside Chronium while the external service performs the work in the background.
+
+Architecture rule: Build provider-neutral connectors so providers can be swapped without rebuilding Chronium.
+
+Cost rule: Do not make Chronium pay for commodity storage, compute, AI, media generation, or datasets when a legitimate free, public, or user-owned alternative can perform the job.
+
+Exception: Chronium should build and pay for what makes Chronium unique: the research orchestration, evidence relationships, provenance, research state, verification, and intelligence layer.
+
+Short rule: Connect first. Build last. Chronium owns the intelligence, not the infrastructure.
 > ---
 >
 > **CHRONIUM IN ONE LINE**
