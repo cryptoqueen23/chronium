@@ -1,4 +1,4 @@
-Absolutely. Give Claude this as the **product constitution for Chronium Mind**. These principles should govern future features so it doesn't slowly turn back into a complicated research dashboard or an expensive AI wrapper.
+
 
 # Chronium Mind Core Principles
 
