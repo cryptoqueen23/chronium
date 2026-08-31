@@ -272,6 +272,7 @@ Absolutely. Give Claude this as the **product constitution for Chronium Mind**. 
 >
 > Fix the research experience.
 >
+> Adaptive research depth. Chronium adapts its responses to the user's requested depth, not the user's identity. Same verified evidence, multiple views, Quick answer, explain, research, professional. Users can ask naturally, explain like I'm 12, give me the executive summary, show every source, generate a report. Evidence and provenance remain constant. Only the presentation changes.
 > ---
 >
 > **CHRONIUM IN ONE LINE**
