@@ -513,8 +513,13 @@ footer { border-top: 1px solid var(--border); max-width: var(--max); margin: 40p
 .entity-type-badge { display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 2px 7px; border-radius: 4px; background: var(--surface-raised); color: var(--text-secondary); border: 1px solid var(--border); }
 
 .alias-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--surface-raised); border: 1px solid var(--border); border-radius: 999px; padding: 4px 6px 4px 12px; margin: 0 6px 6px 0; font-size: 13px; }
+.alias-chip a { color: var(--accent); }
 .alias-chip-remove { background: none; border: 0; color: var(--text-secondary); cursor: pointer; font-size: 15px; line-height: 1; min-width: 28px; min-height: 28px; border-radius: 50%; }
 .alias-chip-remove:hover, .alias-chip-remove:focus-visible { color: var(--danger); background: var(--danger-bg); }
+
+/* ---------- Evidence <-> Subject mentions (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 2) ---------- */
+.linked-subjects { margin-top: 8px; }
+.linked-subjects > .hint { margin-right: 4px; }
 
 .rel-list { list-style: none; margin: 0; padding: 0; }
 .rel-row { border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; font-size: 13.5px; }

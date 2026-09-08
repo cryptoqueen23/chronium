@@ -11,7 +11,8 @@ import {
   listAskSourcesHistory, createAskSourcesHistoryEntry, updateClaim,
   createEntity, updateEntity, listEntities, findEntities, deleteEntity,
   createRelationship, listRelationshipsForEntity, deleteRelationship,
-  addEntityAlias, listEntityAliases, deleteEntityAlias
+  addEntityAlias, listEntityAliases, deleteEntityAlias,
+  createEntityMention, listMentionsForEntity, listMentionsForEvidence, deleteEntityMention
 } from './db.js';
 import {
   ENTITY_TYPES, ENTITY_TYPE_LABELS, RELATIONSHIP_STATUSES, RELATIONSHIP_STATUS_LABELS,
@@ -119,6 +120,12 @@ let lastBibliographyRecords = [];
 // hash-as-state convention as Findings/Evidence sub-tabs.
 let lastSubjectsEntities = [];
 let lastSubjectsEvidenceItems = [];
+
+// Evidence tab (Phase 2): entities loaded fresh here rather than reused
+// from lastSubjectsEntities, so "Link Subject" works correctly even if
+// the Subjects tab was never visited this session - the two tabs stay
+// independently self-sufficient, not silently order-dependent on each other.
+let lastEvidenceEntities = [];
 
 // P0 "Make Investigation Workspace User-Friendly": 4 primary sections
 // instead of 9 - a first-time user shouldn't need to understand Sources,
@@ -1964,12 +1971,14 @@ document.addEventListener('change', async (e) => {
 // Evidence Items
 // ---------------------------------------------------------------------------
 async function renderEvidencePanel() {
-  const [records, outline, items] = await Promise.all([
+  const [records, outline, items, entities] = await Promise.all([
     listInvestigationRecords(activeInvestigationId),
     getOutline(activeInvestigationId),
-    listEvidenceItems(activeInvestigationId)
+    listEvidenceItems(activeInvestigationId),
+    listEntities(activeInvestigationId)
   ]);
   currentOutline = outline;
+  lastEvidenceEntities = entities;
 
   const sourceSelect = document.querySelector('#evidenceSourceSelect');
   sourceSelect.innerHTML = records.length
@@ -1979,23 +1988,113 @@ async function renderEvidencePanel() {
   const laneSelect = document.querySelector('#evidenceLaneSelect');
   laneSelect.innerHTML = '<option value="">None</option>' + (outline.lanes || []).map((l) => `<option value="${attr(l.id)}">${esc(l.label)}</option>`).join('');
 
-  renderEvidenceList(items, records);
+  // One listMentionsForEvidence() call per item - fine at this app's
+  // scale (matches the existing per-row pattern elsewhere, e.g.
+  // investigationCardHtml's per-card listInvestigationRecords call); a
+  // bulk by-investigation query isn't worth adding until a real
+  // investigation shows this is a bottleneck.
+  const mentionLists = await Promise.all(items.map((item) => listMentionsForEvidence(activeInvestigationId, item.id)));
+  const mentionsByEvidence = new Map(items.map((item, i) => [item.id, mentionLists[i]]));
+
+  renderEvidenceList(items, records, entities, mentionsByEvidence);
 }
 
-function renderEvidenceList(items, records) {
+function renderEvidenceList(items, records, entities, mentionsByEvidence) {
   const container = document.querySelector('#evidenceList');
   if (!items.length) { container.innerHTML = '<p class="status">No evidence items yet — pull a specific excerpt from a source above.</p>'; return; }
   const byId = new Map(records.map((r) => [r.id, r]));
+  const entityById = new Map(entities.map((e) => [e.id, e]));
   container.innerHTML = items.map((item) => {
     const src = byId.get(item.sourceRecordId);
+    const mentions = mentionsByEvidence.get(item.id) || [];
+    // Linked Subjects: explicitly labeled as mentions, never implied
+    // relationships (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 2 "the UI
+    // must make clear these are evidence mentions, not automatically
+    // relationships") - each chip shows the subject's canonical name AND
+    // the exact quoted wording, since they can legitimately differ.
+    const linkedSubjectsHtml = mentions.length
+      ? `<div class="linked-subjects"><span class="hint">Mentions:</span> ${mentions.map((m) => {
+          const entity = entityById.get(m.entityId);
+          const label = entity ? esc(entity.name) : 'Subject removed';
+          const linkOpen = entity ? `<a href="#/workspace/subjects/${attr(entity.id)}">` : '<span>';
+          const linkClose = entity ? '</a>' : '</span>';
+          return `<span class="alias-chip">${linkOpen}${label}${linkClose} <span class="hint">as “${esc(m.quotedName)}”</span> <button type="button" class="alias-chip-remove" data-action="delete-mention" data-id="${attr(m.id)}" aria-label="Remove mention of ${label}">×</button></span>`;
+        }).join(' ')}</div>`
+      : '';
     return `<article class="evidence-card">
       <p class="evidence-card-meta">${esc(item.excerptType)}${item.location ? ' · ' + esc(item.location) : ''}</p>
       <p>${esc(item.excerptText)}</p>
       <p class="evidence-card-cite">From: ${src ? esc(src.title || src.originalUrl || 'Untitled source') : 'Source no longer in this investigation'}</p>
+      ${linkedSubjectsHtml}
+      <button type="button" class="btn btn-small" data-action="open-link-subject" data-id="${attr(item.id)}">Link Subject</button>
       <button type="button" class="btn btn-small card-delete" data-action="delete-evidence" data-id="${attr(item.id)}">Delete</button>
     </article>`;
   }).join('');
 }
+
+// ---------------------------------------------------------------------------
+// Link Subject dialog (Phase 2): attaches an Entity Mention to an evidence
+// item from the Evidence tab, per docs/INVESTIGATION_WORKSPACE_PLAN.md
+// Phase 2 §4 ("From an existing evidence item, allow the researcher to
+// 'Link Subject'"). Never creates a relationship - see public/db.js
+// createEntityMention() for why that's structurally impossible here.
+// ---------------------------------------------------------------------------
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action="open-link-subject"]');
+  if (!btn) return;
+  if (!lastEvidenceEntities.length) { showToast('Add a subject on the Subjects tab first.', true); return; }
+  document.querySelector('#linkSubjectEvidenceId').value = btn.dataset.id;
+  const select = document.querySelector('#linkSubjectEntitySelect');
+  select.innerHTML = lastEvidenceEntities.map((ent) => `<option value="${attr(ent.id)}">${esc(ent.name)} (${esc(ENTITY_TYPE_LABELS[ent.type] || ent.type)})</option>`).join('');
+  document.querySelector('#linkSubjectForm').reset();
+  document.querySelector('#linkSubjectEvidenceId').value = btn.dataset.id; // reset() above clears the hidden field too - set it again after
+  // Courtesy prefill only, never forced - the researcher can freely
+  // overwrite it to match the source's actual wording.
+  const selected = lastEvidenceEntities.find((ent) => ent.id === select.value);
+  if (selected) document.querySelector('#linkSubjectQuotedName').value = selected.name;
+  openDialog('linkSubjectDialog', { initialFocusEl: select });
+});
+
+document.querySelector('#linkSubjectEntitySelect').addEventListener('change', (e) => {
+  const selected = lastEvidenceEntities.find((ent) => ent.id === e.target.value);
+  const quotedNameInput = document.querySelector('#linkSubjectQuotedName');
+  if (selected && !quotedNameInput.value.trim()) quotedNameInput.value = selected.name;
+});
+
+document.querySelector('#linkSubjectForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!activeInvestigationId) return;
+  const evidenceId = document.querySelector('#linkSubjectEvidenceId').value;
+  const entityId = document.querySelector('#linkSubjectEntitySelect').value;
+  const quotedName = document.querySelector('#linkSubjectQuotedName').value;
+  try {
+    await createEntityMention(activeInvestigationId, {
+      entityId, evidenceId, quotedName,
+      snippet: document.querySelector('#linkSubjectSnippet').value,
+      page: document.querySelector('#linkSubjectPage').value,
+      location: document.querySelector('#linkSubjectLocation').value,
+      notes: document.querySelector('#linkSubjectNotes').value
+    });
+    closeDialog('linkSubjectDialog');
+    await renderEvidencePanel();
+    showToast('Linked subject to this evidence item.');
+  } catch (err) {
+    showToast(err.message || 'Could not link subject.', true);
+  }
+});
+
+// "Remove mention" appears in two places (the Evidence tab's Linked
+// Subjects chips, and a Subject profile's Evidence Mentions list) - both
+// share this one handler, which refreshes whichever view is actually on
+// screen rather than assuming the Evidence tab.
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="delete-mention"]');
+  if (!btn) return;
+  await deleteEntityMention(btn.dataset.id);
+  const entity = currentProfileEntity();
+  if (entity) await renderEntityMentionsList(entity);
+  else await renderEvidencePanel();
+});
 
 document.querySelector('#evidenceForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -2227,6 +2326,37 @@ async function renderEntityProfile(entity, allEntities, evidenceItems) {
   renderRelationshipVocabularyOptions();
   renderRelationshipEvidencePicker(evidenceItems);
   await renderEntityRelationships(entity, allEntities);
+  await renderEntityMentionsList(entity);
+}
+
+// Evidence Mentions (Phase 2): every evidence item explicitly linked to
+// this subject, read-only here - linking happens from the Evidence tab's
+// "Link Subject" button (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 2 §5).
+async function renderEntityMentionsList(entity) {
+  const container = document.querySelector('#entityMentionsList');
+  const [mentions, records] = await Promise.all([
+    listMentionsForEntity(activeInvestigationId, entity.id),
+    listInvestigationRecords(activeInvestigationId)
+  ]);
+  if (!mentions.length) { container.innerHTML = '<p class="status">No evidence mentions yet — use "Link Subject" on an evidence item, on the Evidence tab.</p>'; return; }
+
+  const evidenceItems = await listEvidenceItems(activeInvestigationId);
+  const evidenceById = new Map(evidenceItems.map((ev) => [ev.id, ev]));
+  const recordById = new Map(records.map((r) => [r.id, r]));
+
+  container.innerHTML = `<ul class="rel-list">${mentions.map((m) => {
+    const evidence = evidenceById.get(m.evidenceId);
+    const src = evidence ? recordById.get(evidence.sourceRecordId) : null;
+    const sourceLabel = src ? esc(src.title || src.originalUrl || 'Untitled source') : 'Evidence removed';
+    const dateLine = src?.captureDate ? ` · ${esc(formatDate(src.captureDate))}` : '';
+    return `<li class="rel-row">
+      <strong>“${esc(m.quotedName)}”</strong> <span class="hint">appears in: ${sourceLabel}${dateLine}${m.page ? ' · p.' + esc(m.page) : ''}${m.location ? ' · ' + esc(m.location) : ''}</span>
+      ${evidence ? `<p class="hint">${esc(evidence.excerptText.slice(0, 160))}${evidence.excerptText.length > 160 ? '…' : ''}</p>` : ''}
+      ${m.snippet ? `<p class="hint">Snippet: ${esc(m.snippet)}</p>` : ''}
+      <a href="#/workspace/evidence/items" class="hint">View in Evidence →</a>
+      <button type="button" class="btn btn-small card-delete" data-action="delete-mention" data-id="${attr(m.id)}">Remove mention</button>
+    </li>`;
+  }).join('')}</ul>`;
 }
 
 async function renderEntityAliases(entity) {

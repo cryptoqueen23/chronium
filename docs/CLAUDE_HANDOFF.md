@@ -10,25 +10,24 @@ every `CANON RULE` — these are load-bearing, not decoration), then
 investigation-level research loop this session completed most of), then
 skim `src/index.js` and `public/app.js`.
 
-**Last updated:** 2026-09-08 (second update same day). **Investigation
-Entities (Subjects tab) — Phase 1 of the case-file layer — is built and
-live-verified**, per the user's explicit request following the Ask
-Sources milestone. See "In progress this session: Investigation Entities"
-below. Everything under that heading is uncommitted as of this writing;
-it is the very next thing to commit (see "Where to look next"), separately
-from the Ask Sources commit below.
+**Last updated:** 2026-09-08 (third update same day). **Entity Mentions +
+Evidence↔Subject linking — Phase 2 of the case-file layer — is built and
+live-verified**, per the user's explicit request after accepting Phase 1.
+See "In progress this session: Entity Mentions" below. Uncommitted as of
+this writing; the very next thing to commit (see "Where to look next").
 
-Ask Sources + Discover Sources (Roadmap Phase 5) is **done, live-verified,
-and committed** as `98509dc` ("feat: Ask Sources + Discover Sources,
-live-verified end-to-end") — see that commit and
-`docs/ROADMAP.md` Phase 5 for what it covers; this file no longer carries
-its uncommitted-diff details since git history is now the source of truth
-for it. `principle.md` (repo root, Chronium's product constitution) was
-merged into `docs/CANON.md` as "Product Principles" in that same commit —
+Phase 1 (Investigation Entities / Subjects tab) is **done, live-verified,
+and committed** as `8e525ac` ("feat: add evidence-backed investigation
+entities") — accepted by the user as the clean baseline for Phase 2. Ask
+Sources + Discover Sources is committed as `98509dc`. See those commits
+and `docs/ROADMAP.md` Phase 6/Phase 5 for what each covers; this file no
+longer carries their uncommitted-diff details since git history is the
+source of truth for both now. `principle.md` (Chronium's product
+constitution) is merged into `docs/CANON.md` as "Product Principles" —
 read that section first, before the rest of CANON.md.
 
-Everything from "Previous session's work" onward below reflects the
-session before that, committed as `8b22ea5` and pushed to `origin/main`.
+Everything from "Previous session's work" onward below reflects an
+earlier session, committed as `8b22ea5` and pushed to `origin/main`.
 
 ## What Chronium Mind actually is right now
 
@@ -41,10 +40,11 @@ Three things, merged into one engine:
    no-captures-in-index / verified-gap).
 2. An **Investigation Workspace** — upload/search your own documents, turn
    a passage into cited Evidence, build Claims, build a **case file of
-   Subjects and evidence-backed Relationships between them** (new this
-   session — see below), and generate a deterministic (free)
-   Evidence-Backed Report. AI is a paid, opt-in, last-resort layer
-   (Qualitative Analysis synthesis only).
+   Subjects, evidence-backed Relationships between them, and Entity
+   Mentions pinpointing exactly where each subject appears in the
+   evidence** (Phase 2, new this session — see below), and generate a
+   deterministic (free) Evidence-Backed Report. AI is a paid, opt-in,
+   last-resort layer (Qualitative Analysis synthesis only).
 3. **Ask Sources** (including Discover Sources) — a conversational entry
    point over the same investigation state, source-first and
    deterministic-first. See commit `98509dc`.
@@ -52,141 +52,132 @@ Three things, merged into one engine:
 Copperas Cove, TX is still the proof corpus, not a special case in the
 code — no Copperas-Cove-specific logic outside `data/`.
 
-## In progress this session: Investigation Entities (Subjects tab) — uncommitted, live-verified 2026-09-08
+## In progress this session: Entity Mentions (Evidence↔Subject linking) — uncommitted, live-verified 2026-09-08
 
-The user's explicit ask, following the Ask Sources milestone: evolve
-Chronium from "archive search" into a real investigation workspace —
-subjects (people, organizations, government bodies, etc.), a relationship
-graph between them, with one hard non-negotiable rule pasted verbatim:
-**"A relationship MUST NOT be persisted unless it references at least one
-valid evidence item... Enforce this at the data-layer boundary, not just
-the UI."** The user also specified a permanent regression test: create
-Marc Payne and Raymond Payne as separate people, give each an independent
-evidence-backed relationship, and verify Chronium never merges them,
-transfers a relationship between them, or infers a connection neither
-piece of evidence supports — modeling a real research error from an
-earlier Copperas Cove session (a secondary source conflated "Marc Payne"
-with "Raymond Payne").
+The user's explicit ask, Phase 2 of `docs/INVESTIGATION_WORKSPACE_PLAN.md`,
+following acceptance of Phase 1: answer "where, exactly, in the evidence
+does this subject appear?" — distinct from a Relationship. Core principle
+pasted verbatim: **"An ENTITY is not the same thing as an ENTITY MENTION
+... quotedName must preserve the exact name/string from the source ...
+Never rewrite source text to match the canonical entity name."** Explicit
+non-negotiable: **"MENTIONED IN DOCUMENT != RELATIONSHIP BETWEEN ENTITIES"**
+— two entities mentioned in the same evidence item, or an entity having an
+alias, must never auto-create a relationship. Two permanent regression
+tests were specified: the Marc Payne/Raymond Payne identity-isolation test
+again (this time at the mention layer — evidence stays correctly isolated
+per entity, no cross-contamination), and a NEW same-document/co-occurrence
+test (Raymond Payne + Sheena Tanner mentioned in one evidence item — both
+recorded as mentions, zero relationship implied).
 
-Before writing code: read `docs/INVESTIGATION_WORKSPACE_PLAN.md` in full
-(a same-session audit of what already existed toward this — more than
-expected, see that doc's Part 1 — plus the phased plan), inspected
-`public/db.js`'s existing store/CRUD conventions, the Evidence Items data
-shape, the hash-based nav/routing convention (`#/workspace/:tab/:subtab`),
-and confirmed there is no unit-test runner beyond `npm run check` (syntax
-only) — see "Test conventions" below for what this session added.
+Before writing code: re-read `docs/INVESTIGATION_WORKSPACE_PLAN.md` (Part
+4's original `entityMentions` sketch, deferred in Phase 1's as-built
+section — this is that deferred piece, now built), inspected commit
+`8e525ac`, the evidence item shape (`public/db.js` `evidenceItems` store),
+and the existing deletion semantics for entities/aliases/relationships.
 
-**Scoped tightly, per explicit instruction**: entity + relationship data
-model and a Subjects tab UI only. Explicitly NOT touched: timeline events,
-claims integration, graph visualization, AI extraction, report generation.
-See `docs/INVESTIGATION_WORKSPACE_PLAN.md` "Phase 1: as-built" (appended
-to that doc this session) for the complete as-built record — file list,
-schema, the two deliberate deviations from the original plan (aliases as
-a real `entityAliases` store rather than an inline array field;
-`entityMentions`/`quotedName` deferred, not built), and full verification
-detail. This handoff section is the condensed pointer; that doc is the
-detailed record — don't let the two drift apart.
+**Scoped tightly per explicit instruction**: entity mentions + evidence↔
+subject linking only. Explicitly NOT touched: network visualization,
+timeline engine, identity scoring, source tiers, AI entity extraction —
+linking is manual only this phase, by design ("we need the evidence model
+correct before automation touches it"). `#workspaceKebabBtn` (found broken
+in Phase 1) was explicitly NOT fixed, per instruction. See
+`docs/INVESTIGATION_WORKSPACE_PLAN.md` "Phase 2: as-built" (appended this
+session) for the complete as-built record — schema, deletion-semantics
+table, and full verification detail. This handoff section is the
+condensed pointer; that doc is the detailed record.
 
-**Files touched:**
+**Files touched (no new files this phase):**
 ```
- M package.json    - `check` gains entities.js; new `test:entities` script
- M public/app.js   - Subjects tab: entity/alias/relationship CRUD UI
- M public/db.js    - DB_VERSION 6->7, entities/relationships/entityAliases stores + CRUD
- M public/index.html - Subjects panel markup, icon-user symbol
- M public/styles.css - .entity-card/.alias-chip/.rel-row/.status-badge.status-* styles
- M public/ui.js    - confirmDialog() bug fix (see below) - NOT feature scope, a blocking dependency fix
-?? public/entities.js       - new: pure vocabulary + validation, no DOM/IndexedDB
-?? scripts/test-entities.mjs - new: 21 unit tests, plain `node --test`, no new dependency
+ M public/entities.js       - MentionValidationError, validateEntityMentionFields
+ M public/db.js              - DB_VERSION 7->8, entityMentions store + CRUD;
+                                deleteEntity()/deleteEvidenceItem() extended to cascade mentions
+ M public/app.js             - Evidence tab: Link Subject + Linked Subjects chips;
+                                Subject profile: Evidence Mentions panel
+ M public/index.html         - #linkSubjectDialog, Evidence Mentions panel markup
+ M public/styles.css         - .linked-subjects, .alias-chip a
+ M scripts/test-entities.mjs - +9 unit tests for validateEntityMentionFields (30 total)
 ```
 
-**The hard rule, where it actually lives**: `public/entities.js`
-`validateRelationshipFields()` throws `RelationshipEvidenceRequiredError`
-for missing/non-array/empty `evidenceIds` (shape check, no DB access).
-`public/db.js` `createRelationship()`/`updateRelationship()` — the ONLY
-write path to the `relationships` store — call that, then, inside the
-SAME IndexedDB transaction as the eventual write,
-`assertRelationshipReferencesExist()` confirms every cited evidence id
-and both entity ids actually exist in this investigation, throwing
-`RelationshipValidationError` otherwise. Verified by calling
-`createRelationship()` directly via `page.evaluate(() => import('/db.js'))`
-— bypassing the UI entirely, exactly as instructed — with an empty
-array, a missing field, and a fabricated evidence id: all three rejected,
-zero relationships persisted.
+**The core distinction, as implemented**: `createEntityMention()`/
+`updateEntityMention()` (`public/db.js`) never call
+`createRelationship()`/`updateRelationship()` — there is no code path
+between them, structurally, not just by convention. `quotedName` is
+preserved exactly as entered (only outer whitespace trimmed) — this is
+the specific field that would have caught the real Marc/Ray Payne
+research error the project is named after avoiding, and there's now a
+named unit test asserting it survives verbatim.
 
-**Two pre-existing bugs found and fixed** (both directly blocked
-verifying this phase's own test requirements — not scope creep):
-1. `public/ui.js` `confirmDialog()` always resolved `false` regardless of
-   which button was clicked (a Promise-settle-ordering bug: `close()`'s
-   `onClose: () => resolve(false)` fired before the real
-   `resolve(result)`, and only a promise's first settle call counts).
-   This affected every confirm-gated destructive action in the app,
-   including "Delete investigation" — **which had never actually worked
-   via its Confirm button, in any previous session**, not just this
-   feature's new "Delete subject." Fixed with an idempotent `settle()`
-   guard. Verified on both the new Delete Subject flow AND the
-   pre-existing Delete Investigation flow (Cancel confirmed to not
-   delete, Confirm confirmed to actually delete).
-2. `#workspaceKebabBtn` (the in-workspace "…" menu, home of
-   `delete-active-investigation`) has **no click handler wired up at
-   all** — found while writing the regression check for bug #1, when
-   that specific path turned out to be unreachable independent of the
-   confirmDialog bug. **NOT fixed — explicitly out of scope for this
-   phase.** The investigations-list page's per-card kebab menu is a
-   working alternate path to the same delete feature, so this isn't a
-   product dead-end, just a broken shortcut worth a deliberate fix
-   decision later.
+**The hard rule, where it actually lives** (same shape as Phase 1's
+Relationship rule, applied to a different assertion): `public/entities.js`
+`validateEntityMentionFields()` checks shape (entity/evidence ids present,
+`quotedName` non-empty) → `public/db.js`'s `assertMentionReferencesExist()`
+checks existence (both the entity and evidence item are real, in this
+investigation) inside the SAME transaction as the write. Verified by
+calling `createEntityMention()` directly, bypassing the UI: a fabricated
+entity id, a fabricated evidence id, an empty `quotedName`, and a missing
+`quotedName` field were all rejected — zero mentions persisted from any of
+the four attempts.
 
-**A UI consistency bug found and fixed mid-session** (not pre-existing —
-introduced and caught within this same session): the Subjects list's
-search box called the alias-aware `findEntities()` while live-typing, but
-re-entering the tab with a non-empty search box fell back to a
-plain name-only filter that couldn't see aliases — same visible search
-box, two different behaviors depending on how you got there. Fixed by
-routing both paths through `findEntities()`; `renderEntityList()` no
-longer filters, only renders what it's given.
+**Deletion/referential integrity, decided and verified** (full reasoning
+in the plan doc's table): deleting an entity or an evidence item
+cascade-deletes mentions that reference it (a mention has no independent
+meaning once either side is gone — same logic as Phase 1's alias
+cascade); deleting a mention directly never touches the entity or
+evidence; deleting an alias never touches mentions (unrelated stores by
+construction); a relationship exists fully independently of mentions in
+both directions.
 
-**Test conventions established this session**: `public/entities.js` has
-zero DOM/IndexedDB dependency by design specifically so it could be unit
-tested with plain Node (`node:test` + `node:assert/strict`, both built
-in — no new dependency), wired as `npm run test:entities`. This is a
-reusable pattern for future pure-logic modules; the DB/UI layers still
-need the existing Puppeteer-against-`wrangler dev` approach (see Ask
-Sources' verification method, `98509dc`).
+**A test-harness technique worth recording**: `waitForSelector(...,
+{visible:true})` is unreliable specifically on `<option>` elements and on
+freshly-opened popup-menu items in this environment, even when the
+element demonstrably exists (confirmed via direct `evaluate` each time) —
+wait on the container, act on the child via `evaluate` instead of
+trusting the visibility check. Separately: to seed a genuine lower-version
+IndexedDB database for a real migration test, the app's own script must
+be prevented from opening its own (current-version) connection first, or
+the seed's `indexedDB.open()` at the lower version hangs forever —
+blocking the `app.js` network request for one navigation
+(`page.setRequestInterception`) gives a real origin with IndexedDB access
+but no app connection yet, which made a rigorous v7→v8 migration test
+possible (see "VERIFIED" below).
 
-**VERIFIED (live, Puppeteer against `wrangler dev`, viewport 1280×900 —
-same lesson from the Ask Sources session about default-viewport nav
-collapse):**
-- `npm run check` clean (11 files). `npm run test:entities` 21/21 pass.
-- One Puppeteer run, 21/21 assertions, zero console/page errors:
-  6→7 DB migration survives with all three new stores present → Subjects
-  tab loads → entity create + list → search "Payne" returns BOTH Marc and
-  Raymond → entity profile opens → relationship submit button disabled
-  with zero evidence selected, enables on selection → a valid
-  evidence-backed relationship round-trips with correct
-  Outgoing/Incoming direction and confidence badge → the direct-`db.js`
-  bypass rejection (§ above) → **the full Marc/Raymond Payne regression**:
-  search returns both, no merge, no relationship transfer in either
-  direction, confirmed independently from both profiles → alias added,
-  displayed, doesn't merge or rename → deleting Marc Payne doesn't
-  corrupt Raymond's entity or his (unrelated) relationship → Evidence/
-  Report tabs unaffected → full reload persistence.
-- A separate short regression run confirmed the `confirmDialog()` fix
-  specifically: Cancel does not delete, Confirm does delete (on the
-  pre-existing "Delete investigation" feature), and an Ask Sources smoke
-  check (the priority bare-depth-phrase regression from the previous
-  session) still holds — `public/ui.js` is a shared dependency, worth the
-  extra check.
+**VERIFIED (live, Puppeteer against `wrangler dev`, viewport 1280×900):**
+- `npm run check` clean. `npm run test:entities` 30/30 pass (21 from
+  Phase 1 + 9 new).
+- One Puppeteer run, 30/30 assertions, zero unexpected console errors (one
+  intentionally-aborted network request from the migration-seed technique
+  above, not an app defect):
+  a genuine v7-shaped database (built with raw IndexedDB calls replicating
+  Phase 1's exact schema, not just re-running today's code) seeded with
+  real Phase 1 data, then the actual app's first load in that profile
+  confirmed the v8 migration + `entityMentions` store + all seeded data
+  intact → Link Subject flow end-to-end (Evidence card → dialog → Subject
+  profile) → quotedName round-trips exactly, distinct from the entity's
+  own name in the UI → **Marc/Raymond Payne mention-isolation regression**:
+  each profile shows only its own evidence, zero cross-contamination →
+  **Raymond/Sheena same-document regression**: one evidence item linked to
+  both, zero relationships created as a result → direct-`db.js` bypass
+  rejection (§ above) → all five deletion/referential-integrity scenarios
+  → full **Phase 1 regression pass**: relationship-without-evidence still
+  rejected, fabricated relationship-evidence-id still rejected, Ask
+  Sources' bare-depth-phrase guard still holds, existing evidence still
+  works, investigations/subjects survive reload, Delete Subject still
+  works, Delete Investigation still works.
 
 Driver scripts lived entirely in the scratchpad directory, never in the
-repo — confirmed via `git status` throughout.
+repo.
 
 **Still outstanding:**
 - Not committed as of this writing — see "Where to look next."
 - `docs/ROADMAP.md` Phase 6 and `docs/INVESTIGATION_WORKSPACE_PLAN.md`
-  were updated this session to reflect the above — keep them in sync if
-  Phase 2+ of that plan gets built later.
-- Bug #2 above (`#workspaceKebabBtn`) is a real, known, unfixed issue —
-  don't rediscover it from scratch next session.
+  were updated this session to reflect the above.
+- `#workspaceKebabBtn` (found in Phase 1) is still a real, known, unfixed
+  issue — don't rediscover it from scratch next session.
+- A bulk `listMentionsForInvestigation()` query doesn't exist — the
+  Evidence tab does one `listMentionsForEvidence()` call per item via
+  `Promise.all`, fine at current scale, matching the existing per-row
+  query pattern used elsewhere in this app. Revisit only if a real
+  investigation shows this is a bottleneck.
 
 ## Previous session's work: Research Outline + Detailed Bibliography + Findings/Report
 
@@ -344,19 +335,24 @@ one exists locally.
 
 ## Where to look next
 
-**Immediate:** commit the Investigation Entities diff (see "In progress
-this session" above) — it is live-verified and has been sitting
-uncommitted since being built. Suggested message per the user's own
-instruction: `feat: add evidence-backed investigation entities`.
+**Immediate:** commit the Entity Mentions diff (see "In progress this
+session" above) — it is live-verified and has been sitting uncommitted
+since being built. Suggested message per the user's own instruction:
+`feat: link subjects to evidence mentions`.
 
 **Then STOP.** The user's own instruction for this phase was explicit:
-*"Do not begin Phase 2 after committing... Stop and hand Phase 1 back to
-me for review."* Do not self-direct into Phase 2 of
-`docs/INVESTIGATION_WORKSPACE_PLAN.md` (timeline events), Phase 3
-(identity-resolution scoring / source tiers), Phase 4 (network view), or
-any other roadmap item — including the still-open, explicitly-flagged
-`#workspaceKebabBtn` bug — without being asked. Report back what was
-built, the two pre-existing bugs found, and wait.
+*"Do NOT begin Phase 3. Stop after the commit and hand Phase 2 back for
+review."* Do not self-direct into what's left of
+`docs/INVESTIGATION_WORKSPACE_PLAN.md`'s later phases — timeline events,
+identity-resolution scoring/source tiers, or network view — or any other
+roadmap item, including the still-open, explicitly-flagged
+`#workspaceKebabBtn` bug, without being asked. Report back what was
+built and wait. (Note: the plan doc's original Part 5 sketch numbered
+timeline events as "Phase 2" before this session's actual Phase 2 request
+turned out to be entity mentions instead — treat the plan doc's own
+"Phase 1: as-built" / "Phase 2: as-built" sections, and whatever number
+the user assigns next, as authoritative over that original sketch's
+numbering.)
 
 Beyond that: the user has said further priorities will come from running a
 real-world Chronium investigation through the workflow, not speculative

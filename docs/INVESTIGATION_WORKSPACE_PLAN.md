@@ -366,3 +366,152 @@ cascade-deleting it because an entity got deleted would lose a receipt);
 `deleteInvestigation()` cascading to entities/relationships/aliases (it
 doesn't cascade to `evidenceItems`/`claims` either — pre-existing gap,
 consistent with, not introduced by, this phase).
+
+---
+
+## Phase 2: as-built (2026-09-08)
+
+Shipped, live-verified in a real browser (30/30 assertions, zero
+unexpected console errors — one intentionally-aborted network request
+from the test harness's own migration-seed technique, not an app defect;
+see "Verification" below). Scoped tightly per explicit instruction: entity
+mentions + evidence↔subject linking only. No network visualization,
+timeline engine, identity scoring, source tiers, or AI extraction.
+
+### Core distinction, as implemented
+
+An Entity Mention records "this evidence item uses the exact string
+`quotedName` to refer to entity `entityId`" — never a relationship, never
+inferred from co-occurrence or from an alias. `createEntityMention()`/
+`updateEntityMention()` (`public/db.js`) never call
+`createRelationship()`/`updateRelationship()`, and cannot as currently
+written — there is no code path between them. `quotedName` is preserved
+exactly as entered (only outer whitespace trimmed) — never rewritten
+toward the entity's canonical name, which is the specific property that
+would have caught the real Marc/Ray Payne research error this project is
+named after avoiding.
+
+### Files modified (no new files this phase)
+
+`public/entities.js` (`MentionValidationError`, `validateEntityMentionFields`
+— shape validation only, mirrors `validateRelationshipFields`'s pattern),
+`public/db.js` (`DB_VERSION` 7→8, `entityMentions` store + CRUD,
+`deleteEntity()`/`deleteEvidenceItem()` extended to cascade-delete
+mentions), `public/app.js` (Evidence tab: "Link Subject" button + Linked
+Subjects chips; Subject profile: Evidence Mentions panel), `public/index.html`
+(`#linkSubjectDialog`, Evidence Mentions panel markup), `public/styles.css`
+(`.linked-subjects`, `.alias-chip a`), `scripts/test-entities.mjs` (9 new
+unit tests for `validateEntityMentionFields`).
+
+### Schema (IndexedDB, `DB_VERSION` 8 — additive only)
+
+```js
+// entityMentions
+{ id, investigationId, entityId, evidenceId,
+  quotedName, quotedNameNormalized,   // quotedName preserved EXACTLY (outer whitespace only trimmed)
+  snippet, page, location, notes,     // all optional, default ''
+  metadata: {}, createdAt, updatedAt }
+// indexes: investigationId, entityId, evidenceId, quotedNameNormalized, updatedAt
+```
+
+Matches the plan's original Part 4 sketch in spirit; field names follow
+the Phase 2 brief's literal spec (`evidenceId` singular, since a mention
+cites exactly one evidence item, vs. `relationships`' plural `evidenceIds`
+array).
+
+### The enforcement rule, as actually enforced
+
+Mirrors the Phase 1 Relationship pattern exactly, applied to a different
+assertion: `validateEntityMentionFields` (shape — entity/evidence ids
+present, `quotedName` non-empty) then `assertMentionReferencesExist`
+(existence — both the entity and the evidence item are real, in this
+investigation, checked inside the SAME IndexedDB transaction as the
+eventual write). A direct-`db.js`-call bypass with a fabricated entity id,
+a fabricated evidence id, an empty `quotedName`, or a missing `quotedName`
+field is rejected in all four cases — verified live, not just by code
+reading.
+
+### Deletion / referential integrity, as decided and verified
+
+| Action | Mention behavior | Verified |
+|---|---|---|
+| Delete an entity | Its mentions are cascade-deleted (same reasoning as aliases: a mention has no independent meaning once its entity is gone) | ✅ evidence item survives untouched |
+| Delete an evidence item | Mentions citing it are cascade-deleted (a mention pointing at nothing is a true orphan, unlike a Claim/Relationship, which stays as the factual record itself) | ✅ entity survives untouched |
+| Delete a mention directly | Touches only the `entityMentions` store — never the entity, never the evidence | ✅ both survive |
+| Delete an alias | No effect on mentions — the two stores are unrelated by construction (a mention doesn't reference aliases at all) | ✅ mention survives |
+| A relationship | Exists fully independently of mentions — zero mentions required, zero relationships required | ✅ confirmed both ways |
+
+### Verification summary
+
+`npm run check` clean. `npm run test:entities` — 30/30 pass (21 from
+Phase 1 + 9 new mention-validation cases, including "quotedName survives
+verbatim — never rewritten toward the entity's canonical name" as its own
+named test). Live Puppeteer pass against `wrangler dev` — 30/30
+assertions, zero unexpected console errors:
+
+- **Migration v7→v8**: a genuine v7-shaped database was built with raw
+  IndexedDB calls replicating Phase 1's exact schema (not just re-running
+  today's code), seeded with a real investigation/entity/evidence
+  item/relationship, then the actual app loaded for the first time in that
+  browser profile — confirmed the upgrade to v8, the new `entityMentions`
+  store present, and every seeded Phase 1 record intact afterward.
+- **Link Subject flow**: Evidence tab → "Link Subject" → pick an entity →
+  edit the quoted wording → save → chip appears on the evidence card,
+  labeled with both the entity's name and the distinct quoted text (e.g.
+  "Raymond Payne … as 'Ray Payne'") — never implying the two strings are
+  the same by silently merging them in the display.
+- **Payne identity-isolation regression** (§7): Evidence A ("Councilmember
+  Marc Payne recused…") linked only to Marc Payne; Evidence B ("Ray Payne
+  appeared before Council…") linked only to Raymond Payne with quotedName
+  "Ray Payne" (deliberately alias-like, distinct from the entity's own
+  name). Confirmed: Marc's profile shows only Evidence A, Raymond's shows
+  only Evidence B; searching "Payne" still returns both; zero relationships
+  exist between them at any point.
+- **Same-document co-occurrence regression** (§8): one evidence item
+  ("Raymond Payne and Sheena Tanner both provided public comment…") linked
+  to both entities independently. Confirmed: both profiles show the shared
+  evidence item; zero relationships were created between Raymond and
+  Sheena as a result — co-occurrence produced two mention rows, nothing
+  else.
+- **Deletion/referential-integrity** (§9): all five scenarios in the table
+  above, each created and verified via direct `db.js` calls in the same
+  live browser session (not simulated).
+- **Phase 1 regression pass** (§12): relationship-without-evidence still
+  rejected, fabricated relationship-evidence-id still rejected, Ask
+  Sources' bare-depth-phrase guard still holds, existing evidence still
+  lists correctly, investigations/subjects survive reload, Delete Subject
+  still works (the `confirmDialog()` fix from Phase 1 holds), Delete
+  Investigation still works. `#workspaceKebabBtn` was deliberately left
+  unfixed, per explicit instruction not to touch it this phase.
+
+Driver scripts lived entirely in the scratchpad directory, never in the
+repo.
+
+### A test-harness technique worth recording
+
+Two Puppeteer quirks were hit and worked around, neither an app defect:
+`waitForSelector(..., { visible: true })` is unreliable specifically on
+`<option>` elements and on freshly-opened popup-menu items in this
+environment, even when the element demonstrably exists and is genuinely
+visible (confirmed via direct `evaluate` inspection each time) — the fix
+was to wait on the parent/container instead and act on the child directly
+via `evaluate`, not to assume a real timeout meant a real bug. Also: to
+seed a genuine lower-version IndexedDB database for a migration test,
+the app's own script must be prevented from opening its own (current-version)
+connection first — opening a lower version while a higher one is already
+live cannot succeed and hangs indefinitely. Blocking the `app.js` network
+request for one navigation (via `page.setRequestInterception`) gave a
+real HTTP origin with IndexedDB access but no app connection yet, which
+is what made the seed possible.
+
+### Deferred (explicitly, not silently dropped)
+
+Everything already deferred in Phase 1's own list, unchanged — timeline
+events, identity-resolution scoring, source tiers, network view. Also:
+`#workspaceKebabBtn`'s missing click handler (found in Phase 1, explicitly
+told not to fix this phase either); a bulk `listMentionsForInvestigation()`
+query (the Evidence tab currently does one `listMentionsForEvidence()`
+call per evidence item via `Promise.all`, fine at this app's current
+scale, matching the existing per-row query pattern used elsewhere, e.g.
+`investigationCardHtml`'s per-card `listInvestigationRecords` call —
+revisit only if a real investigation shows this is a bottleneck).

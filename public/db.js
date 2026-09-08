@@ -16,12 +16,18 @@
 // Phase 1 - the Subjects tab's case-file layer: PERSON/ORGANIZATION/etc.
 // entities, evidence-backed relationships between them, and researcher-
 // asserted alternate names that never auto-merge into an entity - see the
-// "Entities / Relationships" section below for the enforcement rule).
+// "Entities / Relationships" section below for the enforcement rule),
+// entityMentions (Phase 2 - "this evidence item uses the exact string X to
+// refer to entity Y," never a relationship by itself - see the "Entity
+// Mentions" section below).
 
-import { validateEntityFields, validateRelationshipFields, normalizeName, normalizeForSearch, RelationshipValidationError } from './entities.js';
+import {
+  validateEntityFields, validateRelationshipFields, validateEntityMentionFields,
+  normalizeName, normalizeForSearch, RelationshipValidationError, MentionValidationError
+} from './entities.js';
 
 const DB_NAME = 'chronium';
-const DB_VERSION = 7;
+const DB_VERSION = 8;
 let dbPromise = null;
 
 function openDb() {
@@ -114,6 +120,14 @@ function openDb() {
         aliases.createIndex('entityId', 'entityId', { unique: false });
         aliases.createIndex('investigationId', 'investigationId', { unique: false });
         aliases.createIndex('aliasNormalized', 'aliasNormalized', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('entityMentions')) {
+        const mentions = db.createObjectStore('entityMentions', { keyPath: 'id' });
+        mentions.createIndex('investigationId', 'investigationId', { unique: false });
+        mentions.createIndex('entityId', 'entityId', { unique: false });
+        mentions.createIndex('evidenceId', 'evidenceId', { unique: false });
+        mentions.createIndex('quotedNameNormalized', 'quotedNameNormalized', { unique: false });
+        mentions.createIndex('updatedAt', 'updatedAt', { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -531,9 +545,20 @@ export async function createEvidenceItem(investigationId, { sourceRecordId, exce
   return item;
 }
 
+// Cascade-deletes entityMentions pointing at this evidence item (Phase 2
+// addition) for the same "no orphan mentions" reason as deleteEntity()
+// above - a mention with no evidence behind it is meaningless, worse than
+// a Claim/Relationship left pointing at a removed reference (which stay,
+// rendered as "removed," because THEY are the factual record). Deleting a
+// mention never deletes evidence or an entity - see deleteEntityMention().
 export async function deleteEvidenceItem(evidenceItemId) {
   const db = await openDb();
-  await tx(db, ['evidenceItems'], 'readwrite', (t) => t.objectStore('evidenceItems').delete(evidenceItemId));
+  await tx(db, ['evidenceItems', 'entityMentions'], 'readwrite', async (t) => {
+    t.objectStore('evidenceItems').delete(evidenceItemId);
+    const mentionIdx = t.objectStore('entityMentions').index('evidenceId');
+    const mentions = await reqToPromise(mentionIdx.getAll(evidenceItemId));
+    for (const m of mentions) t.objectStore('entityMentions').delete(m.id);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -836,13 +861,23 @@ export async function findEntities(investigationId, queryText) {
 // already used for a removed Evidence Item in the Claims panel
 // (public/app.js renderClaimsList). Aliases ARE deleted, since they have
 // no independent meaning once their entity is gone.
+// Mentions are cascade-deleted alongside aliases (Phase 2 addition to
+// this Phase 1 function): a mention's entire meaning is "this entity
+// appears here" - like an alias, it has no independent meaning once its
+// entity is gone, so leaving it behind would be an orphan record, not a
+// preserved receipt. Relationships are still NOT cascaded (unchanged from
+// Phase 1) - a relationship is itself an evidence-backed factual record,
+// so it renders "Entity removed" instead of disappearing.
 export async function deleteEntity(entityId) {
   const db = await openDb();
-  await tx(db, ['entities', 'entityAliases'], 'readwrite', async (t) => {
+  await tx(db, ['entities', 'entityAliases', 'entityMentions'], 'readwrite', async (t) => {
     t.objectStore('entities').delete(entityId);
     const aliasIdx = t.objectStore('entityAliases').index('entityId');
     const aliases = await reqToPromise(aliasIdx.getAll(entityId));
     for (const a of aliases) t.objectStore('entityAliases').delete(a.id);
+    const mentionIdx = t.objectStore('entityMentions').index('entityId');
+    const mentions = await reqToPromise(mentionIdx.getAll(entityId));
+    for (const m of mentions) t.objectStore('entityMentions').delete(m.id);
   });
 }
 
@@ -968,4 +1003,96 @@ async function listEntityAliasesForInvestigation(investigationId) {
 export async function deleteEntityAlias(aliasId) {
   const db = await openDb();
   await tx(db, ['entityAliases'], 'readwrite', (t) => t.objectStore('entityAliases').delete(aliasId));
+}
+
+// ---------------------------------------------------------------------------
+// Entity Mentions (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 2): "this
+// evidence item uses the exact string quotedName to refer to entityId."
+// The researcher establishes the link explicitly - Chronium never derives
+// one from an alias, from two entities sharing a surname, or from two
+// entities merely appearing in the same evidence item.
+//
+// CRITICAL, non-negotiable per the Phase 2 brief: A MENTION IS NOT A
+// RELATIONSHIP. createEntityMention()/updateEntityMention() below must
+// NEVER call createRelationship()/updateRelationship(), and never will -
+// linking two entities to the same evidence item creates two independent
+// mention rows, nothing else. "Mentioned in the same document" stays
+// exactly that: co-occurrence, not a claim about a connection between the
+// two entities.
+//
+// Enforcement shape mirrors Relationships exactly: validateEntityMentionFields
+// (public/entities.js) checks the shape (quotedName present, ids present);
+// assertMentionReferencesExist below checks EXISTENCE (the entity and the
+// evidence item are both real, in this investigation) inside the SAME
+// transaction as the write - so a direct-call bypass with a fabricated
+// entityId/evidenceId is rejected exactly like a bypassed Relationship
+// evidence check would be, not silently accepted.
+// ---------------------------------------------------------------------------
+
+async function assertMentionReferencesExist(t, { investigationId, entityId, evidenceId }) {
+  const entity = await reqToPromise(t.objectStore('entities').get(entityId));
+  if (!entity || entity.investigationId !== investigationId) throw new MentionValidationError('Entity not found in this investigation.');
+  const evidence = await reqToPromise(t.objectStore('evidenceItems').get(evidenceId));
+  if (!evidence || evidence.investigationId !== investigationId) throw new MentionValidationError('Evidence item not found in this investigation.');
+}
+
+export async function createEntityMention(investigationId, fields) {
+  const shaped = validateEntityMentionFields({ investigationId, ...fields });
+  const db = await openDb();
+  return tx(db, ['entities', 'evidenceItems', 'entityMentions'], 'readwrite', async (t) => {
+    await assertMentionReferencesExist(t, shaped);
+    const now = new Date().toISOString();
+    const mention = { id: genId('mention'), ...shaped, createdAt: now, updatedAt: now };
+    await reqToPromise(t.objectStore('entityMentions').add(mention));
+    return mention;
+  });
+}
+
+export async function updateEntityMention(mentionId, patch) {
+  const db = await openDb();
+  return tx(db, ['entities', 'evidenceItems', 'entityMentions'], 'readwrite', async (t) => {
+    const store = t.objectStore('entityMentions');
+    const existing = await reqToPromise(store.get(mentionId));
+    if (!existing) return null;
+    // Re-validate the full merged result, not just the patch - same
+    // discipline as updateRelationship(): an update that clears
+    // quotedName or repoints entityId/evidenceId at nothing must be
+    // rejected exactly like a create would be.
+    const merged = { ...existing, ...patch };
+    const shaped = validateEntityMentionFields({
+      investigationId: merged.investigationId, entityId: merged.entityId, evidenceId: merged.evidenceId,
+      quotedName: merged.quotedName, snippet: merged.snippet, page: merged.page,
+      location: merged.location, notes: merged.notes, metadata: merged.metadata
+    });
+    await assertMentionReferencesExist(t, shaped);
+    const updated = { ...existing, ...shaped, updatedAt: new Date().toISOString() };
+    await reqToPromise(store.put(updated));
+    return updated;
+  });
+}
+
+export async function getEntityMention(mentionId) {
+  const db = await openDb();
+  return tx(db, ['entityMentions'], 'readonly', (t) => reqToPromise(t.objectStore('entityMentions').get(mentionId)));
+}
+
+export async function listMentionsForEntity(investigationId, entityId) {
+  const db = await openDb();
+  const rows = await tx(db, ['entityMentions'], 'readonly', (t) => reqToPromise(t.objectStore('entityMentions').index('entityId').getAll(entityId)));
+  return rows.filter((m) => m.investigationId === investigationId).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+export async function listMentionsForEvidence(investigationId, evidenceId) {
+  const db = await openDb();
+  const rows = await tx(db, ['entityMentions'], 'readonly', (t) => reqToPromise(t.objectStore('entityMentions').index('evidenceId').getAll(evidenceId)));
+  return rows.filter((m) => m.investigationId === investigationId).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+// Deletes exactly one mention row - never the entity, never the evidence
+// item. "Be especially careful not to delete the underlying evidence
+// merely because a subject link is removed" is true by construction here:
+// this function never touches the `entities` or `evidenceItems` stores.
+export async function deleteEntityMention(mentionId) {
+  const db = await openDb();
+  await tx(db, ['entityMentions'], 'readwrite', (t) => t.objectStore('entityMentions').delete(mentionId));
 }

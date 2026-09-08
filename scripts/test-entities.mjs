@@ -1,16 +1,18 @@
 // Pure-logic tests for public/entities.js - no DOM, no IndexedDB, no test
 // runner dependency (node:assert + node:test, both built in). Covers the
-// ENTITY and RELATIONSHIP validation-shape cases from Phase 1's test plan
-// that don't require a browser/IndexedDB; the evidence-existence,
-// database-migration, identity-regression, and UI cases are covered
-// separately by a live Puppeteer pass (see docs/CLAUDE_HANDOFF.md).
+// ENTITY, RELATIONSHIP, and (Phase 2) ENTITY MENTION validation-shape
+// cases from the project's test plans that don't require a browser/
+// IndexedDB; the evidence-existence, database-migration, identity-
+// regression, and UI cases are covered separately by a live Puppeteer
+// pass (see docs/CLAUDE_HANDOFF.md).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ENTITY_TYPES, RELATIONSHIP_STATUSES, DEFAULT_RELATIONSHIP_STATUS,
   EntityValidationError, RelationshipValidationError, RelationshipEvidenceRequiredError,
+  MentionValidationError,
   normalizeName, normalizeForSearch, normalizeRelationshipType,
-  validateEntityFields, validateRelationshipFields
+  validateEntityFields, validateRelationshipFields, validateEntityMentionFields
 } from '../public/entities.js';
 
 const INV = 'inv-test-1';
@@ -164,4 +166,81 @@ test('normalizeName: collapses whitespace without altering distinct strings', ()
   assert.equal(normalizeName('  Ray   Payne  '), 'Ray Payne');
   assert.equal(normalizeName(null), '');
   assert.equal(normalizeName(undefined), '');
+});
+
+// ---------------------------------------------------------------------------
+// Entity Mentions (Phase 2)
+// ---------------------------------------------------------------------------
+
+test('validateEntityMentionFields: accepts a valid mention', () => {
+  const out = validateEntityMentionFields({ investigationId: INV, entityId: 'ent-a', evidenceId: 'ev-1', quotedName: 'Ray Payne' });
+  assert.equal(out.quotedName, 'Ray Payne');
+  assert.equal(out.quotedNameNormalized, 'ray payne');
+  assert.equal(out.snippet, '');
+  assert.deepEqual(out.metadata, {});
+});
+
+test('validateEntityMentionFields: rejects a missing entity', () => {
+  assert.throws(
+    () => validateEntityMentionFields({ investigationId: INV, evidenceId: 'ev-1', quotedName: 'Ray Payne' }),
+    MentionValidationError
+  );
+});
+
+test('validateEntityMentionFields: rejects a missing evidence item', () => {
+  assert.throws(
+    () => validateEntityMentionFields({ investigationId: INV, entityId: 'ent-a', quotedName: 'Ray Payne' }),
+    MentionValidationError
+  );
+});
+
+test('validateEntityMentionFields: rejects an empty quotedName', () => {
+  assert.throws(
+    () => validateEntityMentionFields({ investigationId: INV, entityId: 'ent-a', evidenceId: 'ev-1', quotedName: '' }),
+    MentionValidationError
+  );
+  assert.throws(
+    () => validateEntityMentionFields({ investigationId: INV, entityId: 'ent-a', evidenceId: 'ev-1', quotedName: '   ' }),
+    MentionValidationError
+  );
+  assert.throws(
+    () => validateEntityMentionFields({ investigationId: INV, entityId: 'ent-a', evidenceId: 'ev-1' }),
+    MentionValidationError
+  );
+});
+
+test('validateEntityMentionFields: rejects a missing investigationId', () => {
+  assert.throws(
+    () => validateEntityMentionFields({ entityId: 'ent-a', evidenceId: 'ev-1', quotedName: 'Ray Payne' }),
+    MentionValidationError
+  );
+});
+
+test('validateEntityMentionFields: quotedName survives verbatim - never rewritten toward the entity\'s canonical name', () => {
+  // The whole point of quotedName: Chronium must never "correct" a source
+  // quote to match the entity it's attached to. This is what would have
+  // caught the real Marc/Ray Payne research error.
+  const out = validateEntityMentionFields({ investigationId: INV, entityId: 'ent-raymond-payne', evidenceId: 'ev-1', quotedName: 'Marc Payne' });
+  assert.equal(out.quotedName, 'Marc Payne');
+  assert.notEqual(out.quotedName, 'Raymond Payne');
+});
+
+test('validateEntityMentionFields: only trims outer whitespace, preserves internal text exactly', () => {
+  const out = validateEntityMentionFields({ investigationId: INV, entityId: 'ent-a', evidenceId: 'ev-1', quotedName: '  Councilmember Marc Payne  ' });
+  assert.equal(out.quotedName, 'Councilmember Marc Payne');
+});
+
+test('validateEntityMentionFields: rejects non-object metadata', () => {
+  assert.throws(
+    () => validateEntityMentionFields({ investigationId: INV, entityId: 'ent-a', evidenceId: 'ev-1', quotedName: 'X', metadata: 'nope' }),
+    MentionValidationError
+  );
+});
+
+test('validateEntityMentionFields: optional fields (snippet/page/location/notes) default to empty string, not undefined', () => {
+  const out = validateEntityMentionFields({ investigationId: INV, entityId: 'ent-a', evidenceId: 'ev-1', quotedName: 'X' });
+  assert.equal(out.snippet, '');
+  assert.equal(out.page, '');
+  assert.equal(out.location, '');
+  assert.equal(out.notes, '');
 });

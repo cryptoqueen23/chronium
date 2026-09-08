@@ -1,6 +1,6 @@
 // Entity/relationship vocabulary and pure validation logic for the
 // Investigation Workspace "Subjects" layer (docs/INVESTIGATION_WORKSPACE_PLAN.md
-// Phase 1). No DOM, no IndexedDB - this file only decides whether a shape
+// Phase 1/2). No DOM, no IndexedDB - this file only decides whether a shape
 // is valid, so it can be tested directly (scripts/test-entities.mjs) and
 // reused identically by both public/db.js (the enforcement boundary) and
 // public/app.js (the UI).
@@ -13,6 +13,16 @@
 // evidence ever reaches storage - see public/db.js createRelationship()
 // for the second half of the enforcement (confirming the cited evidence
 // actually exists), which this file can't do since it has no store access.
+//
+// Phase 2 adds a second, DIFFERENT kind of assertion - an Entity Mention
+// ("this evidence uses the exact string X to refer to entity Y"), never
+// to be confused with a Relationship. validateEntityMentionFields is the
+// shape half of that; public/db.js's existence checks are the other half,
+// same division of labor. CRITICAL: nothing in this file, in
+// public/db.js, or in public/app.js may ever call a relationship-creating
+// function as a side effect of creating a mention - "mentioned in the
+// same document" is not evidence of a relationship between two entities,
+// and Chronium must never manufacture one from mere co-occurrence.
 
 export const ENTITY_TYPES = [
   'PERSON', 'ORGANIZATION', 'GOVERNMENT_BODY', 'BUSINESS', 'PROPERTY',
@@ -128,6 +138,43 @@ export function validateRelationshipFields({
   return {
     investigationId, sourceEntityId, targetEntityId, type: normType, status: normStatus,
     evidenceIds: cleanEvidenceIds, dateStart: dateStart || null, dateEnd: dateEnd || null,
+    notes: normalizeName(notes || ''), metadata: metadata || {}
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Entity Mentions (Phase 2): "this evidence item uses the exact string
+// quotedName to refer to entity entityId." A mention is NOT a relationship
+// and NEVER implies one - two entities mentioned in the same evidence item
+// are evidence of co-occurrence only. See the file header.
+// ---------------------------------------------------------------------------
+export class MentionValidationError extends Error {
+  constructor(message) { super(message); this.name = 'MentionValidationError'; }
+}
+
+// Shape validation only - existence of investigationId/entityId/evidenceId
+// as real records is public/db.js's job (same division of labor as
+// validateRelationshipFields above). quotedName is preserved EXACTLY as
+// given (never trimmed of internal content, only leading/trailing
+// whitespace via normalizeName) - it is a transcription of the source,
+// not a display label, so "Marc Payne" must never be silently rewritten
+// to match an entity named "Raymond Payne."
+export function validateEntityMentionFields({
+  investigationId, entityId, evidenceId, quotedName, snippet, page, location, notes, metadata
+} = {}) {
+  if (!investigationId) throw new MentionValidationError('A mention must belong to an investigation.');
+  if (!entityId) throw new MentionValidationError('A mention requires an entity.');
+  if (!evidenceId) throw new MentionValidationError('A mention requires an evidence item.');
+
+  const cleanQuotedName = normalizeName(quotedName);
+  if (!cleanQuotedName) throw new MentionValidationError('A mention requires the exact name/text as it appears in the source.');
+
+  if (metadata !== undefined && !isPlainObject(metadata)) throw new MentionValidationError('metadata must be a plain object.');
+
+  return {
+    investigationId, entityId, evidenceId,
+    quotedName: cleanQuotedName, quotedNameNormalized: normalizeForSearch(cleanQuotedName),
+    snippet: normalizeName(snippet || ''), page: normalizeName(page || ''), location: normalizeName(location || ''),
     notes: normalizeName(notes || ''), metadata: metadata || {}
   };
 }
