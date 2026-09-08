@@ -1,0 +1,10 @@
+REDBUD ELECTRIC CO.
+Invoice
+
+Invoice No: INV-0469
+Date: May 15, 2023
+Bill To: City of Larkspur Falls, Finance
+
+Description: Quarterly contract service
+Amount due: $797.39
+Terms: Net 30

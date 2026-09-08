@@ -1,0 +1,10 @@
+REDBUD ELECTRIC CO.
+Invoice
+
+Invoice No: INV-0487
+Date: February 7, 2023
+Bill To: City of Larkspur Falls, Library
+
+Description: Materials delivery
+Amount due: $6558.46
+Terms: Net 30

@@ -1,0 +1,10 @@
+ARAMARK UNIFORM SERVICES
+Invoice
+
+Invoice No: INV-0467
+Date: April 16, 2022
+Bill To: City of Larkspur Falls, Police Department
+
+Description: Quarterly contract service
+Amount due: $6973.67
+Terms: Net 30

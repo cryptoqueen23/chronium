@@ -1,0 +1,1094 @@
+{
+  "runAt": "2026-09-08T20:07:13.787Z",
+  "testRunCommit": "7e80b83",
+  "productionCommitUnderTest": "83cc986",
+  "corpus": {},
+  "bulkIngestion": {
+    "corpusFileCount": 222,
+    "firstPass": {
+      "elapsedMs": 3514,
+      "statusText": "Imported 222 files (125 KB). 0 duplicates, 3 need attention.",
+      "attempted": 225,
+      "ingestedOk": 222,
+      "failed": 0,
+      "duplicatesFound": 0,
+      "manualInterventionRequired": 0,
+      "batchStatus": "COMPLETED"
+    },
+    "dedupePass": {
+      "elapsedMs": 1332,
+      "statusText": "Imported 222 files (125 KB). 222 duplicates, 0 need attention.",
+      "duplicatesDetected": 222,
+      "expectedDuplicates": 222,
+      "dedupeCorrect": true
+    }
+  },
+  "subjectInvestigation": {},
+  "identitySafety": {
+    "phaseA": {
+      "candidatesSurfaced": 18,
+      "confirmed": 10,
+      "rejected": 7,
+      "leftUnreviewed": 1,
+      "wouldBeFalsePositiveIfTrusted": 7
+    },
+    "phaseB": {
+      "recordsRescanned": 6,
+      "nowCorrectlyAmbiguous": 6,
+      "detail": [
+        {
+          "title": "code-compliance-notice-2024-05-14.txt",
+          "found": true,
+          "candidatesBefore": 2,
+          "candidatesAfter": 4,
+          "newRows": [
+            {
+              "state": "REJECTED",
+              "candidateCount": 1
+            },
+            {
+              "state": "AMBIGUOUS",
+              "candidateCount": 2
+            }
+          ]
+        },
+        {
+          "title": "code-compliance-memo-2024-06-02.txt",
+          "found": true,
+          "candidatesBefore": 1,
+          "candidatesAfter": 2,
+          "newRows": [
+            {
+              "state": "AMBIGUOUS",
+              "candidateCount": 2
+            }
+          ]
+        },
+        {
+          "title": "lfedc-board-agenda-2023-11-14.txt",
+          "found": true,
+          "candidatesBefore": 1,
+          "candidatesAfter": 2,
+          "newRows": [
+            {
+              "state": "AMBIGUOUS",
+              "candidateCount": 2
+            }
+          ]
+        },
+        {
+          "title": "lfedc-board-minutes-2024-05-14-excerpt.txt",
+          "found": true,
+          "candidatesBefore": 1,
+          "candidatesAfter": 2,
+          "newRows": [
+            {
+              "state": "AMBIGUOUS",
+              "candidateCount": 2
+            }
+          ]
+        },
+        {
+          "title": "council-meeting-signin-2024-03-26.txt",
+          "found": true,
+          "candidatesBefore": 1,
+          "candidatesAfter": 2,
+          "newRows": [
+            {
+              "state": "AMBIGUOUS",
+              "candidateCount": 2
+            }
+          ]
+        },
+        {
+          "title": "citizen-complaint-email-2024-07-19.txt",
+          "found": true,
+          "candidatesBefore": 1,
+          "candidatesAfter": 2,
+          "newRows": [
+            {
+              "state": "AMBIGUOUS",
+              "candidateCount": 2
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "moneyTrail": {
+    "searches": [
+      {
+        "question": "Holt Construction",
+        "elapsedMs": 601,
+        "timedOut": false,
+        "provenance": "Confirmed Fact Answered from 9 sources · 9 passages",
+        "computedFact": "",
+        "resultTitles": [
+          "UnknownCapture date unavailablelfedc-grant-agreement-rrf-2024-07.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Facade Improvement Grant Agreement No. RRF-2024",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2024-03-12.txtCapture date unavailable · My library…officio: Mayor Diane Castellano (non-voting). 1. Call to Order 2. Approval of Prior Minutes — app",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-annual-report-2024-press-release.txtCapture date unavailable · My library…rporation released its 2024 annual report today, highlighting several downtown investment",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelarkspur-falls-gazette-2024-04-09-edc-grant-brief.txtCapture date unavailable · My library…l Business Brief — April 9, 2024 EDC Approves Riverwalk Facade Grant At its Ap",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailableholt-construction-llc-vendor-registration-2024.txtCapture date unavailable · My libraryCITY OF LARKSPUR FALLS Vendor / Contractor Registration Record Business name: Holt",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailableholt-construction-invoice-hc-2024-0091.txtCapture date unavailable · My libraryHOLT CONSTRUCTION LLC 77 Foundry Rd, Larkspur Falls, TX Invoice Invoice No: HC-2024-0091 D",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecouncil-minutes-2024-03-26-regular.txtCapture date unavailable · My library…). Present: Councilmembers James Ko, Renee Blackwood, Hector Salinas, Anita Whitfield, Doug M",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecouncil-agenda-2024-03-26.txtCapture date unavailable · My library…ers, 200 Municipal Way 1. Call to Order / Invocation / Pledge 2. Consent Agenda 3. Public Comment ... ",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecity-check-register-2024-06.csvCapture date unavailable · My library…neral Fund,PO-22190 10422,2024-06-07,\"Delgado Landscaping\",2100.00,Parks Fund,PO-22201 10426,2024-06",
+          "Save as Evidence",
+          "Remove"
+        ],
+        "resultCount": 9,
+        "answerVisible": true
+      },
+      {
+        "question": "Riverwalk Redevelopment Fund grant",
+        "elapsedMs": 573,
+        "timedOut": false,
+        "provenance": "Confirmed Fact Answered from 8 sources · 8 passages",
+        "computedFact": "",
+        "resultTitles": [
+          "UnknownCapture date unavailableordinance-2024-31-full-text.txtCapture date unavailable · My libraryCITY OF LARKSPUR FALLS Ordinance No. 2024-31 AN ORDINANCE OF THE CITY OF LARKSPUR FALLS ESTABLISHING ",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-grant-agreement-rrf-2024-07.txtCapture date unavailable · My library…1. Scope: Facade improvement work at 214 Main St, Larkspur Falls, TX, per the specifications a",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2024-03-12.txtCapture date unavailable · My library…Executive Director Sheena Tanner. Ex officio: Mayor Diane Castellano (non-voting). 1. Call to Ord",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-annual-report-2024-press-release.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION FOR IMMEDIATE RELEASE — September 3, 2024 ",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecouncil-minutes-2024-03-26-regular.txtCapture date unavailable · My library…ane Castellano presiding (did not vote). Present: Councilmembers James Ko, Renee Blackwood, H",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecouncil-budget-workshop-2024-01-16.txtCapture date unavailable · My library…— Budget Workshop Minutes (excerpt) January 16, 2024 Finance Director presented projected FY2",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecouncil-agenda-2024-03-26.txtCapture date unavailable · My library…da March 26, 2024, 7:00 PM, Council Chambers, 200 Municipal Way 1. Call to Order / Invocation / Pledge",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecity-check-register-2024-06.csvCapture date unavailable · My library…-07,\"Delgado Landscaping\",2100.00,Parks Fund,PO-22201 10426,2024-06-10,\"Larkspur Falls Gazette\",640.",
+          "Save as Evidence",
+          "Remove"
+        ],
+        "resultCount": 8,
+        "answerVisible": true
+      },
+      {
+        "question": "LFEDC facade grant vote",
+        "elapsedMs": 639,
+        "timedOut": false,
+        "provenance": "Confirmed Fact Answered from 2 sources · 2 passages",
+        "computedFact": "",
+        "resultTitles": [
+          "UnknownCapture date unavailablelfedc-board-minutes-2024-03-12.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Minutes March",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecouncil-minutes-2024-03-26-regular.txtCapture date unavailable · My library…pal Way Mayor Diane Castellano presiding (did not vote). Present: Councilmembers James Ko, Re",
+          "Save as Evidence",
+          "Remove"
+        ],
+        "resultCount": 2,
+        "answerVisible": true
+      }
+    ],
+    "distinctResultRowsAcrossSearches": 21
+  },
+  "crossDocument": {
+    "personStartedFrom": "Raymond Payne",
+    "manualStepsToRepresentOrgAndGovBody": 3,
+    "entitiesManuallyCreated": 2,
+    "relationshipsManuallyCreated": 1,
+    "note": "Confirmed entity mentions were free (came from Review Queue confirmation already done in the identity-safety phase). Organization/government-body linkage required manually creating both entities and the relationship by hand — nothing suggests or auto-creates this from a mention alone."
+  },
+  "claimTest": {
+    "claimText": "Raymond Payne served on the Larkspur Falls City Council.",
+    "claimCreated": true,
+    "supportingSearch": {
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+    },
+    "contradictingSearch": {
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+    },
+    "note": "Chronium never asserted a verdict on its own - status stayed investigator-set throughout, matching Phase 3's explicit rule."
+  },
+  "contradictionTest": {
+    "discoverySearch": {
+      "resultCount": 2,
+      "provenance": "Confirmed Fact Answered from 2 sources · 2 passages"
+    },
+    "claimCreated": true,
+    "bothStancesLinked": true,
+    "bothSidesRemainVisible": true
+  },
+  "coOccurrenceTest": {
+    "sheenaCandidatesFound": 0,
+    "sheenaConfirmed": 0,
+    "relationshipsBetweenRaymondAndSheena": 1,
+    "autoRelationshipCreated": false
+  },
+  "reviewQueueFriction": {
+    "recordsProcessed": 25,
+    "avgMsPerRecord": 383.8,
+    "avgClicksPerRecord": 1,
+    "recordsWithCandidates": 2,
+    "detail": [
+      {
+        "index": 0,
+        "elapsedMs": 391,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 1,
+        "elapsedMs": 392,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 2,
+        "elapsedMs": 389,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 3,
+        "elapsedMs": 388,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 4,
+        "elapsedMs": 373,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 5,
+        "elapsedMs": 389,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 6,
+        "elapsedMs": 406,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 7,
+        "elapsedMs": 373,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 8,
+        "elapsedMs": 387,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 9,
+        "elapsedMs": 374,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 10,
+        "elapsedMs": 388,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 11,
+        "elapsedMs": 387,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": true
+      },
+      {
+        "index": 12,
+        "elapsedMs": 390,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 13,
+        "elapsedMs": 388,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 14,
+        "elapsedMs": 401,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 15,
+        "elapsedMs": 387,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 16,
+        "elapsedMs": 370,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 17,
+        "elapsedMs": 377,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 18,
+        "elapsedMs": 373,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 19,
+        "elapsedMs": 371,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 20,
+        "elapsedMs": 373,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 21,
+        "elapsedMs": 389,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": true
+      },
+      {
+        "index": 22,
+        "elapsedMs": 387,
+        "clicks": 1,
+        "hadCandidates": true,
+        "hadWatchlistHits": true
+      },
+      {
+        "index": 23,
+        "elapsedMs": 372,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": true
+      },
+      {
+        "index": 24,
+        "elapsedMs": 380,
+        "clicks": 1,
+        "hadCandidates": true,
+        "hadWatchlistHits": false
+      }
+    ]
+  },
+  "threePersonHandoff": {
+    "historyEntryCount": 42,
+    "distinctActorsRepresented": 2,
+    "entriesMissingObjectContext": 0,
+    "sampleEntries": [
+      {
+        "id": "rhist-mtt3q5h6-t2spbk",
+        "investigationId": "inv-mtt3pb9b-csqacf",
+        "action": "item_reviewed",
+        "actor": "investigator-mtt3pckt-vy8ihw",
+        "objectType": "ingestionItem",
+        "objectId": "item-mtt3pint-kyn0qw",
+        "previousValue": null,
+        "newValue": null,
+        "timestamp": "2026-09-08T20:07:55.962Z"
+      },
+      {
+        "id": "rhist-mtt3q56k-bd30h3",
+        "investigationId": "inv-mtt3pb9b-csqacf",
+        "action": "item_reviewed",
+        "actor": "investigator-mtt3pckt-vy8ihw",
+        "objectType": "ingestionItem",
+        "objectId": "item-mtt3pio7-7mjq7l",
+        "previousValue": null,
+        "newValue": null,
+        "timestamp": "2026-09-08T20:07:55.580Z"
+      },
+      {
+        "id": "rhist-mtt3q4vw-sy702j",
+        "investigationId": "inv-mtt3pb9b-csqacf",
+        "action": "item_reviewed",
+        "actor": "investigator-mtt3pckt-vy8ihw",
+        "objectType": "ingestionItem",
+        "objectId": "item-mtt3pion-hw0pfx",
+        "previousValue": null,
+        "newValue": null,
+        "timestamp": "2026-09-08T20:07:55.196Z"
+      },
+      {
+        "id": "rhist-mtt3q4l9-syopzi",
+        "investigationId": "inv-mtt3pb9b-csqacf",
+        "action": "item_reviewed",
+        "actor": "investigator-mtt3pckt-vy8ihw",
+        "objectType": "ingestionItem",
+        "objectId": "item-mtt3pip0-tp9al4",
+        "previousValue": null,
+        "newValue": null,
+        "timestamp": "2026-09-08T20:07:54.813Z"
+      },
+      {
+        "id": "rhist-mtt3q4an-qyxpzu",
+        "investigationId": "inv-mtt3pb9b-csqacf",
+        "action": "item_reviewed",
+        "actor": "investigator-mtt3pckt-vy8ihw",
+        "objectType": "ingestionItem",
+        "objectId": "item-mtt3pipc-ym9eod",
+        "previousValue": null,
+        "newValue": null,
+        "timestamp": "2026-09-08T20:07:54.431Z"
+      },
+      {
+        "id": "rhist-mtt3q40g-9bn8uy",
+        "investigationId": "inv-mtt3pb9b-csqacf",
+        "action": "item_reviewed",
+        "actor": "investigator-mtt3pckt-vy8ihw",
+        "objectType": "ingestionItem",
+        "objectId": "item-mtt3pipm-m2mtjb",
+        "previousValue": null,
+        "newValue": null,
+        "timestamp": "2026-09-08T20:07:54.064Z"
+      },
+      {
+        "id": "rhist-mtt3q3qb-jls31u",
+        "investigationId": "inv-mtt3pb9b-csqacf",
+        "action": "item_reviewed",
+        "actor": "investigator-mtt3pckt-vy8ihw",
+        "objectType": "ingestionItem",
+        "objectId": "item-mtt3pipy-h37cgd",
+        "previousValue": null,
+        "newValue": null,
+        "timestamp": "2026-09-08T20:07:53.699Z"
+      },
+      {
+        "id": "rhist-mtt3q3fn-lppv75",
+        "investigationId": "inv-mtt3pb9b-csqacf",
+        "action": "item_reviewed",
+        "actor": "investigator-mtt3pckt-vy8ihw",
+        "objectType": "ingestionItem",
+        "objectId": "item-mtt3piqa-nqjh2r",
+        "previousValue": null,
+        "newValue": null,
+        "timestamp": "2026-09-08T20:07:53.315Z"
+      }
+    ],
+    "assessment": "Every history entry carries action/actor/objectType/objectId, so C can trace WHAT was touched and by whom without being told verbally, but entries are raw IDs (e.g. a candidate id, an entity id) with no rendered label/title anywhere in the log itself - C would still need to cross-reference each id back into the Review Queue or Subjects tab to see what it actually refers to, which is extra manual work on every single line."
+  },
+  "gapAwareness": {
+    "answerableViaFilters": {
+      "statusCountsText": "222Unreviewed0Flagged0Reviewed0Failed222Duplicates skipped444Total",
+      "ambiguousViaFilter": 2,
+      "failedViaFilter": 0,
+      "unverifiedClaimsViaDb": 2
+    },
+    "answerableViaAskSources": [
+      {
+        "question": "What remains unreviewed?",
+        "resultCount": 0,
+        "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+      },
+      {
+        "question": "What matches remain ambiguous?",
+        "resultCount": 0,
+        "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+      },
+      {
+        "question": "What ingestion failures remain?",
+        "resultCount": 0,
+        "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+      },
+      {
+        "question": "What claims remain unverified?",
+        "resultCount": 0,
+        "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+      },
+      {
+        "question": "What evidence hasn't been used?",
+        "resultCount": 0,
+        "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+      },
+      {
+        "question": "What investigative questions remain unanswered?",
+        "resultCount": 0,
+        "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+      }
+    ]
+  },
+  "askSources": [
+    {
+      "question": "Show me every record mentioning Raymond Payne.",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 652,
+      "timedOut": false
+    },
+    {
+      "question": "Where does Ray Payne appear?",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 597,
+      "timedOut": false
+    },
+    {
+      "question": "What organizations is Raymond Payne connected to?",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 637,
+      "timedOut": false
+    },
+    {
+      "question": "Show me evidence for each connection.",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 648,
+      "timedOut": false
+    },
+    {
+      "question": "Did Raymond Payne serve on City Council?",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 624,
+      "timedOut": false
+    },
+    {
+      "question": "What evidence contradicts that claim?",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Investigative Lead Answered from 0 sources · 0 passages · 22 discovered externally",
+      "computedFact": "",
+      "elapsedMs": 8024,
+      "timedOut": false
+    },
+    {
+      "question": "Show me all payments involving the Historical Society.",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 16980,
+      "timedOut": false
+    },
+    {
+      "question": "Who repeatedly appears in EDC records?",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 16850,
+      "timedOut": false
+    },
+    {
+      "question": "Show me everything involving Ordinance 2026-29.",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 16845,
+      "timedOut": false
+    },
+    {
+      "question": "What changed before and after this vote?",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 653,
+      "timedOut": false
+    },
+    {
+      "question": "Which claims have contradictory evidence?",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 624,
+      "timedOut": false
+    },
+    {
+      "question": "What haven't we reviewed yet?",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 652,
+      "timedOut": false
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "bugs": [
+    {
+      "severity": "HIGH",
+      "description": "Bare-surname candidates resolve to a single confident \"Confirm as X\" button (not AMBIGUOUS) whenever only one same-surname entity is registered at scan time — even when the passage content clearly belongs to a different, unregistered person.",
+      "repro": "Register only \"Raymond Payne\", bulk-ingest a document containing bare \"Payne\" in an unrelated (Code Compliance) context, open it in the Review Queue.",
+      "expected": "A bare surname match should read as provisional/low-confidence when the investigation is known-incomplete, or the tool should make it obvious that this offer depends on no other same-surname person being registered yet.",
+      "actual": "The candidate renders identically to a genuine strong match - one enabled \"Confirm as Raymond Payne\" button, state UNREVIEWED - with no visual signal that this is a weak, context-free surname match riding on an incomplete roster.",
+      "impact": "A rushed reviewer who trusts the single-option UI (rather than reading the snippet) would silently misattribute 7 documents to the wrong person. This is exactly the Marc/Raymond Payne failure mode the project is named after — it is contained by investigator discipline here, not by the system."
+    },
+    {
+      "severity": "MEDIUM",
+      "description": "No UI-exposed way to re-scan already-ingested documents after registering a new entity, and scanRecordForReview is not idempotent (adds duplicate candidate rows rather than replacing/superseding).",
+      "repro": "Register entity A, ingest documents, register entity B, look for any \"rescan\" action in the Review Queue.",
+      "expected": "Either an automatic or an explicit manual rescan path, and calling it twice on the same record should not duplicate rows.",
+      "actual": "No rescan control exists anywhere in the UI; calling the underlying scanRecordForReview function directly (as this test does) adds a second, additive set of candidate rows for the same passage rather than replacing the stale ones.",
+      "impact": "An investigation that discovers new people over time (the normal case) accumulates permanently-stale, overconfident candidate rows on already-reviewed documents unless someone manually re-ingests, which is not a realistic workflow for a live case."
+    },
+    {
+      "severity": "HIGH",
+      "description": "Ask Sources requires EVERY extracted search term to literally appear in a document (AND-based substring match in searchInvestigation()), and extractSearchTerms()'s stopword list is incomplete (misses inflections like \"mentioning\" vs. stopworded \"mention/mentions/mentioned\", and filler words like \"every\", \"connected\", \"involving\", \"appears\", \"repeatedly\", \"payments\", \"changed\", \"reviewed\") - so realistic full-sentence investigator questions silently return zero results even when the underlying content unambiguously exists.",
+      "repro": "With Raymond Payne genuinely mentioned in multiple ingested documents, ask \"Show me every record mentioning Raymond Payne.\" via Ask Sources.",
+      "expected": "The real, present mentions of Raymond Payne should surface, the same way the equivalent short query \"Raymond Payne\" already does (verified working, 9+ results for comparable short queries in this same investigation).",
+      "actual": "extractSearchTerms leaves in \"every\" and \"mentioning\" (not in the stopword list), searchInvestigation then requires ALL of [\"every\",\"mentioning\",\"raymond\",\"payne\"] to literally appear in a document - no real document contains the literal word \"every\" or \"mentioning\" next to this content, so the AND match fails and zero results are returned. Reproduced identically for all 12 of the brief's own example questions (all in full-sentence/question form) - genuinely resolved (not a timeout, confirmed via a 60s diagnostic ceiling), consistently zero results - while short noun-phrase queries (\"Holt Construction\", \"Riverwalk Redevelopment Fund grant\") reliably succeed in the same investigation.",
+      "impact": "This is the single largest capability gap found in this test: Ask Sources, the project's primary conversational entry point, cannot answer any of the natural, full-sentence questions an investigator would actually type - it only works if the investigator already knows to type bare keyword phrases instead. Every one of the brief's own §12 example questions fails for this reason."
+    }
+  ],
+  "log": [
+    {
+      "t": 1788898034390,
+      "section": "setup",
+      "msg": "Launching against",
+      "data": {
+        "BASE": "http://127.0.0.1:8787"
+      }
+    },
+    {
+      "t": 1788898037267,
+      "section": "setup",
+      "msg": "Investigation created",
+      "data": {
+        "invId": "inv-mtt3pb9b-csqacf",
+        "invName": "Acceptance Test — Larkspur Falls (2026-09-08T20:07:16)"
+      }
+    },
+    {
+      "t": 1788898039508,
+      "section": "setup",
+      "msg": "Three investigators created, A active",
+      "data": {
+        "investigatorA": "investigator-mtt3pc60-s56rkw",
+        "investigatorB": "investigator-mtt3pckt-vy8ihw",
+        "investigatorC": "investigator-mtt3pd0z-gdbuau"
+      }
+    },
+    {
+      "t": 1788898041283,
+      "section": "setup",
+      "msg": "Watchlist terms added",
+      "data": 4
+    },
+    {
+      "t": 1788898042331,
+      "section": "setup",
+      "msg": "Raymond Payne registered (only person known at start)",
+      "data": {
+        "raymondId": "ent-mtt3pf7p-7o2c46"
+      }
+    },
+    {
+      "t": 1788898042332,
+      "section": "ingestion",
+      "msg": "Corpus directory contains 222 files"
+    },
+    {
+      "t": 1788898046757,
+      "section": "ingestion",
+      "msg": "First ingestion (full 222-doc corpus): import status",
+      "data": "Imported 222 files (125 KB). 0 duplicates, 3 need attention."
+    },
+    {
+      "t": 1788898047170,
+      "section": "ingestion",
+      "msg": "First batch record",
+      "data": {
+        "status": "COMPLETED",
+        "fileCount": 222,
+        "processedCount": 222,
+        "failedCount": 0,
+        "duplicates": 0,
+        "skipped": 3,
+        "errors": 0,
+        "elapsedMs": 3514
+      }
+    },
+    {
+      "t": 1788898049376,
+      "section": "ingestion",
+      "msg": "Second ingestion (dedupe test, same 222 files): import status",
+      "data": "Imported 222 files (125 KB). 222 duplicates, 0 need attention."
+    },
+    {
+      "t": 1788898049794,
+      "section": "ingestion",
+      "msg": "Second (dedupe) batch record",
+      "data": {
+        "status": "COMPLETED",
+        "fileCount": 222,
+        "duplicates": 222,
+        "elapsedMs": 1332
+      }
+    },
+    {
+      "t": 1788898049851,
+      "section": "subjectInvestigation",
+      "msg": "Phase A: 18 \"Payne\" candidates surfaced with only Raymond Payne registered"
+    },
+    {
+      "t": 1788898049971,
+      "section": "subjectInvestigation",
+      "msg": "Phase A investigator decisions",
+      "data": {
+        "confirmed": 10,
+        "rejected": 7,
+        "leftUnreviewed": 1
+      }
+    },
+    {
+      "t": 1788898050983,
+      "section": "identitySafety",
+      "msg": "Marc Payne registered by Investigator B (mid-case discovery)",
+      "data": {
+        "marcId": "ent-mtt3plw3-4qy38a"
+      }
+    },
+    {
+      "t": 1788898051069,
+      "section": "identitySafety",
+      "msg": "Phase B rescan (direct scanRecordForReview call, complete roster)",
+      "data": {
+        "nowAmbiguous": 6,
+        "of": 6,
+        "detail": [
+          {
+            "title": "code-compliance-notice-2024-05-14.txt",
+            "found": true,
+            "candidatesBefore": 2,
+            "candidatesAfter": 4,
+            "newRows": [
+              {
+                "state": "REJECTED",
+                "candidateCount": 1
+              },
+              {
+                "state": "AMBIGUOUS",
+                "candidateCount": 2
+              }
+            ]
+          },
+          {
+            "title": "code-compliance-memo-2024-06-02.txt",
+            "found": true,
+            "candidatesBefore": 1,
+            "candidatesAfter": 2,
+            "newRows": [
+              {
+                "state": "AMBIGUOUS",
+                "candidateCount": 2
+              }
+            ]
+          },
+          {
+            "title": "lfedc-board-agenda-2023-11-14.txt",
+            "found": true,
+            "candidatesBefore": 1,
+            "candidatesAfter": 2,
+            "newRows": [
+              {
+                "state": "AMBIGUOUS",
+                "candidateCount": 2
+              }
+            ]
+          },
+          {
+            "title": "lfedc-board-minutes-2024-05-14-excerpt.txt",
+            "found": true,
+            "candidatesBefore": 1,
+            "candidatesAfter": 2,
+            "newRows": [
+              {
+                "state": "AMBIGUOUS",
+                "candidateCount": 2
+              }
+            ]
+          },
+          {
+            "title": "council-meeting-signin-2024-03-26.txt",
+            "found": true,
+            "candidatesBefore": 1,
+            "candidatesAfter": 2,
+            "newRows": [
+              {
+                "state": "AMBIGUOUS",
+                "candidateCount": 2
+              }
+            ]
+          },
+          {
+            "title": "citizen-complaint-email-2024-07-19.txt",
+            "found": true,
+            "candidatesBefore": 1,
+            "candidatesAfter": 2,
+            "newRows": [
+              {
+                "state": "AMBIGUOUS",
+                "candidateCount": 2
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "t": 1788898055412,
+      "section": "moneyTrail",
+      "msg": "3 searches run to trace the grant",
+      "data": [
+        {
+          "q": "Holt Construction",
+          "resultCount": 9,
+          "elapsedMs": 601
+        },
+        {
+          "q": "Riverwalk Redevelopment Fund grant",
+          "resultCount": 8,
+          "elapsedMs": 573
+        },
+        {
+          "q": "LFEDC facade grant vote",
+          "resultCount": 2,
+          "elapsedMs": 639
+        }
+      ]
+    },
+    {
+      "t": 1788898055445,
+      "section": "crossDocument",
+      "msg": "Manual reconstruction step count",
+      "data": {
+        "personStartedFrom": "Raymond Payne",
+        "manualStepsToRepresentOrgAndGovBody": 3,
+        "entitiesManuallyCreated": 2,
+        "relationshipsManuallyCreated": 1,
+        "note": "Confirmed entity mentions were free (came from Review Queue confirmation already done in the identity-safety phase). Organization/government-body linkage required manually creating both entities and the relationship by hand — nothing suggests or auto-creates this from a mention alone."
+      }
+    },
+    {
+      "t": 1788898059199,
+      "section": "claimTest",
+      "msg": "Search for supporting/contradicting evidence",
+      "data": {
+        "claimSearch": {
+          "resultCount": 0,
+          "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+        },
+        "contradictSearch": {
+          "resultCount": 0,
+          "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+        }
+      }
+    },
+    {
+      "t": 1788898060663,
+      "section": "claimTest",
+      "msg": "Claim recorded",
+      "data": {
+        "claimText": "Raymond Payne served on the Larkspur Falls City Council.",
+        "claimCreated": true,
+        "supportingSearch": {
+          "resultCount": 0,
+          "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+        },
+        "contradictingSearch": {
+          "resultCount": 0,
+          "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Copperas Cove Investigation Corpus. Unavailable right now (coverage unknown, not confirmed absent): Arquivo.pt. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+        },
+        "note": "Chronium never asserted a verdict on its own - status stayed investigator-set throughout, matching Phase 3's explicit rule."
+      }
+    },
+    {
+      "t": 1788898064107,
+      "section": "contradictionTest",
+      "msg": "Vote-outcome contradiction",
+      "data": {
+        "discoverySearch": {
+          "resultCount": 2,
+          "provenance": "Confirmed Fact Answered from 2 sources · 2 passages"
+        },
+        "claimCreated": true,
+        "bothStancesLinked": true,
+        "bothSidesRemainVisible": true
+      }
+    },
+    {
+      "t": 1788898065208,
+      "section": "coOccurrenceTest",
+      "msg": "Co-occurrence check",
+      "data": {
+        "sheenaCandidatesFound": 0,
+        "sheenaConfirmed": 0,
+        "relationshipsBetweenRaymondAndSheena": 1,
+        "autoRelationshipCreated": false
+      }
+    },
+    {
+      "t": 1788898076311,
+      "section": "reviewQueueFriction",
+      "msg": "Processed 25 records",
+      "data": {
+        "avgMsPerRecord": 383.8,
+        "avgClicksPerRecord": 1
+      }
+    },
+    {
+      "t": 1788898076325,
+      "section": "threePersonHandoff",
+      "msg": "Investigator C cold-read of audit trail",
+      "data": {
+        "historyEntryCount": 42,
+        "distinctActorsRepresented": 2
+      }
+    },
+    {
+      "t": 1788898087311,
+      "section": "gapAwareness",
+      "msg": "Gap-awareness check",
+      "data": {
+        "statusCounts": "222Unreviewed0Flagged0Reviewed0Failed222Duplicates skipped444Total",
+        "ambiguousCount": 2,
+        "failedCount": 0,
+        "unverifiedClaims": 2
+      }
+    },
+    {
+      "t": 1788898089100,
+      "section": "askSources",
+      "msg": "\"Show me every record mentioning Raymond Payne.\"",
+      "data": "DOES NOT WORK"
+    },
+    {
+      "t": 1788898090522,
+      "section": "askSources",
+      "msg": "\"Where does Ray Payne appear?\"",
+      "data": "DOES NOT WORK"
+    },
+    {
+      "t": 1788898092278,
+      "section": "askSources",
+      "msg": "\"What organizations is Raymond Payne connected to?\"",
+      "data": "DOES NOT WORK"
+    },
+    {
+      "t": 1788898093882,
+      "section": "askSources",
+      "msg": "\"Show me evidence for each connection.\"",
+      "data": "DOES NOT WORK"
+    },
+    {
+      "t": 1788898095579,
+      "section": "askSources",
+      "msg": "\"Did Raymond Payne serve on City Council?\"",
+      "data": "DOES NOT WORK"
+    },
+    {
+      "t": 1788898104545,
+      "section": "askSources",
+      "msg": "\"What evidence contradicts that claim?\"",
+      "data": "DOES NOT WORK"
+    },
+    {
+      "t": 1788898122334,
+      "section": "askSources",
+      "msg": "\"Show me all payments involving the Historical Society.\"",
+      "data": "DOES NOT WORK"
+    },
+    {
+      "t": 1788898140289,
+      "section": "askSources",
+      "msg": "\"Who repeatedly appears in EDC records?\"",
+      "data": "DOES NOT WORK"
+    },
+    {
+      "t": 1788898158355,
+      "section": "askSources",
+      "msg": "\"Show me everything involving Ordinance 2026-29.\"",
+      "data": "DOES NOT WORK"
+    },
+    {
+      "t": 1788898159951,
+      "section": "askSources",
+      "msg": "\"What changed before and after this vote?\"",
+      "data": "DOES NOT WORK"
+    },
+    {
+      "t": 1788898161586,
+      "section": "askSources",
+      "msg": "\"Which claims have contradictory evidence?\"",
+      "data": "DOES NOT WORK"
+    },
+    {
+      "t": 1788898163108,
+      "section": "askSources",
+      "msg": "\"What haven't we reviewed yet?\"",
+      "data": "DOES NOT WORK"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+NORTHGATE JANITORIAL
+Invoice
+
+Invoice No: INV-0461
+Date: January 21, 2022
+Bill To: City of Larkspur Falls, Library
+
+Description: Equipment repair
+Amount due: $4052.85
+Terms: Net 30

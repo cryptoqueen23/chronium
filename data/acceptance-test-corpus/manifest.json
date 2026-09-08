@@ -1,0 +1,155 @@
+{
+  "generatedAt": "2026-09-08T18:48:25.947Z",
+  "municipality": "Larkspur Falls, TX",
+  "totalDocuments": 222,
+  "answerKey": {
+    "moneyTrail": {
+      "organization": "Larkspur Falls Economic Development Corporation",
+      "fund": "Riverwalk Redevelopment Fund",
+      "ordinance": "Ordinance No. 2024-31",
+      "contractor": "Holt Construction LLC",
+      "grantAgreement": "RRF-2024-07",
+      "invoice": "HC-2024-0091",
+      "checkNumber": "10432",
+      "chain": [
+        {
+          "step": "Authorization + vote",
+          "file": "lfedc-board-minutes-2024-03-12.txt",
+          "fact": "Board authorizes grant not to exceed $185,000.00 to Holt Construction LLC. Vote 4-1 (Alvarez opposed)."
+        },
+        {
+          "step": "Council agenda (ratification notice)",
+          "file": "council-agenda-2024-03-26.txt"
+        },
+        {
+          "step": "Council ratification",
+          "file": "council-minutes-2024-03-26-regular.txt",
+          "fact": "Council ratifies 5-0."
+        },
+        {
+          "step": "Grant agreement (supporting evidence)",
+          "file": "lfedc-grant-agreement-rrf-2024-07.txt"
+        },
+        {
+          "step": "Invoice",
+          "file": "holt-construction-invoice-hc-2024-0091.txt",
+          "fact": "Invoiced amount: $178,500.00"
+        },
+        {
+          "step": "Payment",
+          "file": "city-check-register-2024-06.csv",
+          "fact": "Paid amount: $185,000.00 (check #10432) — does NOT match the invoiced $178,500.00; unexplained $6,500 gap, never resolved elsewhere in the corpus."
+        }
+      ]
+    },
+    "contradictions": [
+      {
+        "id": "A-vote-outcome",
+        "files": [
+          "lfedc-board-minutes-2024-03-12.txt",
+          "lfedc-annual-report-2024-press-release.txt"
+        ],
+        "description": "Board minutes record a 4-1 vote (Alvarez opposed). The LFEDC's own later press release claims the vote was unanimous."
+      },
+      {
+        "id": "B-amount-mismatch",
+        "files": [
+          "holt-construction-invoice-hc-2024-0091.txt",
+          "city-check-register-2024-06.csv"
+        ],
+        "description": "Invoice: $178,500.00. Amount actually paid per the check register: $185,000.00. No document in the corpus explains the $6,500 difference."
+      },
+      {
+        "id": "C-meeting-date",
+        "files": [
+          "lfedc-board-minutes-2024-03-12.txt",
+          "larkspur-falls-gazette-2024-04-09-edc-grant-brief.txt"
+        ],
+        "description": "Board minutes show the vote happened March 12, 2024. A Gazette brief says the vote happened \"at its April meeting.\""
+      }
+    ],
+    "personOrgGovChains": [
+      {
+        "person": "Raymond Payne",
+        "org": "Larkspur Falls Economic Development Corporation",
+        "govBody": "Larkspur Falls City Council",
+        "files": [
+          "council-resolution-2023-14-lfedc-board-appointment.txt",
+          "lfedc-board-roster-2024.txt",
+          "lfedc-board-minutes-2024-03-12.txt"
+        ]
+      },
+      {
+        "person": "Victor Holt",
+        "org": "Holt Construction LLC",
+        "govBody": "Larkspur Falls Economic Development Corporation",
+        "files": [
+          "holt-construction-llc-vendor-registration-2024.txt",
+          "lfedc-grant-agreement-rrf-2024-07.txt",
+          "holt-construction-invoice-hc-2024-0091.txt"
+        ]
+      },
+      {
+        "person": "Sheena Tanner",
+        "org": "Larkspur Falls Economic Development Corporation",
+        "govBody": "Larkspur Falls City Council",
+        "files": [
+          "lfedc-quarterly-report-to-council-2024-02-13.txt",
+          "lfedc-board-minutes-2024-03-12.txt"
+        ]
+      },
+      {
+        "person": "Diane Castellano",
+        "org": "Larkspur Falls Economic Development Corporation",
+        "govBody": "Larkspur Falls City Council",
+        "files": [
+          "council-minutes-2024-01-09-regular.txt",
+          "lfedc-board-roster-2024.txt",
+          "council-minutes-2024-03-26-regular.txt"
+        ]
+      }
+    ],
+    "identityAmbiguity": {
+      "pattern": "Marc Payne (unrelated Code Compliance Officer) vs. Raymond Payne (LFEDC board member, alias \"Ray Payne\")",
+      "fullNameDocs": [
+        "code-compliance-personnel-note-2019.txt",
+        "code-compliance-annual-summary-2023.txt",
+        "council-resolution-2023-14-lfedc-board-appointment.txt",
+        "lfedc-board-minutes-2024-03-12.txt"
+      ],
+      "aliasDocs": [
+        "lfedc-newsletter-2024-summer.txt",
+        "lfedc-board-signin-2024-03-12.txt"
+      ],
+      "bareSurnameDocs_shouldTriggerAmbiguous": [
+        "code-compliance-notice-2024-05-14.txt",
+        "code-compliance-memo-2024-06-02.txt",
+        "lfedc-board-agenda-2023-11-14.txt",
+        "lfedc-board-minutes-2024-05-14-excerpt.txt",
+        "council-meeting-signin-2024-03-26.txt",
+        "citizen-complaint-email-2024-07-19.txt"
+      ],
+      "genuinelyUndecidableFromTextAlone": [
+        "council-meeting-signin-2024-03-26.txt",
+        "citizen-complaint-email-2024-07-19.txt"
+      ],
+      "mistakenIdentityFuel": {
+        "file": "gazette-letter-to-editor-2024-02-20.txt",
+        "note": "Falsely implies a \"Councilman Payne\" exists. No Payne is on the Council roster (council-roster-2024.txt) — Raymond Payne is LFEDC-only."
+      }
+    },
+    "watchlistSuggestedTerms": [
+      "LFEDC",
+      "Riverwalk Redevelopment Fund",
+      "Ordinance No. 2024-31",
+      "Holt Construction"
+    ],
+    "corruptedFiles": [
+      "corrupted-scan-riverwalk-appraisal.pdf",
+      "corrupted-truncated-inspection-report.pdf",
+      "corrupted-budget-detail.xlsx",
+      "corrupted-grant-application-draft.docx",
+      "corrupted-empty-file.txt"
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+LOMA VERDE NURSERY
+Invoice
+
+Invoice No: INV-0473
+Date: July 7, 2022
+Bill To: City of Larkspur Falls, Utilities
+
+Description: Supply order per PO
+Amount due: $3035.77
+Terms: Net 30

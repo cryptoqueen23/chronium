@@ -1,0 +1,12 @@
+CITY OF LARKSPUR FALLS
+Vendor / Contractor Registration Record
+
+Business name: Holt Construction LLC
+Principal: Victor Holt (Owner/Operator)
+Address: 77 Foundry Rd, Larkspur Falls, TX
+Registered trades: General contracting, exterior renovation, masonry
+Vendor ID: VEN-04417
+Registered: 2021-06-02
+Status: Active
+Notes: Eligible bidder for LFEDC-administered facade/streetscape grant
+programs per LFEDC Purchasing Policy Sec. 3.1.
