@@ -353,6 +353,13 @@ kbd { background: var(--surface-raised); border: 1px solid var(--border); border
 .fact-badge-unresolved { background: var(--surface-raised); color: var(--text-secondary); border: 1px solid var(--border); }
 .fact-badge-ai-analysis { border: 1px solid #5b4a8a; color: #b6a7dd; }
 
+/* Finding classifications (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 3) - text label always present, color supplemental only */
+.fact-badge-documented-fact { background: rgba(101,184,138,.15); color: var(--success); }
+.fact-badge-supported-inference { background: rgba(101,184,138,.1); color: var(--success); }
+.fact-badge-allegation { background: rgba(214,168,75,.15); color: var(--accent); }
+.fact-badge-unresolved-question { background: var(--surface-raised); color: var(--text-secondary); border: 1px solid var(--border); }
+.fact-badge-no-evidence-located { background: var(--surface-raised); color: var(--text-secondary); border: 1px solid var(--border); }
+
 /* Adaptive Research Depth (Principle #21): "explain" hides technical
    clutter (raw metadata/hash/mime) without altering the passage text
    itself - never paraphrased, since that would risk misquoting a source. */
@@ -470,6 +477,9 @@ footer { border-top: 1px solid var(--border); max-width: var(--max); margin: 40p
 .stance-tag { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 1px 6px; border-radius: 4px; margin-right: 6px; }
 .stance-tag.supports { background: rgba(101,184,138,.15); color: var(--success); }
 .stance-tag.contradicts { background: rgba(220,113,105,.15); color: var(--danger); }
+.stance-tag.contextualizes { background: rgba(214,168,75,.15); color: var(--accent); }
+.link-remove { background: none; border: 0; color: var(--text-secondary); cursor: pointer; font-size: 14px; line-height: 1; min-width: 28px; min-height: 28px; border-radius: 50%; vertical-align: middle; }
+.link-remove:hover, .link-remove:focus-visible { color: var(--danger); background: var(--danger-bg); }
 .card-delete { margin-top: 10px; }
 
 .ai-badge { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 2px 8px; border-radius: 999px; border: 1px solid #5b4a8a; color: #b6a7dd; vertical-align: middle; margin-left: 6px; }
@@ -534,6 +544,14 @@ footer { border-top: 1px solid var(--border); max-width: var(--max); margin: 40p
 .status-badge.status-disputed { background: rgba(220,113,105,.12); color: var(--danger); }
 .status-badge.status-refuted { background: rgba(220,113,105,.2); color: var(--danger); }
 .status-badge.status-unknown { background: var(--surface-raised); color: var(--text-secondary); }
+
+/* Claim statuses (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 3) - reuses
+   .status-confirmed/.status-refuted above, since CONFIRMED/REFUTED are
+   shared vocabulary between Relationship confidence and Claim status. */
+.status-badge.status-unverified { background: var(--surface-raised); color: var(--text-secondary); }
+.status-badge.status-supported { background: rgba(101,184,138,.1); color: var(--success); }
+.status-badge.status-strongly-supported { background: rgba(101,184,138,.15); color: var(--success); }
+.status-badge.status-contradicted { background: rgba(220,113,105,.12); color: var(--danger); }
 
 /* ---------- Bibliography cards (Evidence tab subpanel) ---------- */
 .biblio-title { font-size: 15px; font-weight: 700; margin: 0 0 10px; }

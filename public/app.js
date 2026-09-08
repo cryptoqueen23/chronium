@@ -12,12 +12,19 @@ import {
   createEntity, updateEntity, listEntities, findEntities, deleteEntity,
   createRelationship, listRelationshipsForEntity, deleteRelationship,
   addEntityAlias, listEntityAliases, deleteEntityAlias,
-  createEntityMention, listMentionsForEntity, listMentionsForEvidence, deleteEntityMention
+  createEntityMention, listMentionsForEntity, listMentionsForEvidence, deleteEntityMention,
+  getClaim, listClaimsForEntity,
+  createClaimEvidence, listClaimEvidenceForClaim, listClaimEvidenceForEvidence, deleteClaimEvidence,
+  createClaimFinding, listClaimFindings, listClaimFindingsForClaim, listClaimFindingsForEntity, deleteClaimFinding
 } from './db.js';
 import {
   ENTITY_TYPES, ENTITY_TYPE_LABELS, RELATIONSHIP_STATUSES, RELATIONSHIP_STATUS_LABELS,
   SUGGESTED_RELATIONSHIP_TYPES
 } from './entities.js';
+import {
+  CLAIM_STATUSES, CLAIM_STATUS_LABELS, EVIDENCE_STANCES, EVIDENCE_STANCE_LABELS,
+  FINDING_CLASSIFICATIONS, FINDING_CLASSIFICATION_LABELS, FINDING_CLASSIFICATIONS_REQUIRING_EVIDENCE
+} from './claims.js';
 import { ingestFiles, ingestZip } from './ingest/pipeline.js';
 import { openOverlay, openMenu, confirmDialog } from './ui.js';
 import { formatCitation, buildFootnotes, CITATION_STYLES, CITATION_STYLE_LABELS } from './citations.js';
@@ -144,6 +151,7 @@ const WORKSPACE_TABS = [
 ];
 const FINDINGS_SUBTABS = [
   { id: 'claims', label: 'Claims' },
+  { id: 'findings', label: 'Findings' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'contradictions', label: 'Contradictions' },
   { id: 'gaps', label: 'Gaps' },
@@ -1108,6 +1116,7 @@ async function renderWorkspaceView(tab, subtab) {
     document.querySelector(`#findingsPanel-${activeSubtab}`).classList.remove('hidden');
     await refreshWorkspaceData(); // Timeline reads lastDashboardData
     if (activeSubtab === 'claims') await renderClaimsPanel();
+    else if (activeSubtab === 'findings') await renderFindingsPanel();
     else if (activeSubtab === 'timeline') renderTimelinePanel();
     else if (activeSubtab === 'contradictions') await renderContradictionsPanel();
     else if (activeSubtab === 'gaps') await renderGapsPanel();
@@ -1996,10 +2005,17 @@ async function renderEvidencePanel() {
   const mentionLists = await Promise.all(items.map((item) => listMentionsForEvidence(activeInvestigationId, item.id)));
   const mentionsByEvidence = new Map(items.map((item, i) => [item.id, mentionLists[i]]));
 
-  renderEvidenceList(items, records, entities, mentionsByEvidence);
+  // Phase 3 §7 "USED IN CLAIMS" - same per-row query pattern as mentions
+  // above, read-only, never alters the underlying evidence.
+  const claimLinkLists = await Promise.all(items.map((item) => listClaimEvidenceForEvidence(activeInvestigationId, item.id)));
+  const claims = await listClaims(activeInvestigationId);
+  const claimLinksByEvidence = new Map(items.map((item, i) => [item.id, claimLinkLists[i]]));
+  const claimById = new Map(claims.map((c) => [c.id, c]));
+
+  renderEvidenceList(items, records, entities, mentionsByEvidence, claimLinksByEvidence, claimById);
 }
 
-function renderEvidenceList(items, records, entities, mentionsByEvidence) {
+function renderEvidenceList(items, records, entities, mentionsByEvidence, claimLinksByEvidence, claimById) {
   const container = document.querySelector('#evidenceList');
   if (!items.length) { container.innerHTML = '<p class="status">No evidence items yet — pull a specific excerpt from a source above.</p>'; return; }
   const byId = new Map(records.map((r) => [r.id, r]));
@@ -2007,6 +2023,17 @@ function renderEvidenceList(items, records, entities, mentionsByEvidence) {
   container.innerHTML = items.map((item) => {
     const src = byId.get(item.sourceRecordId);
     const mentions = mentionsByEvidence.get(item.id) || [];
+    const claimLinks = claimLinksByEvidence.get(item.id) || [];
+    // "USED IN CLAIMS" - never alters the evidence itself, just shows
+    // where it's cited and with what stance (docs/INVESTIGATION_WORKSPACE_PLAN.md
+    // Phase 3 §7).
+    const usedInClaimsHtml = claimLinks.length
+      ? `<div class="linked-subjects"><span class="hint">Used in claims:</span> ${claimLinks.map((l) => {
+          const claim = claimById.get(l.claimId);
+          const label = claim ? `${esc(claim.claimId)} — ${esc(claim.text.slice(0, 60))}${claim.text.length > 60 ? '…' : ''}` : 'Claim removed';
+          return `<span class="alias-chip"><span class="stance-tag ${esc(l.stance)}">${esc(EVIDENCE_STANCE_LABELS[l.stance] || l.stance)}</span> ${label}</span>`;
+        }).join(' ')}</div>`
+      : '';
     // Linked Subjects: explicitly labeled as mentions, never implied
     // relationships (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 2 "the UI
     // must make clear these are evidence mentions, not automatically
@@ -2026,6 +2053,7 @@ function renderEvidenceList(items, records, entities, mentionsByEvidence) {
       <p>${esc(item.excerptText)}</p>
       <p class="evidence-card-cite">From: ${src ? esc(src.title || src.originalUrl || 'Untitled source') : 'Source no longer in this investigation'}</p>
       ${linkedSubjectsHtml}
+      ${usedInClaimsHtml}
       <button type="button" class="btn btn-small" data-action="open-link-subject" data-id="${attr(item.id)}">Link Subject</button>
       <button type="button" class="btn btn-small card-delete" data-action="delete-evidence" data-id="${attr(item.id)}">Delete</button>
     </article>`;
@@ -2118,48 +2146,102 @@ document.querySelector('#evidenceForm').addEventListener('submit', async (e) => 
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-action="delete-evidence"]');
   if (!btn) return;
-  await deleteEvidenceItem(btn.dataset.id);
-  await renderEvidencePanel();
+  try {
+    await deleteEvidenceItem(btn.dataset.id);
+    await renderEvidencePanel();
+  } catch (err) {
+    // Phase 3: deleteEvidenceItem refuses to delete the last evidence
+    // behind a DOCUMENTED_FACT/SUPPORTED_INFERENCE/ALLEGATION finding -
+    // surface why instead of silently doing nothing.
+    showToast(err.message || 'Could not delete this evidence item.', true);
+  }
 });
 
 // ---------------------------------------------------------------------------
 // Claims
 // ---------------------------------------------------------------------------
+// Module state, mirroring the lastSubjectsEntities/lastEvidenceEntities
+// pattern: fetched fresh whenever the Claims/Findings panel renders, so
+// form handlers (which run after the render, on user action) don't
+// re-fetch on every keystroke.
+let lastClaimsEntities = [];
+let lastClaimsEvidenceItems = [];
+let lastClaimsRecords = [];
+let lastClaimsList = [];
+// Set by a claim card's "Create Finding" button so the Findings sub-tab
+// can pre-select that claim when the investigator is sent there - a
+// small, deliberately narrow cross-panel affordance, not shared state.
+let pendingFindingClaimId = null;
+
 async function renderClaimsPanel() {
-  const [records, items, claims] = await Promise.all([
+  const [records, items, claims, entities] = await Promise.all([
     listInvestigationRecords(activeInvestigationId),
     listEvidenceItems(activeInvestigationId),
-    listClaims(activeInvestigationId)
+    listClaims(activeInvestigationId),
+    listEntities(activeInvestigationId)
   ]);
+  lastClaimsRecords = records; lastClaimsEvidenceItems = items; lastClaimsList = claims; lastClaimsEntities = entities;
+  renderClaimStatusOptions();
+  renderClaimSubjectsPicker(entities);
   renderClaimEvidencePicker(items);
-  renderClaimsList(claims, items, records);
+  await renderClaimsList(claims, items, records, entities);
+}
+
+function renderClaimStatusOptions() {
+  const select = document.querySelector('#claimStatusSelect');
+  if (!select.options.length) select.innerHTML = CLAIM_STATUSES.map((s) => `<option value="${attr(s)}"${s === 'UNVERIFIED' ? ' selected' : ''}>${esc(CLAIM_STATUS_LABELS[s])}</option>`).join('');
+}
+
+function renderClaimSubjectsPicker(entities) {
+  const container = document.querySelector('#claimSubjectsPicker');
+  container.innerHTML = entities.length
+    ? entities.map((e) => `<label class="claim-evidence-option">
+        <input type="checkbox" data-entity-id="${attr(e.id)}" />
+        <span class="claim-evidence-option-text">${esc(e.name)}<p>${esc(ENTITY_TYPE_LABELS[e.type] || e.type)}</p></span>
+      </label>`).join('')
+    : '<p class="status" style="padding:12px;margin:0">No subjects yet — add one on the Subjects tab to tag this claim, or leave it untagged.</p>';
 }
 
 function renderClaimEvidencePicker(items) {
   const container = document.querySelector('#claimEvidencePicker');
-  if (!items.length) { container.innerHTML = '<p class="status" style="padding:12px;margin:0">Add evidence items first, on the Evidence tab.</p>'; return; }
+  if (!items.length) { container.innerHTML = '<p class="status" style="padding:12px;margin:0">Add evidence items first, on the Evidence tab. A claim may still be added without any — a claim is something being tested, not yet proven.</p>'; return; }
   container.innerHTML = items.map((item) => `<label class="claim-evidence-option">
     <input type="checkbox" data-evidence-id="${attr(item.id)}" />
     <span class="claim-evidence-option-text">${esc(item.excerptText.slice(0, 140))}${item.excerptText.length > 140 ? '…' : ''}<p>${esc(item.excerptType)}${item.location ? ' · ' + esc(item.location) : ''}</p></span>
-    <select data-stance-for="${attr(item.id)}" aria-label="Stance for this evidence item"><option value="supports">Supports</option><option value="contradicts">Contradicts</option></select>
+    <select data-stance-for="${attr(item.id)}" aria-label="Stance for this evidence item">${EVIDENCE_STANCES.map((s) => `<option value="${attr(s)}">${esc(EVIDENCE_STANCE_LABELS[s])}</option>`).join('')}</select>
   </label>`).join('');
 }
 
-function renderClaimsList(claims, items, records) {
+async function renderClaimsList(claims, items, records, entities) {
   const container = document.querySelector('#claimsList');
   if (!claims.length) { container.innerHTML = '<p class="status">No claims yet.</p>'; return; }
   const evById = new Map(items.map((e) => [e.id, e]));
   const recById = new Map(records.map((r) => [r.id, r]));
-  container.innerHTML = claims.map((claim) => {
-    const linkRows = (claim.links || []).map((l) => {
-      const ev = evById.get(l.evidenceItemId);
+  const entById = new Map(entities.map((e) => [e.id, e]));
+  const linksByClaimList = await Promise.all(claims.map((c) => listClaimEvidenceForClaim(activeInvestigationId, c.id)));
+
+  container.innerHTML = claims.map((claim, i) => {
+    const status = claim.status || 'UNVERIFIED';
+    const links = linksByClaimList[i];
+    const linkRows = links.map((l) => {
+      const ev = evById.get(l.evidenceId);
       const src = ev ? recById.get(ev.sourceRecordId) : null;
-      return `<li><span class="stance-tag ${l.stance}">${l.stance}</span>${ev ? esc(ev.excerptText.slice(0, 80)) : 'Evidence item removed'}${src ? ' — ' + esc(src.title || src.originalUrl || '') : ''}</li>`;
+      return `<li><span class="stance-tag ${esc(l.stance)}">${esc(EVIDENCE_STANCE_LABELS[l.stance] || l.stance)}</span>${ev ? esc(ev.excerptText.slice(0, 80)) : 'Evidence item removed'}${src ? ' — ' + esc(src.title || src.originalUrl || '') : ''}
+        <button type="button" class="link-remove" data-action="delete-claim-evidence" data-id="${attr(l.id)}" aria-label="Remove this evidence link">×</button></li>`;
     }).join('');
+    const subjectChips = (claim.subjectEntityIds || []).map((id) => {
+      const e = entById.get(id);
+      return e ? `<a href="#/workspace/subjects/${attr(e.id)}" class="entity-type-badge">${esc(e.name)}</a>` : `<span class="entity-type-badge">(subject removed)</span>`;
+    }).join(' ');
     return `<article class="claim-card">
-      <p class="claim-card-meta">${esc(claim.claimId)}${claim.excludedFromReport ? ' · <span class="hint">excluded from Report</span>' : ''}</p>
+      <p class="claim-card-meta">${esc(claim.claimId)} · <span class="status-badge status-${esc(status.toLowerCase().replace(/_/g, '-'))}">${esc(CLAIM_STATUS_LABELS[status] || status)}</span>${claim.excludedFromReport ? ' · <span class="hint">excluded from Report</span>' : ''}</p>
       <p>${esc(claim.text)}</p>
-      ${linkRows ? `<ul class="claim-card-links">${linkRows}</ul>` : ''}
+      ${subjectChips ? `<p>${subjectChips}</p>` : ''}
+      ${linkRows ? `<ul class="claim-card-links">${linkRows}</ul>` : '<p class="hint">No evidence linked yet.</p>'}
+      <div class="field-row" style="margin-top:10px;align-items:center">
+        <select class="lane-inline-select" data-action="set-claim-status" data-id="${attr(claim.id)}" aria-label="Change status for ${esc(claim.claimId)}">${CLAIM_STATUSES.map((s) => `<option value="${attr(s)}"${s === status ? ' selected' : ''}>${esc(CLAIM_STATUS_LABELS[s])}</option>`).join('')}</select>
+        <button type="button" class="btn btn-small" data-action="create-finding-from-claim" data-id="${attr(claim.id)}">Create Finding</button>
+      </div>
       <button type="button" class="btn btn-small" data-action="toggle-claim-report" data-id="${attr(claim.id)}" data-excluded="${claim.excludedFromReport ? '1' : ''}">${claim.excludedFromReport ? 'Include in Report' : 'Exclude from Report'}</button>
       <button type="button" class="btn btn-small card-delete" data-action="delete-claim" data-id="${attr(claim.id)}">Delete</button>
     </article>`;
@@ -2173,27 +2255,198 @@ document.addEventListener('click', async (e) => {
   await renderClaimsPanel();
 });
 
+document.addEventListener('change', async (e) => {
+  const sel = e.target.closest('[data-action="set-claim-status"]');
+  if (!sel) return;
+  await updateClaim(sel.dataset.id, { status: sel.value });
+  await renderClaimsPanel();
+  showToast('Updated claim status.');
+});
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action="create-finding-from-claim"]');
+  if (!btn) return;
+  pendingFindingClaimId = btn.dataset.id;
+  location.hash = '#/workspace/findings/findings';
+});
+
 document.querySelector('#claimForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!activeInvestigationId) return;
   const text = document.querySelector('#claimTextInput').value.trim();
   if (!text) return;
-  const links = [...document.querySelectorAll('#claimEvidencePicker input[type=checkbox]:checked')].map((cb) => {
+  const status = document.querySelector('#claimStatusSelect').value;
+  const subjectEntityIds = [...document.querySelectorAll('#claimSubjectsPicker input[type=checkbox]:checked')].map((cb) => cb.dataset.entityId);
+  const evidenceLinks = [...document.querySelectorAll('#claimEvidencePicker input[type=checkbox]:checked')].map((cb) => {
     const id = cb.dataset.evidenceId;
     const stanceSelect = document.querySelector(`select[data-stance-for="${id}"]`);
-    return { evidenceItemId: id, stance: stanceSelect ? stanceSelect.value : 'supports' };
+    return { evidenceId: id, stance: stanceSelect ? stanceSelect.value : 'supports' };
   });
-  const claim = await createClaim(activeInvestigationId, { text, links });
-  document.querySelector('#claimForm').reset();
+  try {
+    const claim = await createClaim(activeInvestigationId, { text, status, subjectEntityIds });
+    for (const link of evidenceLinks) await createClaimEvidence(activeInvestigationId, { claimId: claim.id, ...link });
+    document.querySelector('#claimForm').reset();
+    await renderClaimsPanel();
+    showToast(`Added claim ${claim.claimId}.`);
+  } catch (err) {
+    showToast(err.message || 'Could not add claim.', true);
+  }
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="delete-claim-evidence"]');
+  if (!btn) return;
+  await deleteClaimEvidence(btn.dataset.id);
   await renderClaimsPanel();
-  showToast(`Added claim ${claim.claimId}.`);
 });
 
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-action="delete-claim"]');
   if (!btn) return;
-  await deleteClaim(btn.dataset.id);
-  await renderClaimsPanel();
+  try {
+    await deleteClaim(btn.dataset.id);
+    await renderClaimsPanel();
+  } catch (err) {
+    // Phase 3: deleteClaim refuses when a Finding still cites this claim.
+    showToast(err.message || 'Could not delete this claim.', true);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Findings (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 3): the
+// investigator's current evidence-backed CONCLUSION about a claim. THE
+// HARD RULE lives in public/db.js createClaimFinding()/updateClaimFinding()
+// - this file's job is to make it hard to even attempt saving a
+// DOCUMENTED_FACT/SUPPORTED_INFERENCE/ALLEGATION with no evidence (submit
+// button starts enabled only for the two evidence-exempt classifications,
+// and disables for the other three until ≥1 evidence item is checked),
+// but the real enforcement is the data-layer boundary.
+// ---------------------------------------------------------------------------
+async function renderFindingsPanel() {
+  const [claims, items, records, findings] = await Promise.all([
+    listClaims(activeInvestigationId),
+    listEvidenceItems(activeInvestigationId),
+    listInvestigationRecords(activeInvestigationId),
+    listClaimFindings(activeInvestigationId)
+  ]);
+  renderFindingClaimOptions(claims);
+  renderFindingClassificationOptions();
+  renderFindingEvidencePicker(items);
+  if (pendingFindingClaimId && claims.some((c) => c.id === pendingFindingClaimId)) {
+    document.querySelector('#findingClaimSelect').value = pendingFindingClaimId;
+    pendingFindingClaimId = null;
+  }
+  updateFindingSubmitState();
+  renderFindingsList(findings, claims, items, records);
+  renderUnresolvedList(claims, findings);
+}
+
+function renderFindingClaimOptions(claims) {
+  const select = document.querySelector('#findingClaimSelect');
+  select.innerHTML = claims.length
+    ? claims.map((c) => `<option value="${attr(c.id)}">${esc(c.claimId)} — ${esc(c.text.slice(0, 60))}${c.text.length > 60 ? '…' : ''}</option>`).join('')
+    : '<option value="">Add a claim first, above</option>';
+}
+
+function renderFindingClassificationOptions() {
+  const select = document.querySelector('#findingClassificationSelect');
+  if (!select.options.length) select.innerHTML = FINDING_CLASSIFICATIONS.map((c) => `<option value="${attr(c)}">${esc(FINDING_CLASSIFICATION_LABELS[c])}</option>`).join('');
+}
+
+function renderFindingEvidencePicker(items) {
+  const container = document.querySelector('#findingEvidencePicker');
+  container.innerHTML = items.length
+    ? items.map((item) => `<label class="claim-evidence-option">
+        <input type="checkbox" data-evidence-id="${attr(item.id)}" />
+        <span class="claim-evidence-option-text">${esc(item.excerptText.slice(0, 140))}${item.excerptText.length > 140 ? '…' : ''}<p>${esc(item.excerptType)}${item.location ? ' · ' + esc(item.location) : ''}</p></span>
+      </label>`).join('')
+    : '<p class="status" style="padding:12px;margin:0">No evidence items yet.</p>';
+}
+
+// The UI-level half of the hard rule: DOCUMENTED_FACT/SUPPORTED_INFERENCE/
+// ALLEGATION require ≥1 evidence checkbox; UNRESOLVED_QUESTION/
+// NO_EVIDENCE_LOCATED never require one. db.js rejects the write
+// regardless of what this button's state was.
+function updateFindingSubmitState() {
+  const classification = document.querySelector('#findingClassificationSelect').value;
+  const checked = document.querySelectorAll('#findingEvidencePicker input[type="checkbox"]:checked').length;
+  const needsEvidence = FINDING_CLASSIFICATIONS_REQUIRING_EVIDENCE.includes(classification);
+  const btn = document.querySelector('#findingSubmitBtn');
+  const status = document.querySelector('#findingFormStatus');
+  btn.disabled = needsEvidence && checked === 0;
+  status.textContent = needsEvidence
+    ? (checked === 0 ? 'This classification asserts something as true — select at least one evidence item to enable saving.' : `${checked} evidence item${checked === 1 ? '' : 's'} selected.`)
+    : 'This classification does not require evidence — it is itself the honest statement that nothing (yet) established this.';
+}
+document.querySelector('#findingClassificationSelect').addEventListener('change', updateFindingSubmitState);
+document.querySelector('#findingEvidencePicker').addEventListener('change', (e) => {
+  if (e.target.matches('input[type="checkbox"]')) updateFindingSubmitState();
+});
+
+function renderFindingsList(findings, claims, items, records) {
+  const container = document.querySelector('#findingsList');
+  if (!findings.length) { container.innerHTML = '<p class="status">No findings yet.</p>'; return; }
+  const claimById = new Map(claims.map((c) => [c.id, c]));
+  const evById = new Map(items.map((e) => [e.id, e]));
+  const recById = new Map(records.map((r) => [r.id, r]));
+  container.innerHTML = findings.map((f) => {
+    const claim = claimById.get(f.claimId);
+    const evidenceHtml = (f.evidenceIds || []).map((id) => {
+      const ev = evById.get(id);
+      if (!ev) return '<li class="hint">Evidence item removed</li>';
+      const src = recById.get(ev.sourceRecordId);
+      return `<li>${esc(ev.excerptText.slice(0, 100))}${ev.excerptText.length > 100 ? '…' : ''}${src ? ' — ' + esc(src.title || src.originalUrl || '') : ''}</li>`;
+    }).join('');
+    return `<article class="claim-card">
+      <p class="claim-card-meta"><span class="fact-badge fact-badge-${esc(f.classification.toLowerCase().replace(/_/g, '-'))}">${esc(FINDING_CLASSIFICATION_LABELS[f.classification])}</span> ${claim ? `on <a href="#/workspace/findings/claims">${esc(claim.claimId)}</a>` : '(claim removed)'}</p>
+      <p>${esc(f.conclusion)}</p>
+      ${evidenceHtml ? `<ul class="claim-card-links">${evidenceHtml}</ul>` : ''}
+      <button type="button" class="btn btn-small card-delete" data-action="delete-finding" data-id="${attr(f.id)}">Delete</button>
+    </article>`;
+  }).join('');
+}
+
+// Unresolved (Phase 3 brief §6): claims still UNVERIFIED, plus findings
+// classified UNRESOLVED_QUESTION/NO_EVIDENCE_LOCATED - the honest open
+// part of the investigation, never "this never happened" (CANON.md
+// Product Principle #12).
+function renderUnresolvedList(claims, findings) {
+  const container = document.querySelector('#unresolvedList');
+  const unverifiedClaims = claims.filter((c) => (c.status || 'UNVERIFIED') === 'UNVERIFIED');
+  const openFindings = findings.filter((f) => f.classification === 'UNRESOLVED_QUESTION' || f.classification === 'NO_EVIDENCE_LOCATED');
+  if (!unverifiedClaims.length && !openFindings.length) { container.innerHTML = '<p class="status">Nothing unresolved right now.</p>'; return; }
+  const claimItems = unverifiedClaims.map((c) => `<li><strong>${esc(c.claimId)}</strong> — ${esc(c.text)}</li>`).join('');
+  const findingItems = openFindings.map((f) => `<li><span class="fact-badge fact-badge-${esc(f.classification.toLowerCase().replace(/_/g, '-'))}">${esc(FINDING_CLASSIFICATION_LABELS[f.classification])}</span> ${esc(f.conclusion)}</li>`).join('');
+  container.innerHTML = `
+    ${claimItems ? `<h3 style="margin:0 0 8px;font-size:13px">Unverified claims</h3><ul class="report-list">${claimItems}</ul>` : ''}
+    ${findingItems ? `<h3 style="margin:${claimItems ? '18px' : '0'} 0 8px;font-size:13px">Open findings</h3><ul class="report-list">${findingItems}</ul>` : ''}
+  `;
+}
+
+document.querySelector('#findingForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!activeInvestigationId) return;
+  const claimId = document.querySelector('#findingClaimSelect').value;
+  if (!claimId) { showToast('Add a claim first.', true); return; }
+  const conclusion = document.querySelector('#findingConclusionInput').value.trim();
+  const classification = document.querySelector('#findingClassificationSelect').value;
+  const evidenceIds = [...document.querySelectorAll('#findingEvidencePicker input[type="checkbox"]:checked')].map((cb) => cb.dataset.evidenceId);
+  try {
+    await createClaimFinding(activeInvestigationId, { claimId, conclusion, classification, evidenceIds });
+    document.querySelector('#findingForm').reset();
+    updateFindingSubmitState();
+    await renderFindingsPanel();
+    showToast('Added finding.');
+  } catch (err) {
+    showToast(err.message || 'Could not add finding.', true);
+  }
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="delete-finding"]');
+  if (!btn) return;
+  await deleteClaimFinding(btn.dataset.id);
+  await renderFindingsPanel();
 });
 
 // ---------------------------------------------------------------------------
@@ -2327,6 +2580,37 @@ async function renderEntityProfile(entity, allEntities, evidenceItems) {
   renderRelationshipEvidencePicker(evidenceItems);
   await renderEntityRelationships(entity, allEntities);
   await renderEntityMentionsList(entity);
+  await renderEntityClaimsList(entity);
+  await renderEntityFindingsList(entity);
+}
+
+// "Claims involving this subject" / "Findings involving this subject"
+// (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 3 §8) - explicit
+// subjectEntityIds only, never plain-text name matching.
+async function renderEntityClaimsList(entity) {
+  const container = document.querySelector('#entityClaimsList');
+  const claims = await listClaimsForEntity(activeInvestigationId, entity.id);
+  if (!claims.length) { container.innerHTML = '<p class="status">No claims tag this subject yet.</p>'; return; }
+  container.innerHTML = `<ul class="rel-list">${claims.map((c) => {
+    const status = c.status || 'UNVERIFIED';
+    return `<li class="rel-row">
+      <span class="status-badge status-${esc(status.toLowerCase().replace(/_/g, '-'))}">${esc(CLAIM_STATUS_LABELS[status] || status)}</span>
+      <strong>${esc(c.claimId)}</strong>
+      <p class="hint">${esc(c.text)}</p>
+      <a href="#/workspace/findings/claims" class="hint">View in Claims →</a>
+    </li>`;
+  }).join('')}</ul>`;
+}
+
+async function renderEntityFindingsList(entity) {
+  const container = document.querySelector('#entityFindingsList');
+  const findings = await listClaimFindingsForEntity(activeInvestigationId, entity.id);
+  if (!findings.length) { container.innerHTML = '<p class="status">No findings involve this subject yet.</p>'; return; }
+  container.innerHTML = `<ul class="rel-list">${findings.map((f) => `<li class="rel-row">
+      <span class="fact-badge fact-badge-${esc(f.classification.toLowerCase().replace(/_/g, '-'))}">${esc(FINDING_CLASSIFICATION_LABELS[f.classification])}</span>
+      <p class="hint">${esc(f.conclusion)}</p>
+      <a href="#/workspace/findings/findings" class="hint">View in Findings →</a>
+    </li>`).join('')}</ul>`;
 }
 
 // Evidence Mentions (Phase 2): every evidence item explicitly linked to
@@ -2565,7 +2849,7 @@ async function renderGapsPanel() {
 // required) and skipped silently when there's nothing in it yet.
 // ---------------------------------------------------------------------------
 async function renderReportPanel() {
-  const [outline, records, evidenceItems, claims, quantFindings, qualFindings, crossValidations, cachedAnalysis] = await Promise.all([
+  const [outline, records, evidenceItems, claims, quantFindings, qualFindings, crossValidations, cachedAnalysis, claimFindings] = await Promise.all([
     getOutline(activeInvestigationId),
     listInvestigationRecords(activeInvestigationId),
     listEvidenceItems(activeInvestigationId),
@@ -2573,7 +2857,8 @@ async function renderReportPanel() {
     listQuantitativeFindings(activeInvestigationId),
     listQualitativeFindings(activeInvestigationId),
     listCrossValidations(activeInvestigationId),
-    getQualitativeAnalysis(activeInvestigationId)
+    getQualitativeAnalysis(activeInvestigationId),
+    listClaimFindings(activeInvestigationId)
   ]);
   const container = document.querySelector('#reportContent');
 
@@ -2643,26 +2928,51 @@ async function renderReportPanel() {
   // Claim with excludedFromReport stays fully intact everywhere else
   // (Findings > Claims, its Evidence Items) but is left out of the Report
   // itself, per Ask Sources' "remove this from the report but keep it as
-  // evidence" command (public/db.js updateClaim).
+  // evidence" command (public/db.js updateClaim). Evidence links now come
+  // from the claimEvidence store (Phase 3), not the deprecated inline
+  // `claim.links` array.
   const evById = new Map(evidenceItems.map((e) => [e.id, e]));
   const recById = new Map(records.map((r) => [r.id, r]));
   const reportClaims = claims.filter((c) => !c.excludedFromReport);
   const excludedCount = claims.length - reportClaims.length;
   if (reportClaims.length) {
-    const claimsHtml = reportClaims.map((claim) => {
-      const evidenceHtml = (claim.links || []).map((l) => {
-        const ev = evById.get(l.evidenceItemId);
+    const linkLists = await Promise.all(reportClaims.map((c) => listClaimEvidenceForClaim(activeInvestigationId, c.id)));
+    const claimsHtml = reportClaims.map((claim, i) => {
+      const status = claim.status || 'UNVERIFIED';
+      const evidenceHtml = linkLists[i].map((l) => {
+        const ev = evById.get(l.evidenceId);
         if (!ev) return '';
         const src = recById.get(ev.sourceRecordId);
-        return `<div class="report-evidence"><span class="stance-tag ${l.stance}">${l.stance}</span>${esc(ev.excerptText)}<p>${src ? esc(src.title || src.originalUrl || 'Untitled source') : 'Source unavailable'}${ev.location ? ' · ' + esc(ev.location) : ''}</p></div>`;
+        return `<div class="report-evidence"><span class="stance-tag ${esc(l.stance)}">${esc(EVIDENCE_STANCE_LABELS[l.stance] || l.stance)}</span>${esc(ev.excerptText)}<p>${src ? esc(src.title || src.originalUrl || 'Untitled source') : 'Source unavailable'}${ev.location ? ' · ' + esc(ev.location) : ''}</p></div>`;
       }).join('');
-      return `<article class="report-claim"><p class="report-claim-id">${esc(claim.claimId)}</p><h3>${esc(claim.text)}</h3>${evidenceHtml || '<p class="hint">No evidence linked to this claim yet.</p>'}</article>`;
+      return `<article class="report-claim"><p class="report-claim-id">${esc(claim.claimId)} · ${esc(CLAIM_STATUS_LABELS[status] || status)}</p><h3>${esc(claim.text)}</h3>${evidenceHtml || '<p class="hint">No evidence linked to this claim yet.</p>'}</article>`;
     }).join('');
     sections.push(`<section class="report-section"><h2>Claims</h2>${excludedCount ? `<p class="hint">${excludedCount} claim${excludedCount === 1 ? '' : 's'} kept as evidence but excluded from this report.</p>` : ''}${claimsHtml}</section>`);
   } else if (excludedCount) {
     sections.push(`<section class="report-section"><h2>Claims</h2><p class="hint">${excludedCount} claim${excludedCount === 1 ? '' : 's'} kept as evidence but excluded from this report — see Findings &gt; Claims.</p></section>`);
   } else {
     sections.push(`<section class="report-section"><h2>Claims</h2><p class="hint">No claims yet — add claims backed by evidence on the <a href="#/workspace/findings/claims" data-route="/workspace/findings">Findings</a> tab.</p></section>`);
+  }
+
+  // 9. Findings (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 3) - the
+  // investigator's evidence-backed conclusions, kept visually and
+  // structurally distinct from the Claims they answer. A DOCUMENTED_FACT/
+  // SUPPORTED_INFERENCE/ALLEGATION finding here is GUARANTEED to cite real
+  // evidence (public/db.js createClaimFinding()/updateClaimFinding()
+  // enforce this at write time), so the report never has to re-check.
+  if (claimFindings.length) {
+    const claimByIdForFindings = new Map(claims.map((c) => [c.id, c]));
+    const findingsHtml = claimFindings.map((f) => {
+      const claim = claimByIdForFindings.get(f.claimId);
+      const evidenceHtml = (f.evidenceIds || []).map((id) => {
+        const ev = evById.get(id);
+        if (!ev) return '';
+        const src = recById.get(ev.sourceRecordId);
+        return `<div class="report-evidence">${esc(ev.excerptText)}<p>${src ? esc(src.title || src.originalUrl || 'Untitled source') : 'Source unavailable'}${ev.location ? ' · ' + esc(ev.location) : ''}</p></div>`;
+      }).join('');
+      return `<article class="report-claim"><p class="report-claim-id">${esc(FINDING_CLASSIFICATION_LABELS[f.classification])}${claim ? ` on ${esc(claim.claimId)}` : ''}</p><h3>${esc(f.conclusion)}</h3>${evidenceHtml}</article>`;
+    }).join('');
+    sections.push(`<section class="report-section"><h2>Findings</h2>${findingsHtml}</section>`);
   }
 
   container.innerHTML = sections.join('');

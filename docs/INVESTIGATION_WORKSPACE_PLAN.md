@@ -515,3 +515,187 @@ call per evidence item via `Promise.all`, fine at this app's current
 scale, matching the existing per-row query pattern used elsewhere, e.g.
 `investigationCardHtml`'s per-card `listInvestigationRecords` call —
 revisit only if a real investigation shows this is a bottleneck).
+
+---
+
+## Phase 3: as-built (2026-09-08)
+
+Shipped, live-verified in a real browser (49/49 assertions, zero
+unexpected console errors). Scoped tightly per explicit instruction:
+Findings + Claim Ledger + support/contradiction only. No network
+visualization, automatic NER, automatic identity merging, AI-generated
+accusations, source reliability scoring, or timeline engine. This phase
+was not part of this document's original Part 5 sketch (that sketch's
+"Phase 2-5" were timeline/identity/tiers/network — see the note in
+`docs/CLAUDE_HANDOFF.md` about that numbering); it's a new addition
+driven entirely by explicit user direction after Phase 2 was accepted.
+
+### The model, as implemented
+
+```text
+SOURCE -> EVIDENCE -> ENTITY MENTION -> ENTITY/RELATIONSHIP -> CLAIM -> FINDING -> REPORT
+```
+
+A **Claim** is something being tested and may legitimately exist with
+zero evidence (status UNVERIFIED, an investigative lead) - this is the
+one deliberate asymmetry versus Phase 1/2's Relationships and Mentions,
+which both require evidence to exist at all. A **Finding** is the
+investigator's current evidence-backed CONCLUSION about a claim, and
+THIS is where the hard rule lives: a Finding classified DOCUMENTED_FACT,
+SUPPORTED_INFERENCE, or ALLEGATION must cite real evidence; only
+UNRESOLVED_QUESTION and NO_EVIDENCE_LOCATED may exist with none, because
+those two classifications ARE the honest statement that nothing was
+established (CANON.md "Never Confuse Absence of Evidence With Evidence
+of Absence"). Status and classification are always an explicit
+investigator decision - nothing in this codebase derives either from an
+evidence count.
+
+### A pre-existing store, extended rather than duplicated
+
+Chronium already had a `claims` store (predating Phase 1) with inline
+`links: [{evidenceItemId, stance}]`. Rather than build a parallel claim
+concept, this phase **extended** it additively: new `status`,
+`subjectEntityIds`, `notes`, `metadata` fields (absent-means-default on
+old records, same convention already used for `excludedFromReport`), and
+a real join table (`claimEvidence`) replacing the inline `links` array as
+what new code reads/writes. A one-time, idempotent migration
+(`ensureClaimEvidenceBackfill`, gated by a `meta` flag) copies existing
+`links` data into `claimEvidence` on first load after upgrading - the old
+`links` field is left on those records untouched, never deleted, just no
+longer read.
+
+The new Finding concept is named **`claimFindings`** (store and every
+function), not `findings`, specifically to avoid confusion with the
+pre-existing, unrelated `quantitativeFindings`/`qualitativeFindings`
+stores (`docs/RESEARCH_METHOD.md`'s mixed-methods workflow, tied to
+outline lanes, not claims) - a deliberate naming deviation from the
+brief's literal suggestion, same latitude ("follow the actual plan if
+names differ") used in Phase 1's `entityAliases` decision.
+
+### Files modified (no new files besides the pure-logic pair)
+
+`public/claims.js` (new - pure vocabulary + validation, mirrors
+`public/entities.js`'s pattern exactly: `CLAIM_STATUSES`,
+`EVIDENCE_STANCES` including the new `contextualizes`,
+`FINDING_CLASSIFICATIONS`, `FindingEvidenceRequiredError`), `public/db.js`
+(`DB_VERSION` 8→9; `claimEvidence`/`claimFindings`/`claimHistory` stores;
+two new indexes added to the *existing* `claims` store during the same
+upgrade; the backfill migration; extended `createClaim`/`updateClaim`/
+`deleteClaim`; `deleteEvidenceItem` extended with the block-or-trim logic
+below), `public/app.js` (Claims form gains status/subjects/three-stance
+evidence; new Findings sub-tab with its own create form + Unresolved
+section; Evidence tab gains "Used in Claims"; Subject profile gains
+"Claims/Findings involving this subject"; Report gains a Findings
+section and reads claim evidence from `claimEvidence` instead of the
+deprecated `links`), `public/index.html`, `public/styles.css`,
+`scripts/test-claims.mjs` (new, 26 unit tests), `package.json` (`check` +
+new `test:claims` script + a combined `test` script).
+
+### Referential integrity, decided and verified
+
+The brief explicitly offered a choice here - **block the delete**, or
+auto-downgrade/flag the finding. Blocking was chosen throughout, for the
+same reason each time: silently changing what a finding asserts is
+itself an editorial act Chronium has no business taking on the
+investigator's behalf.
+
+| Action | Behavior | Verified |
+|---|---|---|
+| Delete an evidence item that is the ONLY evidence behind a DOCUMENTED_FACT/SUPPORTED_INFERENCE/ALLEGATION finding | **Blocked entirely** - checked for every affected finding before any mutation is issued, so a refusal never leaves a partial delete behind | ✅ |
+| Delete an evidence item that is ONE OF SEVERAL cited by a finding | Proceeds - that finding's `evidenceIds` is trimmed of the now-gone reference, nothing false is implied since real evidence remains | ✅ |
+| Delete a claim while a Finding still cites it | **Blocked entirely** - delete the finding first | ✅ |
+| Delete a claim with no findings | Proceeds - cascades its `claimEvidence` links and `claimHistory` rows (meaningless without their claim, same reasoning as Phase 1/2's alias/mention cascades) | ✅ |
+| Delete a single claim-evidence LINK | Always safe - touches only that link; a Finding cites its own independent `evidenceIds`, never `claimEvidence` rows, so no finding is ever affected by a link deletion | ✅ |
+| Delete an entity referenced in a claim's `subjectEntityIds` | **Soft reference, not blocked** - same convention as Relationships: the claim keeps existing, the UI renders "(subject removed)". A claim's statement is self-contained prose that stays meaningful even if the entity naming it is gone | not separately re-tested this phase (identical mechanism to Phase 1's already-verified Relationship convention) |
+| Delete an alias | No effect on claims/findings - unrelated stores by construction | not separately re-tested (trivially true, same as Phase 2's alias/mention independence) |
+
+`subjectEntityIds` existence IS checked at claim WRITE time (an entity id
+must be real if provided) but is soft on later entity deletion - the same
+asymmetry Phase 1 already established for Relationships.
+
+### Forward-compatible, not built
+
+`createdBy`/`updatedBy`/`reviewedBy` were considered per the brief's §15,
+but **not added** - Chronium has no auth/user-identity system yet, and
+adding nullable fields nobody ever populates would be speculative schema
+weight with no present value. Nothing in the `claims`/`claimEvidence`/
+`claimFindings` schemas blocks adding them additively later (same pattern
+as every other field in this phase), so the forward-compatibility the
+brief asked for is preserved by the additive-migration discipline itself,
+not by pre-placing unused columns.
+
+### Verification summary
+
+`npm run check` clean (12 files, `public/claims.js` added).
+`npm test` (new combined script) - 56/56 unit tests pass (30 from Phase
+1/2 + 26 new: every `CLAIM_STATUSES`/`FINDING_CLASSIFICATIONS` value,
+the evidence-required rejection for each of the three asserting
+classifications, the two evidence-exempt classifications succeeding with
+none, stance validation including `contextualizes`, and "an unsupported
+claim may remain UNVERIFIED" as its own named test documenting the
+Claim/Relationship asymmetry). Live Puppeteer pass against `wrangler dev`
+- **49/49 assertions, zero unexpected console errors** (one
+intentionally-aborted network request from the same migration-seed
+technique introduced in Phase 2, not an app defect), covering:
+
+- **Migration v8→v9** against a genuinely v8-shaped seeded database (raw
+  IndexedDB, full Phase 1+2 schema) carrying a legacy claim with the OLD
+  `links` shape - confirmed the new stores exist, the legacy claim
+  survives with its old `links` field untouched, it correctly reads as
+  UNVERIFIED with no `status` field present, and its `links` entry was
+  backfilled into `claimEvidence` exactly once.
+- **The full core workflow** as one continuous run: create a claim, tag
+  a subject, attach both a supporting and a contradicting evidence item
+  (three-stance coexistence separately confirmed by adding a third,
+  `contextualizes`, link to the same claim), change status to REFUTED
+  (confirmed logged to `claimHistory` with the correct previous/new
+  values), create a DOCUMENTED_FACT finding (submit button confirmed
+  disabled with zero evidence, enabled once checked), confirm the
+  evidence trail stays intact on the claim after the finding exists, and
+  confirm everything survives a reload.
+- **The Payne claim regression** (§9), built as the core workflow's real
+  content rather than a separate fixture: the claim "Raymond Payne served
+  on Copperas Cove City Council" with an ambiguous supporting source
+  ("Ray Payne") and a contradicting official record (Marc Payne),
+  resolved to REFUTED with a DOCUMENTED_FACT finding citing the official
+  record - confirmed entity IDs stay isolated (Marc has zero
+  claims/relationships), zero relationship was created between them, the
+  incorrect-but-real supporting source was never deleted, and no entity
+  merge occurred.
+- **Conflicting evidence regression** (§10): two supporting + one
+  contradicting link coexisting on one claim, confirmed all three render;
+  deleting one link confirmed to leave the evidence item itself completely
+  untouched, exact text byte-for-byte identical before and after.
+- **No-evidence test** (§11): confirmed DOCUMENTED_FACT/SUPPORTED_INFERENCE/
+  ALLEGATION findings are rejected with zero evidence while
+  NO_EVIDENCE_LOCATED succeeds, and that the claim itself stays a valid
+  UNVERIFIED lead throughout.
+- **Referential integrity** (§13): all five blocking/trimming/cascading
+  scenarios in the table above, each verified as a real state transition
+  (blocked → unblocked after removing the obstruction), not just a
+  single-shot check.
+- **Evidence-view and Subject-profile integration** (§7/§8): "Used in
+  Claims" renders with the correct stance on the evidence card; "Claims
+  involving this subject" and "Findings involving this subject" both
+  render correctly on the Subject profile, driven by explicit
+  `subjectEntityIds`, never plain-text name matching.
+- **Full Phase 1+2 regression pass** (§17): every item explicitly listed
+  in the brief - relationship/mention evidence requirements still
+  enforced, Marc/Raymond Payne still separate, quotedName still
+  round-trips exactly, Ask Sources still works, evidence/investigations
+  still survive reload, Delete Subject and Delete Investigation still
+  work. `#workspaceKebabBtn` was deliberately left unfixed, per explicit
+  instruction.
+
+### Deferred (explicitly, not silently dropped)
+
+Everything already deferred in Phases 1/2 (timeline events,
+identity-resolution scoring, source tiers, network view,
+`#workspaceKebabBtn`). New this phase: `createdBy`/`updatedBy`/
+`reviewedBy` (see "Forward-compatible, not built" above); automatic
+detection of a Finding's classification/status from evidence patterns
+(explicitly ruled out by the brief's §3 - status/classification stay
+investigator judgment calls indefinitely, not a future automation
+target); a bulk cross-store query for "everything about claim X" (the UI
+currently composes several targeted queries per render, matching the
+established per-row pattern - fine at current scale).

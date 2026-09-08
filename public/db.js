@@ -19,15 +19,32 @@
 // "Entities / Relationships" section below for the enforcement rule),
 // entityMentions (Phase 2 - "this evidence item uses the exact string X to
 // refer to entity Y," never a relationship by itself - see the "Entity
-// Mentions" section below).
+// Mentions" section below), claimEvidence/claimFindings/claimHistory
+// (Phase 3 - docs/INVESTIGATION_WORKSPACE_PLAN.md: claimEvidence is the
+// proper join table for the pre-existing `claims` store's supports/
+// contradicts/contextualizes links, replacing that store's old inline
+// `links` array going forward (old records' `links` field is left as
+// inert legacy data, never deleted - see the migration note below);
+// claimFindings is the investigator's evidence-backed CONCLUSION about a
+// claim (named claimFindings, not `findings`, specifically to avoid
+// collision with the pre-existing, unrelated quantitativeFindings/
+// qualitativeFindings stores from docs/RESEARCH_METHOD.md's mixed-methods
+// workflow); claimHistory is a lightweight status-change audit trail. See
+// the "Claims / Claim Evidence / Findings" section below for the
+// enforcement rule.
 
 import {
   validateEntityFields, validateRelationshipFields, validateEntityMentionFields,
   normalizeName, normalizeForSearch, RelationshipValidationError, MentionValidationError
 } from './entities.js';
+import {
+  validateClaimFields, validateClaimEvidenceFields, validateFindingFields,
+  CLAIM_STATUSES, FINDING_CLASSIFICATIONS_REQUIRING_EVIDENCE,
+  ClaimValidationError, ClaimEvidenceValidationError, FindingValidationError, FindingEvidenceRequiredError
+} from './claims.js';
 
 const DB_NAME = 'chronium';
-const DB_VERSION = 8;
+const DB_VERSION = 9;
 let dbPromise = null;
 
 function openDb() {
@@ -71,6 +88,17 @@ function openDb() {
       if (!db.objectStoreNames.contains('claims')) {
         const claims = db.createObjectStore('claims', { keyPath: 'id' });
         claims.createIndex('investigationId', 'investigationId', { unique: false });
+      }
+      // Phase 3: new indexes on the PRE-EXISTING `claims` store, added
+      // during this same upgrade - IndexedDB allows adding an index to an
+      // existing store inside a version-change transaction; older claim
+      // records simply have `status`/`subjectEntityIds` as undefined until
+      // read with the same "absent means default" convention already used
+      // for `excludedFromReport` (see createClaim/updateClaim below).
+      {
+        const claimsStore = req.transaction.objectStore('claims');
+        if (!claimsStore.indexNames.contains('status')) claimsStore.createIndex('status', 'status', { unique: false });
+        if (!claimsStore.indexNames.contains('subjectEntityIds')) claimsStore.createIndex('subjectEntityIds', 'subjectEntityIds', { unique: false, multiEntry: true });
       }
       if (!db.objectStoreNames.contains('qualitativeAnalysis')) {
         // One cached result per investigation - investigationId IS the key.
@@ -129,11 +157,60 @@ function openDb() {
         mentions.createIndex('quotedNameNormalized', 'quotedNameNormalized', { unique: false });
         mentions.createIndex('updatedAt', 'updatedAt', { unique: false });
       }
+      if (!db.objectStoreNames.contains('claimEvidence')) {
+        const claimEvidence = db.createObjectStore('claimEvidence', { keyPath: 'id' });
+        claimEvidence.createIndex('investigationId', 'investigationId', { unique: false });
+        claimEvidence.createIndex('claimId', 'claimId', { unique: false });
+        claimEvidence.createIndex('evidenceId', 'evidenceId', { unique: false });
+        claimEvidence.createIndex('stance', 'stance', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('claimFindings')) {
+        const findings = db.createObjectStore('claimFindings', { keyPath: 'id' });
+        findings.createIndex('investigationId', 'investigationId', { unique: false });
+        findings.createIndex('claimId', 'claimId', { unique: false });
+        findings.createIndex('classification', 'classification', { unique: false });
+        findings.createIndex('updatedAt', 'updatedAt', { unique: false });
+        findings.createIndex('evidenceIds', 'evidenceIds', { unique: false, multiEntry: true });
+      }
+      if (!db.objectStoreNames.contains('claimHistory')) {
+        const history = db.createObjectStore('claimHistory', { keyPath: 'id' });
+        history.createIndex('investigationId', 'investigationId', { unique: false });
+        history.createIndex('claimId', 'claimId', { unique: false });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
-  });
+  }).then(async (db) => { await ensureClaimEvidenceBackfill(db); return db; });
   return dbPromise;
+}
+
+// One-time data backfill: copies the pre-existing `claims` store's inline
+// `links` array (the old supports/contradicts model) into the new
+// `claimEvidence` join table, so nothing already recorded is lost when
+// the UI/Report switch to reading claimEvidence exclusively. The old
+// `links` field is left on those claim records untouched (never deleted -
+// CANON.md "never lose the receipt"), just no longer read. Gated by a
+// `meta` flag so it runs exactly once per database, ever - safe to call
+// on every openDb() (including on a brand-new database, where it's a
+// harmless no-op since there are no legacy `links` to copy).
+async function ensureClaimEvidenceBackfill(db) {
+  const already = await tx(db, ['meta'], 'readonly', (t) => reqToPromise(t.objectStore('meta').get('claimEvidenceBackfillDone')));
+  if (already?.value) return;
+  await tx(db, ['claims', 'claimEvidence', 'meta'], 'readwrite', async (t) => {
+    const claims = await reqToPromise(t.objectStore('claims').getAll());
+    const claimEvidenceStore = t.objectStore('claimEvidence');
+    for (const claim of claims) {
+      for (const link of claim.links || []) {
+        if (!link?.evidenceItemId) continue;
+        await reqToPromise(claimEvidenceStore.add({
+          id: genId('cev'), investigationId: claim.investigationId, claimId: claim.id, evidenceId: link.evidenceItemId,
+          stance: link.stance === 'contradicts' ? 'contradicts' : 'supports',
+          notes: '', createdAt: claim.createdAt || new Date().toISOString()
+        }));
+      }
+    }
+    await reqToPromise(t.objectStore('meta').put({ key: 'claimEvidenceBackfillDone', value: true }));
+  });
 }
 
 function tx(db, stores, mode, work) {
@@ -545,27 +622,80 @@ export async function createEvidenceItem(investigationId, { sourceRecordId, exce
   return item;
 }
 
-// Cascade-deletes entityMentions pointing at this evidence item (Phase 2
-// addition) for the same "no orphan mentions" reason as deleteEntity()
-// above - a mention with no evidence behind it is meaningless, worse than
-// a Claim/Relationship left pointing at a removed reference (which stay,
-// rendered as "removed," because THEY are the factual record). Deleting a
-// mention never deletes evidence or an entity - see deleteEntityMention().
+// Cascade-deletes entityMentions (Phase 2) and claimEvidence links
+// (Phase 3) pointing at this evidence item, for the same "no orphan
+// pointer records" reason as deleteEntity() above - a mention or a
+// support/contradict/contextualize LINK has no meaning without the
+// evidence it points at, unlike a Relationship or a Finding, which are
+// themselves the factual record (Relationships stay, rendered as
+// "removed"; Findings get the conservative treatment below, per Phase 3
+// brief §13's explicit "BLOCK THE DELETE... do not silently preserve a
+// false appearance of support").
+//
+// THE HARD RULE, referential-integrity half (Phase 3 brief §13): if this
+// evidence item is the ONLY evidence keeping a DOCUMENTED_FACT/
+// SUPPORTED_INFERENCE/ALLEGATION finding non-empty, the ENTIRE deletion
+// is refused - checked for every affected finding BEFORE any mutation is
+// issued, so a refusal never leaves a partial delete behind. Chosen over
+// the alternative (auto-downgrading the finding) because silently
+// changing what a finding asserts is itself an editorial act Chronium
+// has no business taking on the investigator's behalf - refusing and
+// telling them to reclassify/delete the finding first keeps that
+// decision explicitly human. If this evidence is one of SEVERAL cited by
+// a finding, the deletion proceeds and that finding's evidenceIds is
+// simply trimmed of the now-gone reference - it still has real evidence
+// left, so nothing false is implied.
 export async function deleteEvidenceItem(evidenceItemId) {
   const db = await openDb();
-  await tx(db, ['evidenceItems', 'entityMentions'], 'readwrite', async (t) => {
+  await tx(db, ['evidenceItems', 'entityMentions', 'claimEvidence', 'claimFindings'], 'readwrite', async (t) => {
+    const findingsStore = t.objectStore('claimFindings');
+    const allFindings = await reqToPromise(findingsStore.getAll());
+    const affected = allFindings.filter((f) => (f.evidenceIds || []).includes(evidenceItemId));
+    for (const f of affected) {
+      const remaining = f.evidenceIds.filter((id) => id !== evidenceItemId);
+      if (!remaining.length && FINDING_CLASSIFICATIONS_REQUIRING_EVIDENCE.includes(f.classification)) {
+        throw new FindingEvidenceRequiredError(`Cannot delete this evidence item - it is the only evidence behind the ${f.classification} finding "${f.conclusion.slice(0, 80)}${f.conclusion.length > 80 ? '…' : ''}". Delete or reclassify that finding first.`);
+      }
+    }
+
+    // Nothing above threw - safe to actually mutate now.
     t.objectStore('evidenceItems').delete(evidenceItemId);
     const mentionIdx = t.objectStore('entityMentions').index('evidenceId');
     const mentions = await reqToPromise(mentionIdx.getAll(evidenceItemId));
     for (const m of mentions) t.objectStore('entityMentions').delete(m.id);
+    const cevIdx = t.objectStore('claimEvidence').index('evidenceId');
+    const cevRows = await reqToPromise(cevIdx.getAll(evidenceItemId));
+    for (const c of cevRows) t.objectStore('claimEvidence').delete(c.id);
+    for (const f of affected) {
+      const remaining = f.evidenceIds.filter((id) => id !== evidenceItemId);
+      await reqToPromise(findingsStore.put({ ...f, evidenceIds: remaining, updatedAt: new Date().toISOString() }));
+    }
   });
 }
 
 // ---------------------------------------------------------------------------
-// Claims: a specific factual assertion an Evidence Item supports or
-// contradicts - what findings and reports actually reason over. Carries a
-// human-readable CHR-CLAIM-NNN id (parallel to Source's CHR-NNNNNN) so a
-// claim can be cited independent of any one investigation.
+// Claims (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 3): a specific
+// factual assertion being TESTED - what Findings and Reports reason over.
+// Carries a human-readable CHR-CLAIM-NNN id (parallel to Source's
+// CHR-NNNNNN) so a claim can be cited independent of any one
+// investigation.
+//
+// UNLIKE Relationships/Mentions, a Claim does NOT require evidence to
+// exist - it may legitimately sit at UNVERIFIED as an investigative lead
+// with nothing behind it yet (Phase 3 brief §3/§11: "an unsupported
+// question/lead may remain in the claim ledger"). The hard evidence
+// requirement in this phase lives on Claim FINDINGS instead (see below) -
+// a Claim is the question, a Finding is the evidence-backed answer.
+// `status` is always an explicit investigator decision - nothing in this
+// file ever derives it from a supporting/contradicting evidence count.
+//
+// `subjectEntityIds` existence IS checked at write time (an entity id
+// must be real if provided, same as Relationships/Mentions), but is a
+// SOFT reference on delete (matching Relationships' convention): if a
+// referenced entity is later deleted, the claim keeps existing and the
+// UI renders "(subject removed)" for that id - a claim's statement text
+// is self-contained prose that stays meaningful even if the entity
+// record naming it is gone.
 // ---------------------------------------------------------------------------
 export async function getNextClaimId() {
   const db = await openDb();
@@ -586,21 +716,66 @@ export async function listClaims(investigationId) {
   return claims.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 }
 
-export async function createClaim(investigationId, { text, links }) {
+export async function getClaim(claimId) {
   const db = await openDb();
-  const claimId = await getNextClaimId();
-  const claim = {
-    id: genId('claim'), claimId, investigationId, text: text.trim(),
-    links: (links || []).map((l) => ({ evidenceItemId: l.evidenceItemId, stance: l.stance === 'contradicts' ? 'contradicts' : 'supports' })),
-    createdAt: new Date().toISOString()
-  };
-  await tx(db, ['claims'], 'readwrite', (t) => t.objectStore('claims').add(claim));
-  return claim;
+  return tx(db, ['claims'], 'readonly', (t) => reqToPromise(t.objectStore('claims').get(claimId)));
 }
 
+// "Claims involving this subject" (Phase 3 brief §8) - explicit entity
+// IDs only, never plain-text name matching.
+export async function listClaimsForEntity(investigationId, entityId) {
+  const db = await openDb();
+  const rows = await tx(db, ['claims'], 'readonly', (t) => reqToPromise(t.objectStore('claims').index('subjectEntityIds').getAll(entityId)));
+  return rows.filter((c) => c.investigationId === investigationId).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+async function assertClaimSubjectsExist(t, investigationId, subjectEntityIds) {
+  const entities = t.objectStore('entities');
+  for (const entityId of subjectEntityIds) {
+    const entity = await reqToPromise(entities.get(entityId));
+    if (!entity || entity.investigationId !== investigationId) {
+      throw new ClaimValidationError(`Subject entity "${entityId}" was not found in this investigation.`);
+    }
+  }
+}
+
+export async function createClaim(investigationId, fields) {
+  const shaped = validateClaimFields({ investigationId, ...fields });
+  const db = await openDb();
+  const claimId = await getNextClaimId();
+  return tx(db, ['entities', 'claims'], 'readwrite', async (t) => {
+    await assertClaimSubjectsExist(t, investigationId, shaped.subjectEntityIds);
+    const now = new Date().toISOString();
+    const claim = { id: genId('claim'), claimId, ...shaped, createdAt: now, updatedAt: now };
+    await reqToPromise(t.objectStore('claims').add(claim));
+    return claim;
+  });
+}
+
+// Blocks deletion if any Finding still cites this claim (a Finding is a
+// standing conclusion ABOUT a specific claim - deleting the claim out
+// from under it would leave the finding pointing at nothing, the same
+// "don't silently preserve a false appearance of support" concern as
+// evidence deletion below). Cascades claimEvidence links (safe - they're
+// just supports/contradicts/contextualizes pointers, not conclusions
+// themselves) and claimHistory rows (same reasoning as the aliases/
+// mentions cascade in Phase 1/2 - meaningless without their claim).
 export async function deleteClaim(claimId) {
   const db = await openDb();
-  await tx(db, ['claims'], 'readwrite', (t) => t.objectStore('claims').delete(claimId));
+  await tx(db, ['claims', 'claimEvidence', 'claimFindings', 'claimHistory'], 'readwrite', async (t) => {
+    const findingsIdx = t.objectStore('claimFindings').index('claimId');
+    const relatedFindings = await reqToPromise(findingsIdx.getAll(claimId));
+    if (relatedFindings.length) {
+      throw new ClaimValidationError(`Cannot delete this claim - ${relatedFindings.length} finding${relatedFindings.length === 1 ? '' : 's'} still cite${relatedFindings.length === 1 ? 's' : ''} it. Delete those findings first.`);
+    }
+    t.objectStore('claims').delete(claimId);
+    const cevIdx = t.objectStore('claimEvidence').index('claimId');
+    const cevRows = await reqToPromise(cevIdx.getAll(claimId));
+    for (const c of cevRows) t.objectStore('claimEvidence').delete(c.id);
+    const histIdx = t.objectStore('claimHistory').index('claimId');
+    const histRows = await reqToPromise(histIdx.getAll(claimId));
+    for (const h of histRows) t.objectStore('claimHistory').delete(h.id);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -718,22 +893,60 @@ export async function deleteCrossValidation(id) {
 }
 
 // ---------------------------------------------------------------------------
-// Claim updates - so far only used for excludedFromReport (a Claim can be
-// kept, with its Evidence intact, while being left out of the generated
-// Report - "remove this from the report but keep it as evidence"). Additive
-// optional field: an existing claim with no excludedFromReport key is
-// treated as included (see renderReportPanel, public/app.js).
+// Claim updates - originally only used for excludedFromReport (a Claim
+// can be kept, with its Evidence intact, while being left out of the
+// generated Report - "remove this from the report but keep it as
+// evidence"). Additive optional field: an existing claim with no
+// excludedFromReport key is treated as included (see renderReportPanel,
+// public/app.js). Same "absent means default" convention now also covers
+// `status` (absent = UNVERIFIED, see validateClaimFields) and
+// `subjectEntityIds` (absent = []).
+//
+// Phase 3 addition: whenever `patch.status` actually changes the status,
+// this is the ONE code path that can happen through (there is no
+// separate "set status" function to accidentally bypass), so it's also
+// the one place a claimHistory row gets written - the lightweight audit
+// trail from docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 3 §14.
 // ---------------------------------------------------------------------------
 export async function updateClaim(claimId, patch) {
   const db = await openDb();
-  return tx(db, ['claims'], 'readwrite', async (t) => {
+  return tx(db, ['claims', 'entities', 'claimHistory'], 'readwrite', async (t) => {
     const store = t.objectStore('claims');
     const existing = await reqToPromise(store.get(claimId));
     if (!existing) return null;
-    const updated = { ...existing, ...patch };
+
+    const previousStatus = existing.status || 'UNVERIFIED';
+    let nextStatus = previousStatus;
+    if (patch.status !== undefined) {
+      nextStatus = String(patch.status).trim().toUpperCase();
+      if (!CLAIM_STATUSES.includes(nextStatus)) {
+        throw new ClaimValidationError(`Unknown claim status "${patch.status}". Must be one of: ${CLAIM_STATUSES.join(', ')}.`);
+      }
+    }
+
+    if (patch.subjectEntityIds !== undefined) {
+      const cleanSubjects = Array.isArray(patch.subjectEntityIds) ? [...new Set(patch.subjectEntityIds.filter((id) => typeof id === 'string' && id.trim()))] : [];
+      await assertClaimSubjectsExist(t, existing.investigationId, cleanSubjects);
+      patch = { ...patch, subjectEntityIds: cleanSubjects };
+    }
+
+    const updated = { ...existing, ...patch, status: nextStatus, updatedAt: new Date().toISOString() };
     await reqToPromise(store.put(updated));
+
+    if (nextStatus !== previousStatus) {
+      await reqToPromise(t.objectStore('claimHistory').add({
+        id: genId('chist'), investigationId: existing.investigationId, claimId,
+        previousStatus, newStatus: nextStatus, timestamp: new Date().toISOString()
+      }));
+    }
     return updated;
   });
+}
+
+export async function listClaimHistory(investigationId, claimId) {
+  const db = await openDb();
+  const rows = await tx(db, ['claimHistory'], 'readonly', (t) => reqToPromise(t.objectStore('claimHistory').index('claimId').getAll(claimId)));
+  return rows.filter((h) => h.investigationId === investigationId).sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
 }
 
 // ---------------------------------------------------------------------------
@@ -1095,4 +1308,159 @@ export async function listMentionsForEvidence(investigationId, evidenceId) {
 export async function deleteEntityMention(mentionId) {
   const db = await openDb();
   await tx(db, ['entityMentions'], 'readwrite', (t) => t.objectStore('entityMentions').delete(mentionId));
+}
+
+// ---------------------------------------------------------------------------
+// Claim Evidence (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 3): the
+// proper join table for a Claim's supports/contradicts/contextualizes
+// links - replaces the pre-existing `claims.links` inline array as the
+// thing new code reads/writes (see ensureClaimEvidenceBackfill above for
+// how existing `links` data was carried forward, once, into this store).
+//
+// This is NOT the evidence-requirement enforcement point - a Claim is
+// allowed zero evidence (see the Claims section above). What IS enforced
+// here, exactly like Phase 1/2's pattern: a link can only be created
+// between a claim and an evidence item that both actually exist in this
+// investigation, checked inside the same transaction as the write.
+// Multiple positions on the same claim can coexist by design - e.g. two
+// supporting rows and one contradicting row, all visible at once, never
+// collapsed into a single verdict (Phase 3 brief §2/§10: "Chronium must
+// preserve conflicting records").
+// ---------------------------------------------------------------------------
+async function assertClaimEvidenceReferencesExist(t, { investigationId, claimId, evidenceId }) {
+  const claim = await reqToPromise(t.objectStore('claims').get(claimId));
+  if (!claim || claim.investigationId !== investigationId) throw new ClaimEvidenceValidationError('Claim not found in this investigation.');
+  const evidence = await reqToPromise(t.objectStore('evidenceItems').get(evidenceId));
+  if (!evidence || evidence.investigationId !== investigationId) throw new ClaimEvidenceValidationError('Evidence item not found in this investigation.');
+}
+
+export async function createClaimEvidence(investigationId, fields) {
+  const shaped = validateClaimEvidenceFields({ investigationId, ...fields });
+  const db = await openDb();
+  return tx(db, ['claims', 'evidenceItems', 'claimEvidence'], 'readwrite', async (t) => {
+    await assertClaimEvidenceReferencesExist(t, shaped);
+    const link = { id: genId('cev'), ...shaped, createdAt: new Date().toISOString() };
+    await reqToPromise(t.objectStore('claimEvidence').add(link));
+    return link;
+  });
+}
+
+export async function listClaimEvidenceForClaim(investigationId, claimId) {
+  const db = await openDb();
+  const rows = await tx(db, ['claimEvidence'], 'readonly', (t) => reqToPromise(t.objectStore('claimEvidence').index('claimId').getAll(claimId)));
+  return rows.filter((c) => c.investigationId === investigationId).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+}
+
+// "USED IN CLAIMS" evidence-view integration (Phase 3 brief §7).
+export async function listClaimEvidenceForEvidence(investigationId, evidenceId) {
+  const db = await openDb();
+  const rows = await tx(db, ['claimEvidence'], 'readonly', (t) => reqToPromise(t.objectStore('claimEvidence').index('evidenceId').getAll(evidenceId)));
+  return rows.filter((c) => c.investigationId === investigationId).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+}
+
+// Removing a link never touches the claim or the evidence item, and
+// never touches any Finding - a Finding cites its own independent
+// evidenceIds (see below), not claimEvidence rows, so this is always
+// safe to delete without a blocking check.
+export async function deleteClaimEvidence(id) {
+  const db = await openDb();
+  await tx(db, ['claimEvidence'], 'readwrite', (t) => t.objectStore('claimEvidence').delete(id));
+}
+
+// ---------------------------------------------------------------------------
+// Claim Findings (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 3): the
+// investigator's current evidence-backed CONCLUSION about a claim. Named
+// `claimFindings` (store and functions) rather than `findings`
+// specifically to avoid any confusion with the pre-existing, unrelated
+// quantitativeFindings/qualitativeFindings stores (docs/RESEARCH_METHOD.md
+// mixed-methods workflow, tied to outline lanes, not claims).
+//
+// THE HARD RULE for this phase lives here, not on the Claim itself (see
+// the Claims section above for why): createClaimFinding()/
+// updateClaimFinding() are the only write path, and both run the same
+// two-part check as every other hard rule in this app - shape
+// (public/claims.js validateFindingFields, which throws
+// FindingEvidenceRequiredError for a DOCUMENTED_FACT/SUPPORTED_INFERENCE/
+// ALLEGATION with no evidenceIds) then existence (the claim and every
+// cited evidence id are real, in this investigation, checked inside the
+// same transaction as the write).
+// ---------------------------------------------------------------------------
+async function assertFindingReferencesExist(t, { investigationId, claimId, evidenceIds }) {
+  const claim = await reqToPromise(t.objectStore('claims').get(claimId));
+  if (!claim || claim.investigationId !== investigationId) throw new FindingValidationError('Claim not found in this investigation.');
+  const evidenceStore = t.objectStore('evidenceItems');
+  for (const evidenceId of evidenceIds) {
+    const evidence = await reqToPromise(evidenceStore.get(evidenceId));
+    if (!evidence || evidence.investigationId !== investigationId) {
+      throw new FindingValidationError(`Evidence item "${evidenceId}" was not found in this investigation - a finding can only cite evidence that actually exists.`);
+    }
+  }
+}
+
+export async function createClaimFinding(investigationId, fields) {
+  const shaped = validateFindingFields({ investigationId, ...fields });
+  const db = await openDb();
+  return tx(db, ['claims', 'evidenceItems', 'claimFindings'], 'readwrite', async (t) => {
+    await assertFindingReferencesExist(t, shaped);
+    const now = new Date().toISOString();
+    const finding = { id: genId('finding'), ...shaped, createdAt: now, updatedAt: now };
+    await reqToPromise(t.objectStore('claimFindings').add(finding));
+    return finding;
+  });
+}
+
+export async function updateClaimFinding(findingId, patch) {
+  const db = await openDb();
+  return tx(db, ['claims', 'evidenceItems', 'claimFindings'], 'readwrite', async (t) => {
+    const store = t.objectStore('claimFindings');
+    const existing = await reqToPromise(store.get(findingId));
+    if (!existing) return null;
+    // Re-validate the FULL merged result, exactly like updateRelationship/
+    // updateEntityMention - an update that drops evidenceIds to [] while
+    // keeping classification: DOCUMENTED_FACT must be rejected exactly
+    // like a create would be, not silently accepted because it's "just
+    // an edit."
+    const merged = { ...existing, ...patch };
+    const shaped = validateFindingFields({
+      investigationId: merged.investigationId, claimId: merged.claimId, conclusion: merged.conclusion,
+      classification: merged.classification, evidenceIds: merged.evidenceIds, notes: merged.notes, metadata: merged.metadata
+    });
+    await assertFindingReferencesExist(t, shaped);
+    const updated = { ...existing, ...shaped, updatedAt: new Date().toISOString() };
+    await reqToPromise(store.put(updated));
+    return updated;
+  });
+}
+
+export async function getClaimFinding(findingId) {
+  const db = await openDb();
+  return tx(db, ['claimFindings'], 'readonly', (t) => reqToPromise(t.objectStore('claimFindings').get(findingId)));
+}
+
+export async function listClaimFindings(investigationId) {
+  const db = await openDb();
+  const rows = await tx(db, ['claimFindings'], 'readonly', (t) => reqToPromise(t.objectStore('claimFindings').index('investigationId').getAll(investigationId)));
+  return rows.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+}
+
+export async function listClaimFindingsForClaim(investigationId, claimId) {
+  const db = await openDb();
+  const rows = await tx(db, ['claimFindings'], 'readonly', (t) => reqToPromise(t.objectStore('claimFindings').index('claimId').getAll(claimId)));
+  return rows.filter((f) => f.investigationId === investigationId).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+}
+
+// "FINDINGS INVOLVING THIS SUBJECT" (Phase 3 brief §8) - findings don't
+// carry their own subjectEntityIds; they inherit subjects through their
+// claim, so this composes listClaimsForEntity + listClaimFindingsForClaim
+// rather than duplicating subjectEntityIds onto every finding.
+export async function listClaimFindingsForEntity(investigationId, entityId) {
+  const claims = await listClaimsForEntity(investigationId, entityId);
+  const findingLists = await Promise.all(claims.map((c) => listClaimFindingsForClaim(investigationId, c.id)));
+  return findingLists.flat().sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+}
+
+// No cascade concerns - nothing else references a finding by id.
+export async function deleteClaimFinding(findingId) {
+  const db = await openDb();
+  await tx(db, ['claimFindings'], 'readwrite', (t) => t.objectStore('claimFindings').delete(findingId));
 }

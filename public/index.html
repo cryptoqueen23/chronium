@@ -369,6 +369,16 @@
               <p class="view-subtitle">Every evidence item explicitly linked to this subject, and the exact wording used there. Link a mention from the Evidence tab's "Link Subject" button.</p>
               <div id="entityMentionsList"></div>
             </div>
+
+            <div class="panel">
+              <h2>Claims involving this subject</h2>
+              <div id="entityClaimsList"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Findings involving this subject</h2>
+              <div id="entityFindingsList"></div>
+            </div>
           </div>
         </div>
 
@@ -405,13 +415,40 @@
           <div id="findingsPanel-claims" class="findings-subpanel">
             <div class="panel">
               <h2>Add claim</h2>
+              <p class="view-subtitle">Something being tested — a claim may exist with no evidence yet as an investigative lead. Status is always your own judgment call; Chronium never derives it from an evidence count.</p>
               <form id="claimForm" class="dialog-form dialog-form-compact">
-                <div class="field"><label for="claimTextInput">Claim</label><textarea id="claimTextInput" rows="2" required maxlength="500" placeholder="A specific factual assertion an evidence item supports or contradicts"></textarea></div>
-                <div class="field"><label id="claimEvidencePickerLabel">Supporting / contradicting evidence</label><div id="claimEvidencePicker" class="claim-evidence-picker" role="group" aria-labelledby="claimEvidencePickerLabel"></div></div>
+                <div class="field"><label for="claimTextInput">Claim</label><textarea id="claimTextInput" rows="2" required maxlength="500" placeholder="A specific factual assertion, e.g. Raymond Payne served on Copperas Cove City Council."></textarea></div>
+                <div class="field"><label for="claimStatusSelect">Status</label><select id="claimStatusSelect"></select></div>
+                <div class="field"><label id="claimSubjectsPickerLabel">Subjects (optional)</label><div id="claimSubjectsPicker" class="claim-evidence-picker" role="group" aria-labelledby="claimSubjectsPickerLabel"></div></div>
+                <div class="field"><label id="claimEvidencePickerLabel">Evidence (optional)</label><div id="claimEvidencePicker" class="claim-evidence-picker" role="group" aria-labelledby="claimEvidencePickerLabel"></div></div>
                 <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-primary">Add claim</button></div>
               </form>
             </div>
             <div id="claimsList"></div>
+          </div>
+
+          <div id="findingsPanel-findings" class="findings-subpanel hidden">
+            <div class="panel">
+              <h2>Create finding</h2>
+              <p class="view-subtitle">The investigator's current evidence-backed conclusion about a claim. A finding classified Documented Fact, Supported Inference, or Allegation must cite at least one evidence item — Chronium never presents an unsupported assertion as established.</p>
+              <form id="findingForm" class="dialog-form dialog-form-compact">
+                <div class="field"><label for="findingClaimSelect">Claim</label><select id="findingClaimSelect" required></select></div>
+                <div class="field"><label for="findingConclusionInput">Conclusion</label><textarea id="findingConclusionInput" rows="2" required maxlength="600" placeholder="e.g. Available official records identify Marc Payne, rather than Raymond Payne, as the Council member."></textarea></div>
+                <div class="field"><label for="findingClassificationSelect">Classification</label><select id="findingClassificationSelect" required></select></div>
+                <div class="field"><label id="findingEvidencePickerLabel">Evidence</label><div id="findingEvidencePicker" class="claim-evidence-picker" role="group" aria-labelledby="findingEvidencePickerLabel"></div></div>
+                <p id="findingFormStatus" class="hint"></p>
+                <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-primary" id="findingSubmitBtn">Add finding</button></div>
+              </form>
+            </div>
+            <div class="panel">
+              <h2>Findings</h2>
+              <div id="findingsList"></div>
+            </div>
+            <div class="panel">
+              <h2>Unresolved</h2>
+              <p class="view-subtitle">Claims still Unverified, and findings that are Unresolved Questions or where no evidence was located — the open part of the investigation. Never treat these as "this never happened."</p>
+              <div id="unresolvedList"></div>
+            </div>
           </div>
 
           <div id="findingsPanel-timeline" class="findings-subpanel hidden"></div>
