@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check": "node --check src/index.js && node --check src/schema.js && node --check public/app.js && node --check public/db.js && node --check public/ingest/adapters.js && node --check public/ingest/pipeline.js"
+    "check": "node --check src/index.js && node --check src/schema.js && node --check public/app.js && node --check public/db.js && node --check public/citations.js && node --check public/artifacts.js && node --check public/askCommands.js && node --check public/discover.js && node --check public/ingest/adapters.js && node --check public/ingest/pipeline.js"
   },
   "devDependencies": {
     "fflate": "^0.8.3",

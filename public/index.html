@@ -221,19 +221,49 @@
 
         <div id="workspacePanel-research" class="workspace-panel" role="tabpanel">
           <div class="research-hero">
-            <h2>What are you trying to find?</h2>
+            <h2>Ask Sources</h2>
+            <p class="view-subtitle">Ask a question ("where did the road money go?"), a research command ("make a timeline", "cite this in APA"), "what should I investigate next?", or "explain it simply" / "give me the professional version" — Chronium answers from your sources and computed facts first. AI is opt-in and always labeled.</p>
             <form id="investigationSearchForm" class="search compact" role="search">
-              <label class="sr-only" for="investigationQuery">Search this investigation</label>
+              <label class="sr-only" for="investigationQuery">Ask a question or search this investigation</label>
               <svg class="search-icon" width="16" height="16" aria-hidden="true"><use href="#icon-search"/></svg>
-              <input id="investigationQuery" autocomplete="off" placeholder="Search this investigation…" />
-              <button type="submit">Search</button>
+              <input id="investigationQuery" autocomplete="off" placeholder="Ask a question, or search your sources…" />
+              <button type="submit">Ask</button>
             </form>
             <div class="research-actions">
               <button type="button" class="btn btn-primary" data-action="import-research"><svg width="16" height="16"><use href="#icon-upload"/></svg>+ Add Files</button>
               <button type="button" class="btn" data-action="import-research"><svg width="16" height="16"><use href="#icon-plus"/></svg>+ Add Web Source</button>
             </div>
           </div>
-          <div id="investigationSearchResults" class="result-list"></div>
+
+          <div id="askSourcesAnswer" class="ask-sources-answer hidden">
+            <p id="askSourcesProvenance" class="hint"></p>
+            <p id="askSourcesComputedFact" class="hint hidden"></p>
+            <h3 id="askMySourcesHeading" class="ask-sources-section-heading hidden">My Sources</h3>
+            <div id="investigationSearchResults" class="result-list"></div>
+            <div id="askSourcesDiscover" class="hidden">
+              <h3 class="ask-sources-section-heading">Discovered <span class="hint" id="askDiscoverCoverage"></span></h3>
+              <div id="askSourcesDiscoverResults" class="result-list"></div>
+            </div>
+            <div id="askSourcesFootnotes"></div>
+
+            <div id="askSourcesResultActions" class="ask-sources-actions hidden">
+              <div class="menu-wrap">
+                <button type="button" class="btn btn-small" id="askSaveAddToBtn" data-kebab-toggle aria-haspopup="true" aria-expanded="false" aria-controls="askAddToMenu">Save Evidence · Add to… ▾</button>
+                <ul id="askAddToMenu" class="menu hidden" role="menu" aria-label="Add to"></ul>
+              </div>
+              <div class="menu-wrap">
+                <button type="button" class="btn btn-small" id="askCreateBtn" data-kebab-toggle aria-haspopup="true" aria-expanded="false" aria-controls="askCreateMenu">Create… ▾</button>
+                <ul id="askCreateMenu" class="menu hidden" role="menu" aria-label="Create"></ul>
+              </div>
+              <button type="button" class="btn btn-small" id="askRunAiBtn">Analyze with AI</button>
+            </div>
+
+            <p id="askSourcesStatus" class="hint"></p>
+            <div id="askSourcesAiResult"></div>
+            <div id="askSourcesArtifact"></div>
+          </div>
+
+          <div id="askSourcesHistory" class="ask-sources-history"></div>
 
           <div class="panel" id="outlinePanel">
             <h2>Research outline</h2>

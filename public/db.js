@@ -9,13 +9,13 @@
 // docs/RESEARCH_METHOD.md - quantitativeFindings/qualitativeFindings
 // (researcher-asserted findings with their inputs/formula/method or
 // supporting passages/methodology preserved), crossValidations (mixed-method
-// agreement/discrepancy judgments between one of each), and
+// agreement/discrepancy judgments between one of each),
 // qualitativeAnalysis (the last AI-assisted analysis result per
 // investigation, so revisiting the tab doesn't require re-running a paid AI
 // call).
 
 const DB_NAME = 'chronium';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 let dbPromise = null;
 
 function openDb() {
@@ -75,6 +75,10 @@ function openDb() {
       if (!db.objectStoreNames.contains('crossValidations')) {
         const xv = db.createObjectStore('crossValidations', { keyPath: 'id' });
         xv.createIndex('investigationId', 'investigationId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('askSourcesHistory')) {
+        const ask = db.createObjectStore('askSourcesHistory', { keyPath: 'id' });
+        ask.createIndex('investigationId', 'investigationId', { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -651,4 +655,50 @@ export async function createCrossValidation(investigationId, { quantitativeFindi
 export async function deleteCrossValidation(id) {
   const db = await openDb();
   await tx(db, ['crossValidations'], 'readwrite', (t) => t.objectStore('crossValidations').delete(id));
+}
+
+// ---------------------------------------------------------------------------
+// Claim updates - so far only used for excludedFromReport (a Claim can be
+// kept, with its Evidence intact, while being left out of the generated
+// Report - "remove this from the report but keep it as evidence"). Additive
+// optional field: an existing claim with no excludedFromReport key is
+// treated as included (see renderReportPanel, public/app.js).
+// ---------------------------------------------------------------------------
+export async function updateClaim(claimId, patch) {
+  const db = await openDb();
+  return tx(db, ['claims'], 'readwrite', async (t) => {
+    const store = t.objectStore('claims');
+    const existing = await reqToPromise(store.get(claimId));
+    if (!existing) return null;
+    const updated = { ...existing, ...patch };
+    await reqToPromise(store.put(updated));
+    return updated;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Ask Sources history - one row per question asked in the Research tab's
+// conversational query box, so past Q&A stays visible as a running log
+// (docs/CANON.md AI-last-resort rule: most rows never touch AI at all -
+// resultSummary/aiAnswer just capture what was actually shown, not a
+// transcript to feed back into future prompts - see docs/RESEARCH_METHOD.md
+// scoping note on single-turn Q&A for this first version).
+// ---------------------------------------------------------------------------
+export async function listAskSourcesHistory(investigationId) {
+  const db = await openDb();
+  const rows = await tx(db, ['askSourcesHistory'], 'readonly', (t) =>
+    reqToPromise(t.objectStore('askSourcesHistory').index('investigationId').getAll(investigationId))
+  );
+  return rows.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+export async function createAskSourcesHistoryEntry(investigationId, { question, intent, factState, resultSummary, aiAnswer }) {
+  const db = await openDb();
+  const entry = {
+    id: genId('ask'), investigationId, question: (question || '').trim(), intent: intent || 'search',
+    factState: factState || null, // Source Fact/Computed Fact/Investigative Lead/Unresolved/AI Analysis - public/askCommands.js classifyAskAnswer()
+    resultSummary: resultSummary || null, aiAnswer: aiAnswer || null, createdAt: new Date().toISOString()
+  };
+  await tx(db, ['askSourcesHistory'], 'readwrite', (t) => t.objectStore('askSourcesHistory').add(entry));
+  return entry;
 }

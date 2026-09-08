@@ -14,6 +14,16 @@ const AI_MAX_INPUT_CHARS = 12000; // roughly ~3000 tokens of evidence text, leav
 const AI_MAX_TOKENS = 1200;
 const AI_CACHE_TTL_S = 1800; // 30 min - re-running analysis on unchanged evidence is free within this window
 
+// Ask Sources cost controls - same shape as the Qualitative Analysis
+// constants above. Unlike Qualitative Analysis (a synthesis over the whole
+// evidence base), Ask Sources only ever reasons over the passages the
+// client already found deterministically via searchInvestigation(), so
+// even a single matched passage is enough to be worth an AI pass; zero
+// passages means there's nothing for AI to read, so that's the only
+// no-call gate.
+const ASK_MIN_PASSAGES = 1;
+const ASK_CACHE_TTL_S = 1800;
+
 const LOCAL_CORPORA = [
   { id: "copperas-cove", label: "Copperas Cove Investigation Corpus", data: corpus }
 ];
@@ -333,6 +343,11 @@ export default {
     if (url.pathname === "/api/analyze/qualitative") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
       return handleQualitativeAnalysis(request, env, ctx);
+    }
+
+    if (url.pathname === "/api/analyze/ask-sources") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
+      return handleAskSources(request, env, ctx);
     }
 
     if (url.pathname === "/api/search") {
@@ -994,6 +1009,114 @@ function parseAnalysisResponse(text) {
     };
   } catch {
     return { themes: [], patterns: [], contradictions: [], synthesis: text, parseError: true };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Ask Sources (AI-assisted, opt-in) - the last-resort layer behind Ask
+// Sources' deterministic search (docs/CANON.md "AI/Agents Are Last
+// Resort"). The client has already run searchInvestigation() and only
+// sends the passages it matched - never the full corpus - so this never
+// becomes a second, AI-driven search path. The system prompt hard-requires
+// citing a passage id for every sentence and saying so, not guessing, when
+// the passages don't contain the answer.
+// ---------------------------------------------------------------------------
+const ASK_SOURCES_SYSTEM_PROMPT = `You are answering a research question for Chronium, a "never lose the receipt" research tool, using ONLY the passages you are given below.
+Rules:
+- Answer only from the given passages. Never invent facts, names, dates, or figures that aren't present in them, and never use outside/general knowledge.
+- Cite the passage id(s) (the "p-..." ids given to you) that support every sentence of your answer.
+- If a previous question/answer is given, use it only to understand what "that," "it," or "this" in the current question refers to - never treat the previous answer itself as evidence. Every fact in your new answer must still be cited to a passage given for THIS question.
+- If the passages don't contain enough to answer the question, do not guess - set "insufficient" to true and use "missing" to say plainly what's not covered.
+- This is AI Analysis, not Source Fact or Computed Fact - never present your interpretation as established fact.
+- Respond with ONLY a JSON object, no other text, no markdown fences, matching exactly this shape:
+{"answer":string,"citedPassageIds":string[],"insufficient":boolean,"missing":string}`;
+
+async function handleAskSources(request, env, ctx) {
+  let body;
+  try { body = await request.json(); } catch { return json({ error: "Invalid JSON body" }, 400); }
+
+  const question = String(body?.question || "").slice(0, 500);
+  const passages = Array.isArray(body?.passages) ? body.passages : [];
+  // Principle #1 ("Conversation First"): follow-up questions must
+  // understand conversation context - "why did it change" only makes
+  // sense next to what "it" was. This is the one turn of context the
+  // client keeps (docs/CLAUDE_HANDOFF.md: single-turn Ask Sources, no
+  // full chat memory) - not stored or re-sent beyond this one call.
+  const previousQuestion = String(body?.previousQuestion || "").slice(0, 500);
+  const previousAnswer = String(body?.previousAnswer || "").slice(0, 1000);
+
+  if (!question.trim() || passages.length < ASK_MIN_PASSAGES) {
+    return json({ ok: true, skipped: true, reason: "No matched passages to analyze - ask a question that finds sources first.", result: null });
+  }
+
+  const { promptBody, truncated } = buildPassagePromptBody(passages);
+  const contextClause = previousQuestion
+    ? `Previous question: ${previousQuestion}\nPrevious answer: ${previousAnswer || "(not answered by AI)"}\n\n`
+    : "";
+  const prompt = `${contextClause}Question: ${question}\n\n${promptBody}`;
+  const contentHash = hashString(ASK_SOURCES_SYSTEM_PROMPT + "|" + prompt);
+
+  const cacheKey = new Request(`https://cache.internal/analyze/ask-sources?h=${contentHash}`);
+  const cacheHit = await caches.default.match(cacheKey);
+  if (cacheHit) return json({ ...(await cacheHit.json()), cached: true, truncated });
+
+  let provider;
+  try {
+    provider = getAIProvider(env);
+  } catch (e) {
+    return json({ ok: false, error: e.message }, 500);
+  }
+
+  const started = Date.now();
+  try {
+    const completion = await provider.complete({ system: ASK_SOURCES_SYSTEM_PROMPT, prompt, maxTokens: AI_MAX_TOKENS, env });
+    recordAiUsage(env, ctx, provider.id, { calls: 1, inputTokens: completion.inputTokens, outputTokens: completion.outputTokens, errors: 0 });
+
+    const result = parseAskSourcesResponse(completion.text);
+    const payload = { ok: true, result, model: completion.model, tookMs: Date.now() - started };
+
+    const cacheResponse = new Response(JSON.stringify(payload), { headers: { "content-type": "application/json", "cache-control": `public, max-age=${ASK_CACHE_TTL_S}` } });
+    ctx.waitUntil(caches.default.put(cacheKey, cacheResponse));
+
+    return json({ ...payload, cached: false, truncated });
+  } catch (e) {
+    recordAiUsage(env, ctx, provider.id, { calls: 1, inputTokens: 0, outputTokens: 0, errors: 1 });
+    console.error(`ask-sources analysis failed: ${e.message}`);
+    return json({ ok: false, error: "AI analysis is temporarily unavailable. Try again in a moment." }, 502);
+  }
+}
+
+// Builds the passages text block for the prompt, truncating to
+// AI_MAX_INPUT_CHARS rather than silently sending everything.
+function buildPassagePromptBody(passages) {
+  const lines = ["Matched passages:"];
+  let truncated = false;
+  let usedItems = 0;
+  for (const p of passages) {
+    const line = `- [${p.id}]${p.location ? " (" + p.location + ")" : ""}: ${String(p.excerptText || "").slice(0, 600)}`;
+    const candidate = lines.join("\n") + "\n" + line;
+    if (candidate.length > AI_MAX_INPUT_CHARS) { truncated = true; break; }
+    lines.push(line);
+    usedItems++;
+  }
+  if (truncated) lines.push(`\n(Answer is based on the first ${usedItems} of ${passages.length} matched passages - the full set was too large for one pass.)`);
+  return { promptBody: lines.join("\n"), truncated };
+}
+
+// Same not-trusted-unconditionally parsing pattern as parseAnalysisResponse.
+function parseAskSourcesResponse(text) {
+  try {
+    const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/```\s*$/, "");
+    const parsed = JSON.parse(cleaned);
+    return {
+      answer: typeof parsed.answer === "string" ? parsed.answer : "",
+      citedPassageIds: Array.isArray(parsed.citedPassageIds) ? parsed.citedPassageIds : [],
+      insufficient: !!parsed.insufficient,
+      missing: typeof parsed.missing === "string" ? parsed.missing : "",
+      parseError: false
+    };
+  } catch {
+    return { answer: text, citedPassageIds: [], insufficient: false, missing: "", parseError: true };
   }
 }
 

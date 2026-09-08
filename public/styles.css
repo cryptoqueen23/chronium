@@ -329,6 +329,40 @@ kbd { background: var(--surface-raised); border: 1px solid var(--border); border
 .research-sources-details summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 700; font-size: 14px; color: var(--text); }
 .research-sources-details[open] summary { margin-bottom: 6px; }
 
+/* Ask Sources: the deterministic answer area (provenance + Computed Fact
+   lines, Source Fact results), the opt-in AI Analysis card, generated
+   artifacts, and the running Q&A history log underneath it. */
+.ask-sources-answer { margin-top: 4px; }
+.ask-sources-answer .hint:empty { display: none; }
+.ask-sources-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0; }
+.ask-sources-history { margin-top: 26px; border-top: 1px solid var(--border); padding-top: 16px; }
+.ask-history-entry { border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 8px; }
+.ask-history-entry summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.ask-history-entry p { margin: 6px 0 2px; font-size: 13px; }
+
+.biblio-cite { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+.biblio-cite select { min-height: 44px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-raised); color: var(--text); padding: 0 10px; font-size: 12.5px; }
+.biblio-cite-output { font-style: italic; }
+.biblio-cite-output:empty { display: none; }
+
+/* Fact-state badges (docs/CANON.md Product Principles #11): every Ask
+   Sources answer is labeled one of five states, never left implicit. */
+.fact-badge { display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 2px 8px; border-radius: 999px; margin-right: 4px; }
+.fact-badge-confirmed, .fact-badge-computed { background: rgba(101,184,138,.15); color: var(--success); }
+.fact-badge-lead { background: rgba(214,168,75,.15); color: var(--accent); }
+.fact-badge-unresolved { background: var(--surface-raised); color: var(--text-secondary); border: 1px solid var(--border); }
+.fact-badge-ai-analysis { border: 1px solid #5b4a8a; color: #b6a7dd; }
+
+/* Adaptive Research Depth (Principle #21): "explain" hides technical
+   clutter (raw metadata/hash/mime) without altering the passage text
+   itself - never paraphrased, since that would risk misquoting a source. */
+.depth-explain .result-details { display: none; }
+
+/* Discover Sources (docs/CANON.md Product Principles #9): a distinct
+   section, never merged into "My Sources" - discovery is not yet
+   evidence until reviewed/saved. */
+.ask-sources-section-heading { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); }
+
 .import-zone-inner { border: 1px dashed var(--border); border-radius: var(--radius-lg); padding: 32px 22px; text-align: center; background: var(--bg); transition: border-color .15s, background .15s; }
 .import-zone-inner.dragover { border-color: var(--accent); background: var(--surface); }
 .import-formats { color: var(--text-secondary); font-size: 12.5px; letter-spacing: .02em; margin: 0 0 4px; }

@@ -7,10 +7,18 @@ import {
   getQualitativeAnalysis, saveQualitativeAnalysis,
   listQuantitativeFindings, createQuantitativeFinding, deleteQuantitativeFinding,
   listQualitativeFindings, createQualitativeFinding, deleteQualitativeFinding,
-  listCrossValidations, createCrossValidation, deleteCrossValidation
+  listCrossValidations, createCrossValidation, deleteCrossValidation,
+  listAskSourcesHistory, createAskSourcesHistoryEntry, updateClaim
 } from './db.js';
 import { ingestFiles, ingestZip } from './ingest/pipeline.js';
 import { openOverlay, openMenu, confirmDialog } from './ui.js';
+import { formatCitation, buildFootnotes, CITATION_STYLES, CITATION_STYLE_LABELS } from './citations.js';
+import { renderSourceIndex, renderEvidenceTable, renderClaimEvidenceMatrix, renderQuantitativeTable } from './artifacts.js';
+import {
+  parseAskSourcesCommand, computeDeterministicFact, extractSearchTerms, ADD_TO_TARGETS, CREATE_TARGETS,
+  classifyAskAnswer, FACT_STATE_LABELS, parseDepthRequest, DEPTH_LABELS
+} from './askCommands.js';
+import { discoverSources, summarizeDiscoverCoverage } from './discover.js';
 
 // ---------------------------------------------------------------------------
 // Element refs
@@ -35,6 +43,22 @@ const typeFilter = document.querySelector('#typeFilter');
 const investigationSearchForm = document.querySelector('#investigationSearchForm');
 const investigationQuery = document.querySelector('#investigationQuery');
 const investigationSearchResults = document.querySelector('#investigationSearchResults');
+
+const askSourcesAnswer = document.querySelector('#askSourcesAnswer');
+const askSourcesProvenance = document.querySelector('#askSourcesProvenance');
+const askSourcesComputedFact = document.querySelector('#askSourcesComputedFact');
+const askMySourcesHeading = document.querySelector('#askMySourcesHeading');
+const askSourcesDiscover = document.querySelector('#askSourcesDiscover');
+const askSourcesDiscoverResults = document.querySelector('#askSourcesDiscoverResults');
+const askDiscoverCoverage = document.querySelector('#askDiscoverCoverage');
+const askSourcesResultActions = document.querySelector('#askSourcesResultActions');
+const askAddToMenu = document.querySelector('#askAddToMenu');
+const askCreateMenu = document.querySelector('#askCreateMenu');
+const askRunAiBtn = document.querySelector('#askRunAiBtn');
+const askSourcesStatus = document.querySelector('#askSourcesStatus');
+const askSourcesAiResult = document.querySelector('#askSourcesAiResult');
+const askSourcesArtifact = document.querySelector('#askSourcesArtifact');
+const askSourcesHistoryEl = document.querySelector('#askSourcesHistory');
 
 const dashboardSummary = document.querySelector('#dashboardSummary');
 const facetBar = document.querySelector('#facetBar');
@@ -66,6 +90,20 @@ let lastDashboardData = null; // { docs, records, duplicateEntries, skipped, err
 let toastTimer = null;
 let closeNav = null;
 const activeCloses = {};
+
+// Ask Sources: last deterministic result set + the question that produced
+// it, so the "Add to.../Create..." menus and the opt-in AI button act on
+// exactly what's on screen rather than re-querying.
+let lastAskResults = []; // My Sources + Discover Sources, merged - AI/footnotes/citations/mutations read this
+let lastAskMyResults = []; // My Sources only - what renderAskSourcesResultsAtDepth re-renders under "My Sources"
+let lastAskDiscoverResults = []; // Discover Sources only - re-rendered under "Discovered"
+let lastAskDiscoverConnectors = []; // last Discover coverage, for depth re-presentation without re-searching
+let lastAskQuestion = '';
+let lastAskAiAnswer = ''; // last AI answer text, for follow-up context only - never re-asserted as a fact (Principle #1/#19)
+let previousAskQuestion = ''; // the turn before the current one - follow-up context, one turn deep
+let previousAskAiAnswer = '';
+let lastAskDepth = 'research'; // Adaptive Research Depth (Principle #21) - presentation only, same evidence
+let lastBibliographyRecords = [];
 
 // P0 "Make Investigation Workspace User-Friendly": 4 primary sections
 // instead of 9 - a first-time user shouldn't need to understand Sources,
@@ -179,9 +217,19 @@ function resultRow(x, mode) {
   const passageBlock = x.matchPassage
     ? `<p class="result-snippet result-passage">${highlightTerm(esc(x.matchPassage), x.matchTerm)}</p>`
     : (x.snippet ? `<p class="result-snippet result-passage">${highlightTerm(esc(x.snippet).slice(0, 450), lastQuery)}</p>` : '');
+  // A Discover Sources hit (mode 'search', not yet in this investigation)
+  // with real retrieved content (x.snippet) is evidence-able in one click
+  // without a separate "save the source" step first - the button below
+  // saves the source AND creates the Evidence Item together, atomically,
+  // so an Evidence Item's sourceRecordId is never left pointing at
+  // nothing (explicit product requirement: one-click save, but asking
+  // about a retrieved source never requires saving it first - saving is
+  // only required to turn it into a structured Evidence Item).
   const saveEvidenceAction = x.matchPassage
     ? `<button type="button" class="save-evidence-btn" data-record-id="${attr(x.id)}" data-excerpt="${attr(x.matchPassageRaw || x.matchPassage)}" data-location="${attr(x.matchPage ? 'p.' + x.matchPage : '')}">Save as Evidence</button>`
-    : '';
+    : (!x.matchPassage && x.snippet && mode === 'search'
+        ? `<button type="button" class="save-discover-evidence-btn" data-key="${attr(canonicalKeyOf(x))}" data-excerpt="${attr(x.snippet.slice(0, 600))}">Save to Investigation as Evidence</button>`
+        : '');
   // Archive/live links are buttons, not plain <a> tags: Chronium checks the
   // link resolves (and, for an archived copy, tries another preserved copy
   // of the same page from a different archive) before ever navigating -
@@ -368,7 +416,7 @@ form.addEventListener('submit', async (e) => {
     if (!res.ok) throw new Error(data.error || 'Search failed');
     current = [...(data.results || []), ...libraryHits];
     title.textContent = `${current.length} historical result${current.length === 1 ? '' : 's'}`;
-    renderCoverage(data, libraryHits);
+    coverage.innerHTML = renderCoverage(data, libraryHits);
     buildFilters(current);
     renderResults();
     resultsSection.classList.remove('hidden');
@@ -395,6 +443,11 @@ function humanizeConnectorError(c) {
   return `${c.source} temporarily unavailable.`;
 }
 
+// Returns the coverage-summary HTML string (never writes to the DOM
+// itself) so both the Home page's universal search and Ask Sources'
+// "Discover Sources" layer (public/app.js runAskSourcesQuestion) can
+// reuse the exact same Coverage Verdict rendering instead of duplicating
+// it - docs/CANON.md "Never Fake Coverage" applies equally to both.
 function renderCoverage(data, libraryHits) {
   // "Historical archives" (Wayback, Arquivo.pt, Common Crawl, ...) and "My
   // research" (the investigation corpus connector, plus this browser's
@@ -447,7 +500,7 @@ function renderCoverage(data, libraryHits) {
     ? `<details class="source-status"><summary>Source status</summary><ul>${statusItems.join('')}</ul></details>`
     : '';
 
-  coverage.innerHTML = `${banner}${contradictionCallout}${summary}${grid}${details}`;
+  return `${banner}${contradictionCallout}${summary}${grid}${details}`;
 }
 function buildFilters(items) {
   const sources = [...new Set(items.map((x) => x.source).filter(Boolean))].sort();
@@ -464,7 +517,11 @@ function renderResults() {
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('.save-btn');
   if (!btn || btn.disabled || !activeInvestigationId) return;
+  // Discover Sources results (Ask Sources, Research tab) live in
+  // lastAskResults, not the Home page's `current` array - checked before
+  // the expensive full-investigation fallback below.
   const item = current.find((r) => canonicalKeyOf(r) === btn.dataset.key)
+    || lastAskResults.find((r) => canonicalKeyOf(r) === btn.dataset.key)
     || (await searchInvestigation(activeInvestigationId, '', 1000)).find((r) => canonicalKeyOf(r) === btn.dataset.key);
   if (!item) return;
   btn.disabled = true;
@@ -502,6 +559,31 @@ document.addEventListener('click', async (e) => {
     });
     btn.textContent = 'Saved to Evidence';
     showToast('Saved this passage as Evidence — provenance and citation carried over automatically.');
+  } catch (err) {
+    btn.disabled = false;
+    showToast('Could not save this as evidence: ' + err.message, true);
+  }
+});
+
+// Discover Sources -> Evidence, in one click: saves the discovered
+// record into the investigation (dedup-safe by canonical key, same as
+// the Home page's save-btn) AND creates the Evidence Item against its
+// real new record id, atomically - never leaves an Evidence Item's
+// sourceRecordId pointing at a source that was never actually saved.
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.save-discover-evidence-btn');
+  if (!btn || !activeInvestigationId) return;
+  const record = lastAskResults.find((r) => canonicalKeyOf(r) === btn.dataset.key);
+  if (!record) { showToast('Could not find this source to save — try asking again.', true); return; }
+  btn.disabled = true;
+  try {
+    const saved = await saveRecordToInvestigation(activeInvestigationId, record);
+    savedKeys.add(canonicalKeyOf(record));
+    await createEvidenceItem(activeInvestigationId, {
+      sourceRecordId: saved.id, excerptType: 'quote', location: '', outlineLaneId: null, excerptText: btn.dataset.excerpt
+    });
+    btn.textContent = 'Saved to Evidence';
+    showToast('Saved this discovered source and passage as Evidence — provenance preserved.');
   } catch (err) {
     btn.disabled = false;
     showToast('Could not save this as evidence: ' + err.message, true);
@@ -923,6 +1005,8 @@ async function setActiveInvestigation(id) {
   localStorage.setItem('chronium.activeInvestigation', id);
   savedKeys = id ? await getSavedCanonicalKeys(id) : new Set();
   lastDashboardData = null;
+  lastAskResults = []; lastAskMyResults = []; lastAskDiscoverResults = []; lastAskDiscoverConnectors = [];
+  lastAskQuestion = ''; lastAskAiAnswer = ''; previousAskQuestion = ''; previousAskAiAnswer = ''; // never carry Ask Sources context across investigations
   const inv = id ? investigations.find((i) => i.id === id) : null;
   navWorkspaceGroup.hidden = !id;
   if (inv) navWorkspaceTitle.textContent = `Workspace · ${inv.name}`;
@@ -980,6 +1064,9 @@ async function renderWorkspaceView(tab, subtab) {
     renderOverviewPanel();
     renderSourcesPanel();
     await renderOutlinePanel();
+    askSourcesAnswer.classList.add('hidden');
+    investigationQuery.value = '';
+    await renderAskSourcesHistory();
   } else if (tab === 'evidence') {
     const activeSubtab = EVIDENCE_SUBTABS.some((t) => t.id === subtab) ? subtab : 'items';
     lastEvidenceSubtab = activeSubtab;
@@ -1121,14 +1208,518 @@ function renderTimelinePanel() {
   </div>`;
 }
 
+// ---------------------------------------------------------------------------
+// Ask Sources (Research tab): a conversational front end over the same
+// structured investigation state, source-first and deterministic-first per
+// docs/CANON.md's "AI/Agents Are Last Resort" rule. A typed question is
+// routed by parseAskSourcesCommand (public/askCommands.js) to one of:
+//   search        - deterministic searchInvestigation() + a Computed Fact
+//                    line, rendered with the existing resultRow() cards
+//                    (Source Fact layer - no new rendering code needed)
+//   create         - render/jump to one of the artifact views (§ below)
+//   add-to         - a narrow, deterministic mutation (evidence/outline/claim)
+//   exclude-from-report - toggles a Claim's excludedFromReport flag
+// AI only ever enters via the explicit "Analyze with AI" button below, and
+// only over the passages already found deterministically - never the
+// trigger for search, artifacts, citations, or any mutation.
+// ---------------------------------------------------------------------------
+askAddToMenu.innerHTML = ADD_TO_TARGETS.map((t) => `<li role="none"><button type="button" role="menuitem" class="menu-item" data-add-to="${attr(t.id)}">${esc(t.label)}</button></li>`).join('');
+askCreateMenu.innerHTML = CREATE_TARGETS.map((t) => `<li role="none"><button type="button" role="menuitem" class="menu-item" data-create="${attr(t.id)}">${esc(t.label)}</button></li>`).join('');
+
 investigationSearchForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!activeInvestigationId) return;
   const q = investigationQuery.value.trim();
-  if (!q) { investigationSearchResults.innerHTML = ''; return; }
-  const results = await searchInvestigation(activeInvestigationId, q, 50);
-  investigationSearchResults.innerHTML = results.length ? results.map((r) => resultRow(r, 'library')).join('') : '<p class="status">No matches in this investigation.</p>';
+  if (!q) { askSourcesAnswer.classList.add('hidden'); return; }
+  await runAskSourcesQuestion(q);
 });
+
+async function runAskSourcesQuestion(q) {
+  // Principle #1 ("Conversation First"): follow-up questions must
+  // understand conversation context - captured before lastAskQuestion is
+  // overwritten below, so "compare that with 2021" can fall back to the
+  // previous question's topic, and the AI call can resolve "why did it
+  // change" against what was just discussed. One turn of context only -
+  // Ask Sources stays single-turn/stateless beyond that (confirmed scope).
+  const priorQuestion = lastAskQuestion;
+
+  // Adaptive Research Depth (Principle #21): a pure re-presentation
+  // request ("now give me the professional version with footnotes")
+  // re-renders the SAME lastAskResults at a new depth - no re-search, no
+  // new AI call, same evidence/provenance, only the view changes.
+  const depthReq = parseDepthRequest(q);
+  if (depthReq.depth && depthReq.isRepresentOnly && lastAskResults.length) {
+    lastAskDepth = depthReq.depth;
+    askSourcesAnswer.classList.remove('hidden');
+    renderAskSourcesResultsAtDepth(lastAskMyResults, lastAskDiscoverResults, lastAskDiscoverConnectors, lastAskDepth);
+    askSourcesStatus.textContent = `Showing the same research at ${DEPTH_LABELS[lastAskDepth]} depth — same evidence, same provenance, only the presentation changed.`;
+    await appendAskHistory(q, 'depth:' + lastAskDepth, `Re-presented previous answer at ${DEPTH_LABELS[lastAskDepth]} depth`, null);
+    return;
+  }
+  lastAskDepth = depthReq.depth || 'research';
+
+  previousAskQuestion = priorQuestion;
+  previousAskAiAnswer = lastAskAiAnswer;
+  lastAskQuestion = q;
+  lastAskAiAnswer = '';
+  const cmd = parseAskSourcesCommand(q);
+
+  askSourcesAnswer.classList.remove('hidden');
+  askSourcesAiResult.innerHTML = '';
+  askSourcesArtifact.innerHTML = '';
+  askSourcesStatus.textContent = '';
+  investigationSearchResults.innerHTML = '';
+  askSourcesProvenance.innerHTML = '';
+  askSourcesComputedFact.classList.add('hidden');
+  askSourcesComputedFact.textContent = '';
+  askMySourcesHeading.classList.add('hidden');
+  askSourcesDiscover.classList.add('hidden');
+  askSourcesDiscoverResults.innerHTML = '';
+  askDiscoverCoverage.textContent = '';
+  askSourcesResultActions.classList.add('hidden');
+  clearAskSourcesFootnotes();
+
+  if (cmd.intent === 'leads') {
+    await handleLeadsIntent();
+    await appendAskHistory(q, 'leads', 'Investigative leads shown', null);
+    return;
+  }
+  if (cmd.intent === 'unresolved') {
+    await handleUnresolvedIntent();
+    await appendAskHistory(q, 'unresolved', 'Unresolved items shown', null);
+    return;
+  }
+  if (cmd.intent === 'create' || cmd.intent === 'clarify-table') {
+    await handleCreateIntent(cmd, q);
+    await appendAskHistory(q, cmd.intent, cmd.target ? `Created/opened: ${cmd.target.replace(/-/g, ' ')}` : 'Asked which table to build');
+    return;
+  }
+  if (cmd.intent === 'add-to') {
+    await runAskSourcesAddTo(cmd.target);
+    return;
+  }
+  if (cmd.intent === 'exclude-from-report') {
+    await handleExcludeFromReport(q);
+    return;
+  }
+
+  // Deterministic search - the Source Fact layer, over My Sources first
+  // (docs/CANON.md Product Principles: search priority is existing
+  // investigation evidence before external discovery). A follow-up like
+  // "compare that with 2021" often has too few terms of its own to match
+  // anything on its own - if the question alone finds nothing and there
+  // was a previous question this turn, retry once with both questions'
+  // terms combined before giving up (still plain deterministic
+  // substring search, no AI involved in this fallback).
+  let terms = extractSearchTerms(q);
+  // If a depth cue was detected (e.g. "explain it simply") and every word
+  // was stripped as filler, extractSearchTerms's raw-question fallback
+  // would hand the literal filler words ("it") back to searchInvestigation
+  // as substring-match terms - a false-positive flood, not "no results."
+  // Treat a contextless bare depth request as having nothing to search,
+  // never a noisy guess (Principle #17, Never Fake Coverage).
+  const isBareDepthPhrase = depthReq.depth && terms.trim().toLowerCase() === q.trim().toLowerCase();
+  let myResults = isBareDepthPhrase ? [] : await searchInvestigation(activeInvestigationId, terms, 50);
+  let usedFollowUpContext = false;
+  if (!myResults.length && priorQuestion && !isBareDepthPhrase) {
+    const combinedTerms = extractSearchTerms(`${priorQuestion} ${q}`);
+    if (combinedTerms !== terms) {
+      const combinedResults = await searchInvestigation(activeInvestigationId, combinedTerms, 50);
+      if (combinedResults.length) { myResults = combinedResults; usedFollowUpContext = true; terms = combinedTerms; }
+    }
+  }
+
+  // Discover Sources (public/discover.js): search outward - current web,
+  // historical archives, public datasets - through the provider-neutral
+  // seam, never a hard-wired endpoint call here. Runs whenever there's a
+  // real topic to search; never for a bare depth phrase. A Discover
+  // failure never breaks the answer - it just means nothing came back
+  // externally this time, reported honestly, not silently swallowed.
+  let discoverResults = [];
+  let discoverConnectors = [];
+  let discoverMode = 'topic';
+  if (!isBareDepthPhrase && terms.trim()) {
+    try {
+      const discovered = await discoverSources(terms, { limit: 25 });
+      discoverConnectors = discovered.connectors;
+      discoverMode = discovered.mode;
+      // Dedup by canonical key (URL/content identity) against what's
+      // already in this investigation - a source already saved shows up
+      // in "My Sources" above, never duplicated as "newly discovered."
+      const myKeys = new Set([...savedKeys, ...myResults.map((r) => canonicalKeyOf(r))]);
+      discoverResults = discovered.results
+        .filter((r) => !myKeys.has(canonicalKeyOf(r)))
+        .sort((a, b) => authorityRank(a) - authorityRank(b)); // primary/authoritative & archived-primary first
+    } catch (err) {
+      discoverConnectors = [{ source: 'Discover Sources', kind: 'discover', verdict: 'provider-unavailable', error: err.message }];
+    }
+  }
+
+  lastAskResults = [...myResults, ...discoverResults];
+  lastAskMyResults = myResults;
+  lastAskDiscoverResults = discoverResults;
+  lastAskDiscoverConnectors = discoverConnectors;
+  renderAskSourcesResultsAtDepth(myResults, discoverResults, discoverConnectors, lastAskDepth);
+
+  const sourceCount = new Set(myResults.map((r) => r.id)).size;
+  const passageCount = myResults.filter((r) => passageTextOf(r)).length;
+  const discoverCount = discoverResults.length;
+  // Product Principles #11: every answer is labeled one of five states -
+  // never left implicit, never silently blurred into another. Discovery
+  // alone is never "Confirmed" - see classifyAskAnswer.
+  const factState = classifyAskAnswer({ passageCount, sourceCount, discoverCount });
+  const badge = `<span class="fact-badge fact-badge-${factState}">${esc(FACT_STATE_LABELS[factState])}</span> `;
+  const depthNote = lastAskDepth !== 'research' ? ` · ${DEPTH_LABELS[lastAskDepth]} depth` : '';
+  const discoverNote = discoverCount ? ` · ${discoverCount} discovered externally` : '';
+  if (myResults.length || discoverCount) {
+    askSourcesProvenance.innerHTML = `${badge}Answered from ${sourceCount} source${sourceCount === 1 ? '' : 's'} · ${passageCount} passage${passageCount === 1 ? '' : 's'}${discoverNote}${usedFollowUpContext ? ' · using context from your previous question' : ''}${depthNote}`;
+  } else {
+    // Unresolved must say WHERE Chronium searched, not just "no results"
+    // (explicit product requirement + Principle #17, Never Fake Coverage).
+    askSourcesProvenance.innerHTML = `${badge}No matches in your sources for this question. ${describeSearchCoverage(discoverConnectors, discoverMode)}`;
+  }
+
+  const computed = computeDeterministicFact(q, myResults);
+  if (computed) { askSourcesComputedFact.classList.remove('hidden'); askSourcesComputedFact.textContent = computed; }
+
+  askSourcesResultActions.classList.toggle('hidden', myResults.length === 0 && discoverCount === 0);
+  askRunAiBtn.disabled = lastAskResults.filter((r) => passageTextOf(r)).length === 0;
+  askRunAiBtn.textContent = 'Analyze with AI';
+
+  await appendAskHistory(q, 'search',
+    (myResults.length || discoverCount)
+      ? `${sourceCount} source${sourceCount === 1 ? '' : 's'}, ${passageCount} passage${passageCount === 1 ? '' : 's'}${discoverCount ? `, ${discoverCount} discovered externally` : ''}`
+      : 'No matches anywhere searched',
+    null, factState);
+}
+
+// A source already retrieved with real content (a matched passage, or an
+// external connector's own full-text snippet) is citable/analyzable
+// immediately - saving to the investigation is never a precondition
+// (explicit product requirement). Uniform across My Sources and Discover
+// Sources so the rest of Ask Sources doesn't need to know which is which.
+function passageTextOf(r) { return r.matchPassageRaw || r.matchPassage || r.snippet || null; }
+
+// Search priority (explicit product requirement): primary/authoritative
+// sources and archived primary captures before other discovered results.
+// A light, honest, deterministic heuristic over real fields - never a
+// fabricated reliability score.
+function authorityRank(r) {
+  const host = hostnameOf(r.originalUrl || r.archiveUrl || '');
+  if (/\.(gov|mil)$/.test(host)) return 0;
+  if (r.sourceKind === 'archive-connector') return 1;
+  return 2;
+}
+
+function renderDiscoverSection(shownResults, connectors, totalCount) {
+  if (!shownResults.length) {
+    askSourcesDiscover.classList.add('hidden');
+    askSourcesDiscoverResults.innerHTML = '';
+    askDiscoverCoverage.textContent = '';
+    return;
+  }
+  askSourcesDiscover.classList.remove('hidden');
+  const restNote = totalCount > shownResults.length
+    ? `<p class="hint">+${totalCount - shownResults.length} more discovered — ask "give me everything" for the full list.</p>` : '';
+  askSourcesDiscoverResults.innerHTML = shownResults.map((r) => resultRow(r, 'search')).join('') + restNote;
+  const { found } = summarizeDiscoverCoverage(connectors);
+  askDiscoverCoverage.textContent = found.length ? `via ${found.map((c) => c.source).join(', ')}` : '';
+}
+
+// Unresolved (Product Principles #11/#12 + explicit product requirement):
+// must name which source groups were searched, which were unavailable,
+// and what wasn't searched at all - never a bare "nothing found."
+function describeSearchCoverage(connectors, mode) {
+  const { found, noMatch, unavailable } = summarizeDiscoverCoverage(connectors);
+  const bits = ['Searched: your sources.'];
+  if (found.length) bits.push(`Also found matches at ${found.map((c) => c.source).join(', ')} (see Discovered above, or this may already be in your sources).`);
+  if (noMatch.length) bits.push(`No matches at: ${noMatch.map((c) => c.source).join(', ')}.`);
+  if (unavailable.length) bits.push(`Unavailable right now (coverage unknown, not confirmed absent): ${unavailable.map((c) => c.source).join(', ')}.`);
+  if (mode === 'topic') bits.push('Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.');
+  return bits.join(' ');
+}
+
+// Adaptive Research Depth (Principle #21): same two result arrays (My
+// Sources, Discover Sources), same resultRow() markup, just how much of
+// each is shown and whether a Footnotes block is appended - not four
+// separate research engines. Takes both arrays explicitly (rather than
+// reading module state) so it works identically whether called right
+// after a fresh search or when re-presenting a past turn at a new depth.
+function renderAskSourcesResultsAtDepth(myResults, discoverResults, discoverConnectors, depth) {
+  investigationSearchResults.classList.toggle('depth-explain', depth === 'explain');
+  const cap = depth === 'quick' ? 1 : depth === 'explain' ? 3 : Infinity;
+  const shownMy = myResults.slice(0, cap);
+  const shownDiscover = discoverResults.slice(0, cap);
+  askMySourcesHeading.classList.toggle('hidden', myResults.length === 0);
+  const restNote = myResults.length > shownMy.length
+    ? `<p class="hint">+${myResults.length - shownMy.length} more source${myResults.length - shownMy.length === 1 ? '' : 's'} — ask "give me everything" for the full list.</p>` : '';
+  investigationSearchResults.innerHTML = shownMy.map((r) => resultRow(r, 'library')).join('') + restNote;
+  renderDiscoverSection(shownDiscover, discoverConnectors, discoverResults.length);
+  // Footnotes cover everything citable this turn - My Sources AND
+  // Discover Sources - a discovered-but-unsaved source is fully citable
+  // (explicit product requirement). Uses the full (untruncated) sets, not
+  // just what's visually shown at this depth.
+  if (depth === 'professional') renderAskSourcesFootnotes([...myResults, ...discoverResults]); else clearAskSourcesFootnotes();
+}
+
+function clearAskSourcesFootnotes() {
+  const el = document.querySelector('#askSourcesFootnotes');
+  if (el) el.innerHTML = '';
+}
+
+// Citations/Footnotes (Principle #14): built once from stored source
+// metadata via public/citations.js - never invented, never AI-authored.
+function renderAskSourcesFootnotes(results) {
+  const container = document.querySelector('#askSourcesFootnotes');
+  if (!container) return;
+  const seen = new Set();
+  const records = results.filter((r) => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
+  if (!records.length) { container.innerHTML = ''; return; }
+  const locById = new Map(results.filter((r) => passageTextOf(r)).map((r) => [r.id, r.matchPage ? `p.${r.matchPage}` : '']));
+  const { list } = buildFootnotes(records, 'chicago', (r) => locById.get(r.id) || '');
+  container.innerHTML = `<div class="panel"><h2>Footnotes</h2><ol class="report-list">${list.map((f) => `<li>${esc(f.text)}</li>`).join('')}</ol></div>`;
+}
+
+// "What don't we know?" - Unresolved: outline gaps + past questions Ask
+// Sources genuinely couldn't answer (Product Principles #11/#12).
+async function handleUnresolvedIntent() {
+  const [outline, evidenceItems, history] = await Promise.all([
+    getOutline(activeInvestigationId),
+    listEvidenceItems(activeInvestigationId),
+    listAskSourcesHistory(activeInvestigationId)
+  ]);
+  const gapWarnings = computeGapWarnings(outline, evidenceItems);
+  const unresolvedQuestions = history.filter((h) => h.factState === 'unresolved' && h.question !== lastAskQuestion);
+  const gapItems = gapWarnings.map(({ lane, count, reason }) => `<li><strong>${esc(lane.label)}</strong> — ${reason === 'unconfirmed-answered' ? 'marked answered but no evidence linked' : count === 0 ? 'no evidence linked yet' : `only ${count} evidence item${count === 1 ? '' : 's'} linked`}.</li>`).join('');
+  const questionItems = unresolvedQuestions.slice(0, 15).map((h) => `<li>“${esc(h.question)}”${h.aiAnswer ? ' — ' + esc(h.aiAnswer.slice(0, 140)) : ''}</li>`).join('');
+  askSourcesArtifact.innerHTML = `<div class="panel">
+    <h2>What we don't know yet <span class="fact-badge fact-badge-unresolved">${esc(FACT_STATE_LABELS.unresolved)}</span></h2>
+    <p class="view-subtitle">Evidence is insufficient or conflicting here — this is a status, not a conclusion (docs/CANON.md Product Principles #12: absence of a record is not proof of anything).</p>
+    ${gapItems ? `<h3 style="margin:14px 0 6px;font-size:13px">Research outline gaps</h3><ul class="report-list">${gapItems}</ul>` : ''}
+    ${questionItems ? `<h3 style="margin:14px 0 6px;font-size:13px">Questions Ask Sources couldn't answer</h3><ul class="report-list">${questionItems}</ul>` : ''}
+    ${!gapItems && !questionItems ? '<p class="status">Nothing unresolved yet — no outline gaps, and every question asked so far was answerable from your sources.</p>' : ''}
+  </div>`;
+}
+
+// "What should I investigate next?" - Investigative Leads: least-covered
+// outline sections first, plus past questions that matched sources by
+// topic but never confirmed an exact passage. Prioritized deterministically
+// (weakest coverage first), never by AI guesswork.
+async function handleLeadsIntent() {
+  const [outline, evidenceItems, history] = await Promise.all([
+    getOutline(activeInvestigationId),
+    listEvidenceItems(activeInvestigationId),
+    listAskSourcesHistory(activeInvestigationId)
+  ]);
+  const lanes = (outline.lanes || []).filter((l) => l.status !== 'answered')
+    .map((l) => ({ lane: l, count: evidenceItems.filter((e) => e.outlineLaneId === l.id).length }))
+    .sort((a, b) => a.count - b.count || (a.lane.coveragePct ?? 0) - (b.lane.coveragePct ?? 0));
+  const leadQuestions = history.filter((h) => h.factState === 'lead' && h.question !== lastAskQuestion);
+  const laneItems = lanes.slice(0, 10).map(({ lane, count }) => `<li><strong>${esc(lane.label)}</strong> — ${count} evidence item${count === 1 ? '' : 's'} so far${lane.coveragePct != null ? `, ~${lane.coveragePct}% coverage` : ''}.</li>`).join('');
+  const questionItems = leadQuestions.slice(0, 15).map((h) => `<li>“${esc(h.question)}” — sources matched by topic, no confirmed passage yet.</li>`).join('');
+  askSourcesArtifact.innerHTML = `<div class="panel">
+    <h2>What to investigate next <span class="fact-badge fact-badge-lead">${esc(FACT_STATE_LABELS.lead)}</span></h2>
+    <p class="view-subtitle">Worth pursuing, not yet established — prioritized by weakest coverage first, never a conclusion.</p>
+    ${laneItems ? `<h3 style="margin:14px 0 6px;font-size:13px">Least-covered outline sections</h3><ul class="report-list">${laneItems}</ul>` : ''}
+    ${questionItems ? `<h3 style="margin:14px 0 6px;font-size:13px">Leads from past questions</h3><ul class="report-list">${questionItems}</ul>` : ''}
+    ${!laneItems && !questionItems ? '<p class="status">No leads yet — add a research outline section, or ask a few questions, to surface some.</p>' : ''}
+  </div>`;
+}
+
+askRunAiBtn.addEventListener('click', async () => {
+  // My Sources AND Discover Sources - a discovered-but-unsaved source is
+  // analyzable immediately, saving is never a precondition (explicit
+  // product requirement). passageTextOf() is the uniform accessor across
+  // both origins (matched passage vs. a connector's own full-text snippet).
+  const passages = lastAskResults.filter((r) => passageTextOf(r)).map((r) => ({
+    id: r.id, sourceRecordId: r.id, excerptText: passageTextOf(r), location: r.matchPage ? `p.${r.matchPage}` : ''
+  }));
+  if (!passages.length) return;
+  askRunAiBtn.disabled = true;
+  askRunAiBtn.textContent = 'Analyzing…';
+  askSourcesStatus.textContent = 'Sending matched passages for AI analysis…';
+  try {
+    const res = await fetch('/api/analyze/ask-sources', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: lastAskQuestion, passages, previousQuestion: previousAskQuestion, previousAnswer: previousAskAiAnswer })
+    });
+    const data = await res.json();
+    if (!res.ok || data.ok === false) throw new Error(data.error || 'Analysis failed.');
+    if (data.skipped) { askSourcesStatus.textContent = data.reason; return; }
+    renderAskSourcesAiResult(data.result, passages);
+    if (data.result && !data.result.insufficient && !data.result.parseError) lastAskAiAnswer = data.result.answer || '';
+    askSourcesStatus.textContent = `${data.cached ? 'Loaded a recent analysis' : 'Analysis complete'} (${data.model || 'AI'}).${data.truncated ? ' Based on a subset of matched passages — the full set was too large for one pass.' : ''}`;
+    const aiFactState = classifyAskAnswer({ passageCount: passages.length, sourceCount: passages.length, aiResult: data.result });
+    await appendAskHistory(lastAskQuestion, 'ai-analysis', null, data.result?.answer || data.result?.missing || null, aiFactState);
+  } catch (err) {
+    askSourcesStatus.textContent = err.message;
+    showToast(err.message, true);
+  } finally {
+    askRunAiBtn.disabled = false;
+    askRunAiBtn.textContent = 'Re-analyze with AI';
+  }
+});
+
+function renderAskSourcesAiResult(result, passages) {
+  const byId = new Map(passages.map((p) => [p.id, p]));
+  if (result.parseError) {
+    askSourcesAiResult.innerHTML = `<div class="panel"><p class="hint">The AI's response didn't come back in the expected format — showing it as-is.</p><p>${esc(result.answer || '')}</p></div>`;
+    return;
+  }
+  if (result.insufficient) {
+    askSourcesAiResult.innerHTML = `<div class="panel"><h2>Answer <span class="fact-badge fact-badge-unresolved">${esc(FACT_STATE_LABELS.unresolved)}</span></h2><p class="view-subtitle">The matched passages don't contain enough to answer this — AI never guesses past what's in your sources.</p><p class="hint">${esc(result.missing || 'More sources may be needed.')}</p></div>`;
+    return;
+  }
+  const cited = (result.citedPassageIds || []).map((id) => byId.get(id)).filter(Boolean);
+  const citeList = cited.map((p) => `<li>${esc(p.excerptText.slice(0, 140))}${p.excerptText.length > 140 ? '…' : ''}</li>`).join('');
+  askSourcesAiResult.innerHTML = `<div class="panel">
+    <h2>Answer <span class="fact-badge fact-badge-ai-analysis">${esc(FACT_STATE_LABELS['ai-analysis'])}</span></h2>
+    <p class="view-subtitle">This is AI interpretation of your matched sources, not established fact — every sentence cites the passage it's based on.</p>
+    <p>${esc(result.answer)}</p>
+    ${citeList ? `<p class="hint">AI-assisted analysis based on ${cited.length} cited passage${cited.length === 1 ? '' : 's'}</p><ul class="claim-card-links">${citeList}</ul>` : ''}
+  </div>`;
+}
+
+// "Add to..." - shared by the menu and typed commands like "add this to the
+// outline" / "put that in the report". Every branch echoes exactly what it
+// did (never a silent mutation) and only fires against an unambiguous
+// target: the current Ask Sources result set.
+async function runAskSourcesAddTo(target) {
+  if (!lastAskResults.length) { askSourcesStatus.textContent = 'Ask a question with matching sources first, then use Add to…'; return; }
+  const passageResults = lastAskResults.filter((r) => r.matchPassage);
+  if (target === 'evidence') {
+    if (!passageResults.length) { askSourcesStatus.textContent = 'No passage-level match to save as evidence — try a more specific question.'; return; }
+    for (const r of passageResults) {
+      await createEvidenceItem(activeInvestigationId, { sourceRecordId: r.id, excerptType: 'quote', location: r.matchPage ? `p.${r.matchPage}` : '', outlineLaneId: null, excerptText: r.matchPassageRaw || r.matchPassage });
+    }
+    askSourcesStatus.textContent = `Saved ${passageResults.length} passage${passageResults.length === 1 ? '' : 's'} as Evidence.`;
+    showToast('Saved to Evidence.');
+  } else if (target === 'outline') {
+    await addOutlineLane(activeInvestigationId, { label: lastAskQuestion.slice(0, 120), method: 'mixed', status: 'in-progress' });
+    askSourcesStatus.textContent = `Added "${lastAskQuestion.slice(0, 60)}" to the Research Outline.`;
+    showToast('Added to Outline.');
+  } else if (target === 'findings' || target === 'report') {
+    if (!passageResults.length) { askSourcesStatus.textContent = 'No passage-level match to build a claim from — try a more specific question.'; return; }
+    const evItems = [];
+    for (const r of passageResults) {
+      evItems.push(await createEvidenceItem(activeInvestigationId, { sourceRecordId: r.id, excerptType: 'quote', location: r.matchPage ? `p.${r.matchPage}` : '', outlineLaneId: null, excerptText: r.matchPassageRaw || r.matchPassage }));
+    }
+    const claim = await createClaim(activeInvestigationId, { text: lastAskQuestion, links: evItems.map((e) => ({ evidenceItemId: e.id, stance: 'supports' })) });
+    askSourcesStatus.textContent = `Added claim ${claim.claimId} — it'll show up in Findings and Report.`;
+    showToast('Added as a Claim.');
+  } else if (target === 'timeline') {
+    askSourcesStatus.textContent = 'Timeline is generated automatically from dated sources.';
+    location.hash = '#/workspace/findings/timeline';
+  }
+  await appendAskHistory(lastAskQuestion, 'add-to:' + target, null, null);
+}
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('#askAddToMenu button[data-add-to]');
+  if (!btn) return;
+  askAddToMenu.classList.add('hidden');
+  await runAskSourcesAddTo(btn.dataset.addTo);
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('#askCreateMenu button[data-create]');
+  if (!btn) return;
+  askCreateMenu.classList.add('hidden');
+  askSourcesArtifact.innerHTML = '';
+  askSourcesStatus.textContent = '';
+  await handleCreateIntent({ intent: 'create', target: btn.dataset.create }, lastAskQuestion);
+});
+
+// "Create..." - jumps to an existing tab for artifacts that already have a
+// home (Outline, Bibliography, Timeline, Gaps, Report), or renders one of
+// the new deterministic table artifacts directly under Ask Sources.
+async function handleCreateIntent(cmd, q) {
+  if (cmd.intent === 'clarify-table') {
+    askSourcesStatus.textContent = 'Which table would you like — an Evidence Table, a Claim/Evidence Matrix, or a Quantitative Table?';
+    return;
+  }
+  const target = cmd.target;
+  const NAV = {
+    outline: '#/workspace/research',
+    bibliography: '#/workspace/evidence/bibliography',
+    timeline: '#/workspace/findings/timeline',
+    'findings-summary': '#/workspace/findings',
+    gaps: '#/workspace/findings/gaps',
+    report: '#/workspace/report'
+  };
+  if (NAV[target]) {
+    askSourcesStatus.textContent = `Opening ${target.replace(/-/g, ' ')}…`;
+    location.hash = NAV[target];
+    return;
+  }
+  const [records, evidenceItems, claims, quantFindings] = await Promise.all([
+    listInvestigationRecords(activeInvestigationId),
+    listEvidenceItems(activeInvestigationId),
+    listClaims(activeInvestigationId),
+    listQuantitativeFindings(activeInvestigationId)
+  ]);
+  if (target === 'source-index') {
+    askSourcesArtifact.innerHTML = `<div class="panel"><h2>Source Index</h2>${renderSourceIndex(records)}</div>`;
+  } else if (target === 'evidence-table') {
+    askSourcesArtifact.innerHTML = `<div class="panel"><h2>Evidence Table</h2>${renderEvidenceTable(evidenceItems, records, claims)}</div>`;
+  } else if (target === 'claim-matrix') {
+    askSourcesArtifact.innerHTML = `<div class="panel"><h2>Claim/Evidence Matrix</h2>${renderClaimEvidenceMatrix(claims, evidenceItems)}</div>`;
+  } else if (target === 'quantitative-table') {
+    askSourcesArtifact.innerHTML = `<div class="panel"><h2>Quantitative Table</h2>${renderQuantitativeTable(quantFindings)}</div>`;
+  } else if (target === 'citations') {
+    renderCitationsArtifact(records, q);
+  }
+}
+
+function renderCitationsArtifact(records, q) {
+  const styleMatch = /\b(apa|mla|chicago|turabian|legal)\b/i.exec(q || '');
+  const style = styleMatch ? styleMatch[1].toLowerCase() : 'apa';
+  const scopedIds = new Set(lastAskResults.map((r) => r.id));
+  const list = scopedIds.size ? records.filter((r) => scopedIds.has(r.id)) : records;
+  const finalList = list.length ? list : records;
+  if (!finalList.length) { askSourcesArtifact.innerHTML = '<div class="panel"><h2>Citations</h2><p class="status">No sources to cite yet.</p></div>'; return; }
+  const styleOptions = CITATION_STYLES.map((s) => `<option value="${s}" ${s === style ? 'selected' : ''}>${esc(CITATION_STYLE_LABELS[s])}</option>`).join('');
+  const renderList = (st) => finalList.map((r) => `<li>${esc(formatCitation(r, st).text)}</li>`).join('');
+  askSourcesArtifact.innerHTML = `<div class="panel"><h2>Citations</h2>
+    <p class="hint">${finalList.length === records.length ? 'All sources in this investigation.' : `Sources from your last answer (${finalList.length}).`}</p>
+    <label class="sr-only" for="askCitationStyleSelect">Citation style</label>
+    <select id="askCitationStyleSelect">${styleOptions}</select>
+    <ol class="report-list" id="askCitationList" style="margin-top:10px">${renderList(style)}</ol>
+  </div>`;
+  document.querySelector('#askCitationStyleSelect').addEventListener('change', (e) => {
+    document.querySelector('#askCitationList').innerHTML = renderList(e.target.value);
+  });
+}
+
+async function handleExcludeFromReport() {
+  const claims = await listClaims(activeInvestigationId);
+  if (!claims.length) { askSourcesStatus.textContent = 'No claims yet to remove from the report.'; return; }
+  const target = claims[0]; // listClaims sorts newest-first - "this/that" resolves to the most recent claim
+  await updateClaim(target.id, { excludedFromReport: true });
+  askSourcesStatus.textContent = `Excluded claim ${target.claimId} ("${target.text.slice(0, 60)}${target.text.length > 60 ? '…' : ''}") from the Report — it stays as Evidence and in Findings > Claims.`;
+  showToast('Excluded from Report.');
+  await appendAskHistory(lastAskQuestion, 'exclude-from-report', `Excluded ${target.claimId} from Report`, null);
+}
+
+async function appendAskHistory(question, intent, resultSummary, aiAnswer, factState) {
+  if (!activeInvestigationId) return;
+  await createAskSourcesHistoryEntry(activeInvestigationId, { question, intent, resultSummary, aiAnswer, factState });
+  await renderAskSourcesHistory();
+}
+
+async function renderAskSourcesHistory() {
+  if (!activeInvestigationId) { askSourcesHistoryEl.innerHTML = ''; return; }
+  const rows = await listAskSourcesHistory(activeInvestigationId);
+  if (!rows.length) { askSourcesHistoryEl.innerHTML = ''; return; }
+  askSourcesHistoryEl.innerHTML = `<h3 style="margin:18px 0 8px;font-size:14px">Recent questions</h3>` + rows.slice(0, 20).map((r) => `
+    <details class="ask-history-entry">
+      <summary>${r.factState ? `<span class="fact-badge fact-badge-${esc(r.factState)}">${esc(FACT_STATE_LABELS[r.factState] || r.factState)}</span> ` : ''}${esc(r.question)} <span class="hint">· ${esc(formatDate(r.createdAt))}</span></summary>
+      ${r.resultSummary ? `<p class="hint">${esc(r.resultSummary)}</p>` : ''}
+      ${r.aiAnswer ? `<p>${esc(r.aiAnswer)}</p>` : ''}
+    </details>
+  `).join('');
+}
 
 // ---------------------------------------------------------------------------
 // Bibliography (Evidence tab subpanel, per active investigation). Each
@@ -1145,6 +1736,7 @@ async function renderBibliographyPanel() {
     listEvidenceItems(activeInvestigationId),
     listClaims(activeInvestigationId)
   ]);
+  lastBibliographyRecords = records;
   container.innerHTML = records.length
     ? records.map((r) => biblioCardHtml(r, evidenceItems, claims)).join('')
     : '<p class="status">No sources in this investigation yet.</p>';
@@ -1184,9 +1776,25 @@ function biblioCardHtml(record, evidenceItems, claims) {
       <div><dt>Reliability</dt><dd>${esc(b.reliability || '—')}</dd></div>
       <div><dt>Research notes</dt><dd>${esc(b.researchNotes || '—')}</dd></div>
     </dl>
-    <button type="button" class="mini-edit-btn" data-action="edit-bibliography" data-id="${attr(record.id)}">Edit</button>
+    <div class="biblio-cite">
+      <label class="sr-only" for="biblioCiteStyle-${attr(record.id)}">Citation style</label>
+      <select id="biblioCiteStyle-${attr(record.id)}" class="biblio-cite-style" data-record-id="${attr(record.id)}">${CITATION_STYLES.map((s) => `<option value="${s}">${esc(CITATION_STYLE_LABELS[s])}</option>`).join('')}</select>
+      <button type="button" class="mini-edit-btn" data-action="cite-source" data-id="${attr(record.id)}">Cite</button>
+      <button type="button" class="mini-edit-btn" data-action="edit-bibliography" data-id="${attr(record.id)}">Edit</button>
+    </div>
+    <p class="hint biblio-cite-output" id="biblioCiteOut-${attr(record.id)}"></p>
   </article>`;
 }
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action="cite-source"]');
+  if (!btn) return;
+  const record = lastBibliographyRecords.find((r) => r.id === btn.dataset.id);
+  const out = document.querySelector(`#biblioCiteOut-${btn.dataset.id}`);
+  if (!record || !out) return;
+  const styleSelect = document.querySelector(`#biblioCiteStyle-${btn.dataset.id}`);
+  out.textContent = formatCitation(record, styleSelect ? styleSelect.value : 'apa').text;
+});
 
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-action="edit-bibliography"]');
@@ -1432,13 +2040,21 @@ function renderClaimsList(claims, items, records) {
       return `<li><span class="stance-tag ${l.stance}">${l.stance}</span>${ev ? esc(ev.excerptText.slice(0, 80)) : 'Evidence item removed'}${src ? ' — ' + esc(src.title || src.originalUrl || '') : ''}</li>`;
     }).join('');
     return `<article class="claim-card">
-      <p class="claim-card-meta">${esc(claim.claimId)}</p>
+      <p class="claim-card-meta">${esc(claim.claimId)}${claim.excludedFromReport ? ' · <span class="hint">excluded from Report</span>' : ''}</p>
       <p>${esc(claim.text)}</p>
       ${linkRows ? `<ul class="claim-card-links">${linkRows}</ul>` : ''}
+      <button type="button" class="btn btn-small" data-action="toggle-claim-report" data-id="${attr(claim.id)}" data-excluded="${claim.excludedFromReport ? '1' : ''}">${claim.excludedFromReport ? 'Include in Report' : 'Exclude from Report'}</button>
       <button type="button" class="btn btn-small card-delete" data-action="delete-claim" data-id="${attr(claim.id)}">Delete</button>
     </article>`;
   }).join('');
 }
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="toggle-claim-report"]');
+  if (!btn) return;
+  await updateClaim(btn.dataset.id, { excludedFromReport: !btn.dataset.excluded });
+  await renderClaimsPanel();
+});
 
 document.querySelector('#claimForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -1583,11 +2199,17 @@ async function renderReportPanel() {
     sections.push(`<section class="report-section"><h2>Gaps, contradictions &amp; review items</h2><p class="hint">These are open questions the research hasn't resolved yet — never treat them as findings.</p><ul class="report-list">${gapItems}${contraItems}${discItems}</ul></section>`);
   }
 
-  // 8. Claims (the reasoning unit reports are actually built from)
+  // 8. Claims (the reasoning unit reports are actually built from) - a
+  // Claim with excludedFromReport stays fully intact everywhere else
+  // (Findings > Claims, its Evidence Items) but is left out of the Report
+  // itself, per Ask Sources' "remove this from the report but keep it as
+  // evidence" command (public/db.js updateClaim).
   const evById = new Map(evidenceItems.map((e) => [e.id, e]));
   const recById = new Map(records.map((r) => [r.id, r]));
-  if (claims.length) {
-    const claimsHtml = claims.map((claim) => {
+  const reportClaims = claims.filter((c) => !c.excludedFromReport);
+  const excludedCount = claims.length - reportClaims.length;
+  if (reportClaims.length) {
+    const claimsHtml = reportClaims.map((claim) => {
       const evidenceHtml = (claim.links || []).map((l) => {
         const ev = evById.get(l.evidenceItemId);
         if (!ev) return '';
@@ -1596,7 +2218,9 @@ async function renderReportPanel() {
       }).join('');
       return `<article class="report-claim"><p class="report-claim-id">${esc(claim.claimId)}</p><h3>${esc(claim.text)}</h3>${evidenceHtml || '<p class="hint">No evidence linked to this claim yet.</p>'}</article>`;
     }).join('');
-    sections.push(`<section class="report-section"><h2>Claims</h2>${claimsHtml}</section>`);
+    sections.push(`<section class="report-section"><h2>Claims</h2>${excludedCount ? `<p class="hint">${excludedCount} claim${excludedCount === 1 ? '' : 's'} kept as evidence but excluded from this report.</p>` : ''}${claimsHtml}</section>`);
+  } else if (excludedCount) {
+    sections.push(`<section class="report-section"><h2>Claims</h2><p class="hint">${excludedCount} claim${excludedCount === 1 ? '' : 's'} kept as evidence but excluded from this report — see Findings &gt; Claims.</p></section>`);
   } else {
     sections.push(`<section class="report-section"><h2>Claims</h2><p class="hint">No claims yet — add claims backed by evidence on the <a href="#/workspace/findings/claims" data-route="/workspace/findings">Findings</a> tab.</p></section>`);
   }
