@@ -26,6 +26,7 @@ import {
   FINDING_CLASSIFICATIONS, FINDING_CLASSIFICATION_LABELS, FINDING_CLASSIFICATIONS_REQUIRING_EVIDENCE
 } from './claims.js';
 import { ingestFiles, ingestZip } from './ingest/pipeline.js';
+import { renderReviewQueuePanel } from './reviewQueue.js';
 import { openOverlay, openMenu, confirmDialog } from './ui.js';
 import { formatCitation, buildFootnotes, CITATION_STYLES, CITATION_STYLE_LABELS } from './citations.js';
 import { renderSourceIndex, renderEvidenceTable, renderClaimEvidenceMatrix, renderQuantitativeTable } from './artifacts.js';
@@ -90,6 +91,10 @@ const bulkImportFilesInput = document.querySelector('#bulkImportFilesInput');
 const bulkImportFolderInput = document.querySelector('#bulkImportFolderInput');
 const preserveOriginalsCheckbox = document.querySelector('#preserveOriginalsCheckbox');
 const bulkImportProgress = document.querySelector('#bulkImportProgress');
+const bulkImportControls = document.querySelector('#bulkImportControls');
+const bulkImportPauseBtn = document.querySelector('#bulkImportPauseBtn');
+const bulkImportCancelBtn = document.querySelector('#bulkImportCancelBtn');
+const bulkImportResumeBtn = document.querySelector('#bulkImportResumeBtn');
 
 const toast = document.querySelector('#toast');
 
@@ -144,6 +149,7 @@ let lastEvidenceEntities = [];
 // Research under a "Details"-style disclosure.
 const WORKSPACE_TABS = [
   { id: 'research', label: 'Research', icon: 'icon-search' },
+  { id: 'review', label: 'Review Queue', icon: 'icon-list' },
   { id: 'subjects', label: 'Subjects', icon: 'icon-user' },
   { id: 'evidence', label: 'Evidence', icon: 'icon-flag' },
   { id: 'findings', label: 'Findings', icon: 'icon-bar' },
@@ -170,22 +176,26 @@ const STATUS_LABEL = { 'not-started': 'Not started', 'in-progress': 'In progress
 // ---------------------------------------------------------------------------
 // Small utilities
 // ---------------------------------------------------------------------------
-function esc(s = '') { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
-function attr(s = '') { return esc(s); }
+// Exported for public/reviewQueue.js (Phase 4) - the first module in this
+// app to need shared UI utilities from app.js rather than the other way
+// around, since it's large/interactive enough to own its own DOM wiring
+// (see that file's header). Behavior unchanged, just made importable.
+export function esc(s = '') { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+export function attr(s = '') { return esc(s); }
 function asUrl(u) { return /^https?:\/\//i.test(u) ? u : `https://${u}`; }
 function bucket(m = '') { m = String(m).toLowerCase(); if (m.includes('pdf')) return 'PDF'; if (m.startsWith('image/')) return 'Image'; if (m.includes('html')) return 'Webpage'; if (m.includes('audio')) return 'Audio'; if (m.includes('video')) return 'Video'; return m ? 'Other' : 'Unknown'; }
-function formatBytes(n) {
+export function formatBytes(n) {
   if (!n) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB'];
   let i = 0; let v = n;
   while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
   return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
-function formatDate(iso) {
+export function formatDate(iso) {
   const d = iso ? new Date(iso) : null;
   return d && !isNaN(d) ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Unknown date';
 }
-function showToast(msg, bad = false) {
+export function showToast(msg, bad = false) {
   clearTimeout(toastTimer);
   toast.textContent = msg;
   toast.classList.remove('hidden');
@@ -992,11 +1002,25 @@ async function filesFromDataTransfer(dataTransfer) {
   return out;
 }
 
+// Phase 4: Cancel/Pause controls for a running bulk import
+// (docs/INVESTIGATION_WORKSPACE_PLAN.md - "one bad document must not kill
+// the batch," and the investigator must be able to stop a large run).
+// `pendingResume` remembers enough to offer a genuine Resume for the
+// plain-files path (a concrete, indexable array) - re-invoking ingestFiles
+// with the remaining slice against the SAME batch id. Zip imports are
+// streamed and can't be resumed from an arbitrary position - Pause on a
+// zip behaves as Cancel there (documented limitation, see pipeline.js).
+let importControl = null;
+let pendingResume = null;
+
 async function runImport(items) {
   if (!activeInvestigationId || !items.length) return;
   const preserveOriginals = preserveOriginalsCheckbox.checked;
   bulkImportProgress.classList.remove('hidden');
   bulkImportProgress.textContent = 'Starting import…';
+  bulkImportControls.classList.remove('hidden');
+  bulkImportResumeBtn.classList.add('hidden');
+  importControl = { cancelled: false, paused: false };
   const onProgress = (p) => {
     bulkImportProgress.textContent = p.status === 'error'
       ? `Processed ${p.processed} files — error on "${p.current}": ${p.error}`
@@ -1007,10 +1031,27 @@ async function runImport(items) {
     const firstName = first instanceof File ? first.name : first.file.name;
     const isSingleZip = items.length === 1 && /\.zip$/i.test(firstName);
     const batch = isSingleZip
-      ? await ingestZip(first instanceof File ? first : first.file, activeInvestigationId, onProgress, { preserveOriginals })
-      : await ingestFiles(items, activeInvestigationId, onProgress, { preserveOriginals });
+      ? await ingestZip(first instanceof File ? first : first.file, activeInvestigationId, onProgress, { preserveOriginals, control: importControl })
+      : await ingestFiles(items, activeInvestigationId, onProgress, { preserveOriginals, control: importControl });
 
     savedKeys = await getSavedCanonicalKeys(activeInvestigationId);
+    bulkImportControls.classList.add('hidden');
+
+    if (batch.status === 'PAUSED' && !isSingleZip) {
+      pendingResume = { items, investigationId: activeInvestigationId, batchId: batch.id, preserveOriginals, processedCount: batch.processedCount };
+      bulkImportProgress.textContent = `Paused after ${batch.processedCount} of ${items.length} files.`;
+      bulkImportResumeBtn.classList.remove('hidden');
+      bulkImportControls.classList.remove('hidden');
+      setAddResearchStatus(`Import paused after ${batch.processedCount} of ${items.length} files. Click Resume to continue, or close this dialog and resume later from the Review Queue tab.`);
+      return;
+    }
+    if (batch.status === 'CANCELLED' || (batch.status === 'PAUSED' && isSingleZip)) {
+      bulkImportProgress.classList.add('hidden');
+      setAddResearchStatus(`Import cancelled after ${batch.processedCount} file${batch.processedCount === 1 ? '' : 's'}. What was already processed is saved.`);
+      await renderWorkspaceView('research');
+      return;
+    }
+
     bulkImportProgress.classList.add('hidden');
     setAddResearchStatus(`Imported ${batch.fileCount} file${batch.fileCount === 1 ? '' : 's'} (${formatBytes(batch.byteTotal)}). ${batch.duplicates.length} duplicates, ${batch.skipped.length + batch.errors.length} need attention.`);
     showToast(`Imported ${batch.fileCount} file${batch.fileCount === 1 ? '' : 's'} into your investigation.`);
@@ -1021,9 +1062,46 @@ async function runImport(items) {
     location.hash = '#/workspace/research';
     await renderWorkspaceView('research');
   } catch (err) {
+    bulkImportControls.classList.add('hidden');
     setAddResearchStatus(`Import failed: ${err.message}`, true);
   }
 }
+
+bulkImportPauseBtn.addEventListener('click', () => { if (importControl) importControl.paused = true; });
+bulkImportCancelBtn.addEventListener('click', () => { if (importControl) importControl.cancelled = true; });
+bulkImportResumeBtn.addEventListener('click', async () => {
+  if (!pendingResume) return;
+  const { items, investigationId, batchId, preserveOriginals, processedCount } = pendingResume;
+  const remaining = items.slice(processedCount);
+  pendingResume = null;
+  bulkImportResumeBtn.classList.add('hidden');
+  bulkImportProgress.classList.remove('hidden');
+  bulkImportProgress.textContent = 'Resuming…';
+  bulkImportControls.classList.remove('hidden');
+  importControl = { cancelled: false, paused: false };
+  try {
+    const batch = await ingestFiles(remaining, investigationId, (p) => {
+      bulkImportProgress.textContent = `Processed ${p.processed} files (resumed) — current: ${p.current}`;
+    }, { preserveOriginals, existingBatchId: batchId, control: importControl });
+    savedKeys = await getSavedCanonicalKeys(activeInvestigationId);
+    bulkImportControls.classList.add('hidden');
+    if (batch.status === 'PAUSED') {
+      pendingResume = { items, investigationId, batchId, preserveOriginals, processedCount: batch.processedCount };
+      bulkImportProgress.textContent = `Paused after ${batch.processedCount} of ${items.length} files.`;
+      bulkImportResumeBtn.classList.remove('hidden');
+      bulkImportControls.classList.remove('hidden');
+      return;
+    }
+    bulkImportProgress.classList.add('hidden');
+    setAddResearchStatus(`Imported ${batch.fileCount} file${batch.fileCount === 1 ? '' : 's'} total (${formatBytes(batch.byteTotal)}).`);
+    closeDialog('addResearchDialog');
+    location.hash = '#/workspace/research';
+    await renderWorkspaceView('research');
+  } catch (err) {
+    bulkImportControls.classList.add('hidden');
+    setAddResearchStatus(`Resume failed: ${err.message}`, true);
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Active investigation
@@ -1098,6 +1176,8 @@ async function renderWorkspaceView(tab, subtab) {
     askSourcesAnswer.classList.add('hidden');
     investigationQuery.value = '';
     await renderAskSourcesHistory();
+  } else if (tab === 'review') {
+    await renderReviewQueuePanel(activeInvestigationId);
   } else if (tab === 'subjects') {
     await renderSubjectsPanel(subtab || null);
   } else if (tab === 'evidence') {

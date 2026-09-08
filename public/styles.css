@@ -553,6 +553,13 @@ footer { border-top: 1px solid var(--border); max-width: var(--max); margin: 40p
 .status-badge.status-strongly-supported { background: rgba(101,184,138,.15); color: var(--success); }
 .status-badge.status-contradicted { background: rgba(220,113,105,.12); color: var(--danger); }
 
+/* Ingestion item statuses (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 4) */
+.status-badge.status-pending, .status-badge.status-processing { background: rgba(214,168,75,.15); color: var(--accent); }
+.status-badge.status-ready-for-review { background: var(--surface-raised); color: var(--text-secondary); border: 1px solid var(--border); }
+.status-badge.status-reviewed { background: rgba(101,184,138,.15); color: var(--success); }
+.status-badge.status-failed { background: rgba(220,113,105,.15); color: var(--danger); }
+.status-badge.status-skipped { background: var(--surface-raised); color: var(--text-secondary); }
+
 /* ---------- Bibliography cards (Evidence tab subpanel) ---------- */
 .biblio-title { font-size: 15px; font-weight: 700; margin: 0 0 10px; }
 .biblio-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 10px 16px; margin: 0; }

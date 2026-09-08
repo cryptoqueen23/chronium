@@ -31,7 +31,14 @@
 // qualitativeFindings stores from docs/RESEARCH_METHOD.md's mixed-methods
 // workflow); claimHistory is a lightweight status-change audit trail. See
 // the "Claims / Claim Evidence / Findings" section below for the
-// enforcement rule.
+// enforcement rule. ingestionItems/reviewCandidates/watchlists/
+// watchlistMatches/reviewHistory/investigators (Phase 4 -
+// docs/INVESTIGATION_WORKSPACE_PLAN.md: the bulk-ingestion review queue.
+// `ingestionBatches` above is extended, not duplicated, into the "job"
+// concept the brief asks for - see the "Bulk Ingestion Review Queue"
+// section below for why, and for the hard rule this phase protects:
+// candidate detection may only ever SURFACE possibilities, never pick one
+// or create a mention/relationship/claim on its own).
 
 import {
   validateEntityFields, validateRelationshipFields, validateEntityMentionFields,
@@ -42,9 +49,14 @@ import {
   CLAIM_STATUSES, FINDING_CLASSIFICATIONS_REQUIRING_EVIDENCE,
   ClaimValidationError, ClaimEvidenceValidationError, FindingValidationError, FindingEvidenceRequiredError
 } from './claims.js';
+import {
+  validateWatchlistFields, findSubjectCandidates, findWatchlistMatches,
+  JOB_STATUSES, ITEM_STATUSES, CANDIDATE_STATES,
+  IngestionValidationError, WatchlistValidationError, ReviewCandidateValidationError
+} from './ingestionReview.js';
 
 const DB_NAME = 'chronium';
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 let dbPromise = null;
 
 function openDb() {
@@ -72,6 +84,17 @@ function openDb() {
       if (!db.objectStoreNames.contains('ingestionBatches')) {
         const batches = db.createObjectStore('ingestionBatches', { keyPath: 'id' });
         batches.createIndex('investigationId', 'investigationId', { unique: false });
+      }
+      // Phase 4: ingestionBatches IS the "Ingestion Job" model the brief
+      // asks for - extended with a status index here rather than
+      // duplicated into a parallel `ingestionJobs` store, same "extend a
+      // pre-existing store" decision as Phase 3's claims. Old batch rows
+      // have no `status` field; read as COMPLETED (their only prior
+      // meaning - the pipeline always ran a batch to completion before
+      // this phase) by the read-side "absent means default" convention.
+      {
+        const batchesStore = req.transaction.objectStore('ingestionBatches');
+        if (!batchesStore.indexNames.contains('status')) batchesStore.createIndex('status', 'status', { unique: false });
       }
       if (!db.objectStoreNames.contains('meta')) {
         db.createObjectStore('meta', { keyPath: 'key' });
@@ -176,6 +199,52 @@ function openDb() {
         const history = db.createObjectStore('claimHistory', { keyPath: 'id' });
         history.createIndex('investigationId', 'investigationId', { unique: false });
         history.createIndex('claimId', 'claimId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('ingestionItems')) {
+        const items = db.createObjectStore('ingestionItems', { keyPath: 'id' });
+        items.createIndex('investigationId', 'investigationId', { unique: false });
+        items.createIndex('jobId', 'jobId', { unique: false });
+        items.createIndex('recordId', 'recordId', { unique: false });
+        items.createIndex('status', 'status', { unique: false });
+        items.createIndex('byInvestigationAndStatus', ['investigationId', 'status'], { unique: false });
+        items.createIndex('updatedAt', 'updatedAt', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('reviewCandidates')) {
+        // Keyed by recordId, not ingestionItemId - a candidate belongs to
+        // a record's text, and the review queue navigates record-first
+        // (one ingestionItem <-> one recordId already; joining through
+        // recordId is sufficient and avoids a redundant second FK).
+        const candidates = db.createObjectStore('reviewCandidates', { keyPath: 'id' });
+        candidates.createIndex('investigationId', 'investigationId', { unique: false });
+        candidates.createIndex('recordId', 'recordId', { unique: false });
+        candidates.createIndex('state', 'state', { unique: false });
+        candidates.createIndex('candidateEntityIds', 'candidateEntityIds', { unique: false, multiEntry: true });
+      }
+      if (!db.objectStoreNames.contains('watchlists')) {
+        const watchlists = db.createObjectStore('watchlists', { keyPath: 'id' });
+        watchlists.createIndex('investigationId', 'investigationId', { unique: false });
+        watchlists.createIndex('termNormalized', 'termNormalized', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('watchlistMatches')) {
+        const wMatches = db.createObjectStore('watchlistMatches', { keyPath: 'id' });
+        wMatches.createIndex('investigationId', 'investigationId', { unique: false });
+        wMatches.createIndex('watchlistId', 'watchlistId', { unique: false });
+        wMatches.createIndex('recordId', 'recordId', { unique: false });
+        wMatches.createIndex('state', 'state', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('reviewHistory')) {
+        const reviewHistory = db.createObjectStore('reviewHistory', { keyPath: 'id' });
+        reviewHistory.createIndex('investigationId', 'investigationId', { unique: false });
+        reviewHistory.createIndex('objectId', 'objectId', { unique: false });
+        reviewHistory.createIndex('timestamp', 'timestamp', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('investigators')) {
+        // Deliberately NOT scoped to one investigation - a small team's
+        // identities are shared across cases, same as a real login would
+        // be. Explicitly NOT an auth system (brief §10): no password, no
+        // session, just a display name a reviewer can attribute their own
+        // actions to.
+        db.createObjectStore('investigators', { keyPath: 'id' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -429,11 +498,21 @@ export async function getBlob(hash) {
   return tx(db, ['blobs'], 'readonly', (t) => reqToPromise(t.objectStore('blobs').get(hash)));
 }
 
-export async function createIngestionBatch({ investigationId, label }) {
+// Phase 4 addition: `status`/`sourceType`/`documentCount`/`processedCount`/
+// `failedCount`/`startedAt`/`metadata` are new, optional fields - existing
+// callers that only pass {investigationId, label} keep working unchanged.
+// `status` defaults to RUNNING (this function has always meant "a batch is
+// starting right now" - the pipeline calls it immediately before its
+// processing loop) rather than QUEUED, since nothing in this codebase
+// defers a batch's start yet.
+export async function createIngestionBatch({ investigationId, label, sourceType, documentCount }) {
   const db = await openDb();
+  const now = new Date().toISOString();
   const batch = {
-    id: genId('batch'), investigationId, label, createdAt: new Date().toISOString(),
-    completedAt: null, fileCount: 0, byteTotal: 0, skipped: [], errors: [], duplicates: []
+    id: genId('batch'), investigationId, label, sourceType: sourceType || 'bulk-files', createdAt: now, startedAt: now,
+    status: 'RUNNING', completedAt: null, fileCount: 0, byteTotal: 0,
+    documentCount: documentCount ?? null, processedCount: 0, failedCount: 0,
+    skipped: [], errors: [], duplicates: [], metadata: {}
   };
   await tx(db, ['ingestionBatches'], 'readwrite', (t) => t.objectStore('ingestionBatches').add(batch));
   return batch;
@@ -449,6 +528,11 @@ export async function updateIngestionBatch(batchId, patch) {
     await reqToPromise(store.put(updated));
     return updated;
   });
+}
+
+export async function getIngestionBatch(batchId) {
+  const db = await openDb();
+  return tx(db, ['ingestionBatches'], 'readonly', (t) => reqToPromise(t.objectStore('ingestionBatches').get(batchId)));
 }
 
 export async function listIngestionBatches(investigationId) {
@@ -1463,4 +1547,355 @@ export async function listClaimFindingsForEntity(investigationId, entityId) {
 export async function deleteClaimFinding(findingId) {
   const db = await openDb();
   await tx(db, ['claimFindings'], 'readwrite', (t) => t.objectStore('claimFindings').delete(findingId));
+}
+
+// ---------------------------------------------------------------------------
+// Bulk Ingestion Review Queue (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase
+// 4): turns "thousands of dumped-in documents" into a triage queue instead
+// of a wall of unread text. `ingestionBatches` (above) IS the Job model -
+// extended, not duplicated (see the file header). Everything below is the
+// Item/Candidate/Watchlist/History/Investigator layer on top of it.
+//
+// THE HARD RULE this phase protects: automation may only ever SURFACE a
+// possibility. scanRecordForReview() below calls the pure detectors in
+// ingestionReview.js and persists their output as-is - it NEVER calls
+// createEntityMention()/createRelationship()/createClaim() itself. Those
+// only happen from confirmReviewCandidate(), which is always triggered by
+// an explicit investigator action, and even then goes through the SAME
+// existing, validated Phase 1-3 APIs (createEvidenceItem then
+// createEntityMention) - never a shortcut around them.
+// ---------------------------------------------------------------------------
+
+// recordId is nullable - a FAILED item (extraction/hashing threw before a
+// record could be created) legitimately has no record yet. That IS what
+// "failed to ingest" means; requiring one would make failures unrepresentable.
+export async function createIngestionItem(investigationId, { jobId, recordId, sourceFilename, sourceUrl, documentDate, mimeType, status, error, metadata }) {
+  if (!investigationId || !jobId) throw new IngestionValidationError('An ingestion item requires an investigation and a job.');
+  const db = await openDb();
+  const now = new Date().toISOString();
+  const item = {
+    id: genId('item'), investigationId, jobId, recordId: recordId || null,
+    sourceFilename: sourceFilename || null, sourceUrl: sourceUrl || null, documentDate: documentDate || null,
+    mimeType: mimeType || null, status: ITEM_STATUSES.includes(status) ? status : 'PENDING',
+    error: error || null, flagged: false, reviewNotes: '', reviewedAt: null, reviewedBy: null,
+    metadata: metadata || {}, createdAt: now, updatedAt: now
+  };
+  await tx(db, ['ingestionItems'], 'readwrite', (t) => t.objectStore('ingestionItems').add(item));
+  return item;
+}
+
+export async function updateIngestionItem(itemId, patch) {
+  const db = await openDb();
+  return tx(db, ['ingestionItems'], 'readwrite', async (t) => {
+    const store = t.objectStore('ingestionItems');
+    const existing = await reqToPromise(store.get(itemId));
+    if (!existing) return null;
+    if (patch.status !== undefined && !ITEM_STATUSES.includes(patch.status)) {
+      throw new IngestionValidationError(`Unknown ingestion item status "${patch.status}". Must be one of: ${ITEM_STATUSES.join(', ')}.`);
+    }
+    const updated = { ...existing, ...patch, updatedAt: new Date().toISOString() };
+    await reqToPromise(store.put(updated));
+    return updated;
+  });
+}
+
+export async function getIngestionItem(itemId) {
+  const db = await openDb();
+  return tx(db, ['ingestionItems'], 'readonly', (t) => reqToPromise(t.objectStore('ingestionItems').get(itemId)));
+}
+
+// Paginated by design (Phase 4 brief §17 - the queue must not freeze at
+// scale): callers pass a cursor key (an ingestionItem id) to continue from,
+// not an offset, so paging stays cheap regardless of how deep into a
+// 1,000+ item queue the investigator has gone. `statusFilter` narrows via
+// the byInvestigationAndStatus compound index when given, otherwise scans
+// the plain investigationId index.
+export async function listIngestionItemsPage(investigationId, { statusFilter, limit = 50, afterId } = {}) {
+  const db = await openDb();
+  return tx(db, ['ingestionItems'], 'readonly', async (t) => {
+    const store = t.objectStore('ingestionItems');
+    const index = statusFilter ? store.index('byInvestigationAndStatus') : store.index('investigationId');
+    const range = statusFilter ? IDBKeyRange.only([investigationId, statusFilter]) : IDBKeyRange.only(investigationId);
+    const rows = [];
+    let skipping = !!afterId;
+    await new Promise((resolve, reject) => {
+      // 'prev': for a fixed-value range on a non-unique index, the cursor
+      // walks in DESCENDING primary-key order - since genId() embeds a
+      // Date.now() prefix, that's newest-first, matching the order the
+      // queue actually displays. Walking and displaying in the SAME order
+      // is what makes `afterId` a valid continuation cursor across pages;
+      // sorting the page after the fact (as an earlier version of this
+      // function did) would silently break that continuity.
+      const cursorReq = index.openCursor(range, 'prev');
+      cursorReq.onsuccess = () => {
+        const cursor = cursorReq.result;
+        if (!cursor || rows.length >= limit) { resolve(); return; }
+        if (skipping) {
+          if (cursor.value.id === afterId) skipping = false;
+          cursor.continue();
+          return;
+        }
+        rows.push(cursor.value);
+        cursor.continue();
+      };
+      cursorReq.onerror = () => reject(cursorReq.error);
+    });
+    return rows;
+  });
+}
+
+export async function countIngestionItemsByStatus(investigationId) {
+  const db = await openDb();
+  const rows = await tx(db, ['ingestionItems'], 'readonly', (t) => reqToPromise(t.objectStore('ingestionItems').index('investigationId').getAll(investigationId)));
+  const counts = {};
+  for (const s of ITEM_STATUSES) counts[s] = 0;
+  for (const r of rows) counts[r.status] = (counts[r.status] || 0) + 1;
+  counts.TOTAL = rows.length;
+  counts.FLAGGED = rows.filter((r) => r.flagged).length;
+  return counts;
+}
+
+// Search-in-queue (Phase 4 brief §14: "search should return queue items,
+// not just global evidence results"). Deliberately NOT the same code path
+// as listIngestionItemsPage() above: that one only ever looks at whatever
+// page the investigator has already scrolled into, which is correct for
+// normal browsing but would make a search silently miss anything not yet
+// paged in - a real correctness gap at scale, not just a performance one,
+// found via this phase's own 1,000-record scale test. This one walks the
+// FULL (optionally status-filtered) set via a cursor, matching against
+// sourceFilename and the linked record's title/snippet/extractedText,
+// stopping once `limit` matches are found or the store is exhausted -
+// bounded, but a real search over everything, not just what's on screen.
+export async function searchIngestionItems(investigationId, query, { statusFilter, limit = 100 } = {}) {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return [];
+  const db = await openDb();
+  return tx(db, ['ingestionItems', 'records'], 'readonly', async (t) => {
+    const itemStore = t.objectStore('ingestionItems');
+    const index = statusFilter ? itemStore.index('byInvestigationAndStatus') : itemStore.index('investigationId');
+    const range = statusFilter ? IDBKeyRange.only([investigationId, statusFilter]) : IDBKeyRange.only(investigationId);
+    const recordsStore = t.objectStore('records');
+    const matches = [];
+    await new Promise((resolve, reject) => {
+      const cursorReq = index.openCursor(range, 'prev');
+      cursorReq.onsuccess = async () => {
+        const cursor = cursorReq.result;
+        if (!cursor || matches.length >= limit) { resolve(); return; }
+        const item = cursor.value;
+        const record = item.recordId ? await reqToPromise(recordsStore.get(item.recordId)) : null;
+        const haystack = `${item.sourceFilename || ''} ${record?.title || ''} ${record?.snippet || ''} ${record?.extractedText || ''}`.toLowerCase();
+        if (haystack.includes(q)) matches.push(item);
+        cursor.continue();
+      };
+      cursorReq.onerror = () => reject(cursorReq.error);
+    });
+    return matches;
+  });
+}
+
+export async function listIngestionItemsForJob(jobId) {
+  const db = await openDb();
+  const rows = await tx(db, ['ingestionItems'], 'readonly', (t) => reqToPromise(t.objectStore('ingestionItems').index('jobId').getAll(jobId)));
+  return rows.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+}
+
+// Runs the pure detectors (ingestionReview.js) over one record's extracted
+// text against the investigation's already-registered entities and
+// watchlist terms, and persists the results as reviewCandidates/
+// watchlistMatches rows - UNREVIEWED or AMBIGUOUS, never CONFIRMED. This
+// is the ENTIRE extent of what automation does in this phase; see the
+// section header above.
+export async function scanRecordForReview(investigationId, { recordId, text }) {
+  const db = await openDb();
+  const [entities, aliasRows, watchlistTerms] = await Promise.all([
+    listEntities(investigationId),
+    tx(db, ['entityAliases'], 'readonly', (t) => reqToPromise(t.objectStore('entityAliases').index('investigationId').getAll(investigationId))),
+    listWatchlists(investigationId)
+  ]);
+  const aliasesByEntity = new Map();
+  for (const a of aliasRows) {
+    if (!aliasesByEntity.has(a.entityId)) aliasesByEntity.set(a.entityId, []);
+    aliasesByEntity.get(a.entityId).push(a.alias);
+  }
+  const entitiesWithAliases = entities.map((e) => ({ id: e.id, type: e.type, name: e.name, aliases: aliasesByEntity.get(e.id) || [] }));
+
+  const candidates = findSubjectCandidates(text, entitiesWithAliases);
+  const watchlistMatchesFound = findWatchlistMatches(text, watchlistTerms);
+
+  const now = new Date().toISOString();
+  await tx(db, ['reviewCandidates', 'watchlistMatches'], 'readwrite', async (t) => {
+    for (const c of candidates) {
+      await reqToPromise(t.objectStore('reviewCandidates').add({
+        id: genId('cand'), investigationId, recordId, matchedText: c.matchedText, offset: c.offset, snippet: c.snippet,
+        candidateEntityIds: c.candidateEntityIds, matchStrength: c.matchStrength,
+        state: c.initialState, confirmedEntityId: null, confirmedEvidenceId: null, reviewedAt: null, reviewedBy: null,
+        createdAt: now, updatedAt: now
+      }));
+    }
+    for (const m of watchlistMatchesFound) {
+      await reqToPromise(t.objectStore('watchlistMatches').add({
+        id: genId('wmatch'), investigationId, watchlistId: m.watchlistId,
+        recordId, matchedText: m.matchedText, offset: m.offset, snippet: m.snippet,
+        state: 'UNREVIEWED', reviewedAt: null, reviewedBy: null, createdAt: now, updatedAt: now
+      }));
+    }
+  });
+  return { candidateCount: candidates.length, watchlistMatchCount: watchlistMatchesFound.length };
+}
+
+export async function listReviewCandidatesForRecord(investigationId, recordId) {
+  const db = await openDb();
+  const rows = await tx(db, ['reviewCandidates'], 'readonly', (t) => reqToPromise(t.objectStore('reviewCandidates').index('recordId').getAll(recordId)));
+  return rows.filter((r) => r.investigationId === investigationId).sort((a, b) => a.offset - b.offset);
+}
+
+export async function listWatchlistMatchesForRecord(investigationId, recordId) {
+  const db = await openDb();
+  const rows = await tx(db, ['watchlistMatches'], 'readonly', (t) => reqToPromise(t.objectStore('watchlistMatches').index('recordId').getAll(recordId)));
+  return rows.filter((r) => r.investigationId === investigationId).sort((a, b) => a.offset - b.offset);
+}
+
+// The ONLY place a review candidate turns into a real entityMention - and
+// even here, only because the investigator explicitly picked ONE entity
+// id out of the candidate's (possibly multi-entity) list. Goes through
+// the exact same createEvidenceItem()/createEntityMention() APIs a human
+// would use from the Evidence tab - "the review queue must use the
+// existing APIs, not bypass them" (Phase 4 brief §4). A quote-worthy
+// excerpt (the candidate's own snippet) becomes a real, citable Evidence
+// Item first, since a Mention must point at one (Phase 2's rule, still
+// enforced by createEntityMention itself regardless of this call site).
+export async function confirmReviewCandidate(investigationId, candidateId, { entityId, reviewedBy } = {}) {
+  const db = await openDb();
+  const candidate = await tx(db, ['reviewCandidates'], 'readonly', (t) => reqToPromise(t.objectStore('reviewCandidates').get(candidateId)));
+  if (!candidate || candidate.investigationId !== investigationId) throw new ReviewCandidateValidationError('Review candidate not found in this investigation.');
+  if (!candidate.candidateEntityIds.includes(entityId)) {
+    throw new ReviewCandidateValidationError('The chosen entity is not one of this candidate\'s possibilities - Chronium never lets a confirmation silently pick something the detector did not actually surface.');
+  }
+
+  const evidence = await createEvidenceItem(investigationId, {
+    sourceRecordId: candidate.recordId, excerptType: 'quote', excerptText: candidate.snippet,
+    location: '', notes: 'Created from a confirmed review-queue candidate.'
+  });
+  const mention = await createEntityMention(investigationId, {
+    entityId, evidenceId: evidence.id, quotedName: candidate.matchedText, snippet: candidate.snippet
+  });
+
+  const updated = await tx(db, ['reviewCandidates'], 'readwrite', async (t) => {
+    const store = t.objectStore('reviewCandidates');
+    const now = new Date().toISOString();
+    // confirmedEvidenceId is what lets a caller later offer "link this
+    // evidence to a claim" for a confirmed candidate - without it, the
+    // real Evidence Item created above would be undiscoverable from the
+    // candidate row itself.
+    const row = { ...candidate, state: 'CONFIRMED', confirmedEntityId: entityId, confirmedEvidenceId: evidence.id, reviewedAt: now, reviewedBy: reviewedBy || null, updatedAt: now };
+    await reqToPromise(store.put(row));
+    return row;
+  });
+  await recordReviewHistory(investigationId, { action: 'candidate_confirmed', actor: reviewedBy || null, objectType: 'reviewCandidate', objectId: candidateId, newValue: entityId });
+  return { candidate: updated, evidence, mention };
+}
+
+export async function rejectReviewCandidate(investigationId, candidateId, { reviewedBy } = {}) {
+  const db = await openDb();
+  return tx(db, ['reviewCandidates'], 'readwrite', async (t) => {
+    const store = t.objectStore('reviewCandidates');
+    const existing = await reqToPromise(store.get(candidateId));
+    if (!existing || existing.investigationId !== investigationId) return null;
+    const now = new Date().toISOString();
+    const updated = { ...existing, state: 'REJECTED', reviewedAt: now, reviewedBy: reviewedBy || null, updatedAt: now };
+    await reqToPromise(store.put(updated));
+    return updated;
+  }).then(async (updated) => {
+    if (updated) await recordReviewHistory(investigationId, { action: 'candidate_rejected', actor: reviewedBy || null, objectType: 'reviewCandidate', objectId: candidateId });
+    return updated;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Watchlists
+// ---------------------------------------------------------------------------
+export async function createWatchlist(investigationId, fields) {
+  const shaped = validateWatchlistFields({ investigationId, ...fields });
+  const db = await openDb();
+  const now = new Date().toISOString();
+  const entry = { id: genId('watch'), ...shaped, createdAt: now, updatedAt: now };
+  await tx(db, ['watchlists'], 'readwrite', (t) => t.objectStore('watchlists').add(entry));
+  return entry;
+}
+
+export async function listWatchlists(investigationId) {
+  const db = await openDb();
+  const rows = await tx(db, ['watchlists'], 'readonly', (t) => reqToPromise(t.objectStore('watchlists').index('investigationId').getAll(investigationId)));
+  return rows.sort((a, b) => String(a.term).localeCompare(String(b.term)));
+}
+
+export async function deleteWatchlist(watchlistId) {
+  const db = await openDb();
+  await tx(db, ['watchlists'], 'readwrite', (t) => t.objectStore('watchlists').delete(watchlistId));
+}
+
+export async function confirmWatchlistMatch(investigationId, matchId, { reviewedBy } = {}) {
+  return updateWatchlistMatchState(investigationId, matchId, 'CONFIRMED', reviewedBy);
+}
+export async function dismissWatchlistMatch(investigationId, matchId, { reviewedBy } = {}) {
+  return updateWatchlistMatchState(investigationId, matchId, 'REJECTED', reviewedBy);
+}
+async function updateWatchlistMatchState(investigationId, matchId, state, reviewedBy) {
+  const db = await openDb();
+  const updated = await tx(db, ['watchlistMatches'], 'readwrite', async (t) => {
+    const store = t.objectStore('watchlistMatches');
+    const existing = await reqToPromise(store.get(matchId));
+    if (!existing || existing.investigationId !== investigationId) return null;
+    const now = new Date().toISOString();
+    const row = { ...existing, state, reviewedAt: now, reviewedBy: reviewedBy || null, updatedAt: now };
+    await reqToPromise(store.put(row));
+    return row;
+  });
+  if (updated) await recordReviewHistory(investigationId, { action: state === 'CONFIRMED' ? 'watchlist_match_confirmed' : 'watchlist_match_rejected', actor: reviewedBy || null, objectType: 'watchlistMatch', objectId: matchId });
+  return updated;
+}
+
+// ---------------------------------------------------------------------------
+// Review History - the simplest reliable audit-log model (Phase 4 brief
+// §11: "do not build a complicated event-sourcing system"). One row per
+// meaningful action; write-only from the app's perspective, read by
+// listReviewHistory for an activity feed if/when that's wanted.
+// ---------------------------------------------------------------------------
+export async function recordReviewHistory(investigationId, { action, actor, objectType, objectId, previousValue, newValue }) {
+  const db = await openDb();
+  const entry = {
+    id: genId('rhist'), investigationId, action, actor: actor || null, objectType, objectId,
+    previousValue: previousValue ?? null, newValue: newValue ?? null, timestamp: new Date().toISOString()
+  };
+  await tx(db, ['reviewHistory'], 'readwrite', (t) => t.objectStore('reviewHistory').add(entry));
+  return entry;
+}
+
+export async function listReviewHistory(investigationId, { limit = 100 } = {}) {
+  const db = await openDb();
+  const rows = await tx(db, ['reviewHistory'], 'readonly', (t) => reqToPromise(t.objectStore('reviewHistory').index('investigationId').getAll(investigationId)));
+  return rows.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp))).slice(0, limit);
+}
+
+// ---------------------------------------------------------------------------
+// Investigators - a lightweight identity a reviewer can attribute their
+// own actions to. Explicitly NOT authentication (Phase 4 brief §10): no
+// password, no session, no server round-trip, nothing stopping anyone from
+// picking any name. `chronium.activeInvestigator` in localStorage (see
+// public/app.js) remembers the current browser's choice, mirroring the
+// existing `chronium.activeInvestigation` convention.
+// ---------------------------------------------------------------------------
+export async function createInvestigator({ displayName }) {
+  const clean = normalizeName(displayName);
+  if (!clean) throw new IngestionValidationError('An investigator profile requires a display name.');
+  const db = await openDb();
+  const investigator = { id: genId('investigator'), displayName: clean, createdAt: new Date().toISOString() };
+  await tx(db, ['investigators'], 'readwrite', (t) => t.objectStore('investigators').add(investigator));
+  return investigator;
+}
+
+export async function listInvestigators() {
+  const db = await openDb();
+  const rows = await tx(db, ['investigators'], 'readonly', (t) => reqToPromise(t.objectStore('investigators').getAll()));
+  return rows.sort((a, b) => a.displayName.localeCompare(b.displayName));
 }

@@ -10,22 +10,23 @@ every `CANON RULE` — these are load-bearing, not decoration), then
 investigation-level research loop this session completed most of), then
 skim `src/index.js` and `public/app.js`.
 
-**Last updated:** 2026-09-08 (fourth update same day). **Findings + Claim
-Ledger + support/contradiction — Phase 3 of the case-file layer — is
-built and live-verified**, per the user's explicit request after
-accepting Phase 2. See "In progress this session: Findings + Claim
-Ledger" below. Uncommitted as of this writing; the very next thing to
-commit (see "Where to look next").
+**Last updated:** 2026-09-08 (fifth update same day). **Bulk Ingestion +
+Investigator Review Queue — Phase 4 of the case-file layer — is built
+and live-verified**, per the user's explicit 24-section brief after
+accepting Phase 3. See "In progress this session: Bulk Ingestion +
+Review Queue" below. Uncommitted as of this writing; the very next thing
+to commit (see "Where to look next").
 
-Phase 2 (Entity Mentions / Evidence↔Subject linking) is **done,
-live-verified, and committed** as `7e14cc3` ("feat: link subjects to
-evidence mentions") — accepted by the user as the clean baseline for
-Phase 3. Phase 1 is `8e525ac`, Ask Sources is `98509dc`. See those
-commits and `docs/ROADMAP.md` Phase 6/4/9/10/5 for what each covers; this
-file no longer carries their uncommitted-diff details since git history
-is the source of truth for all three now. `principle.md` (Chronium's
-product constitution) is merged into `docs/CANON.md` as "Product
-Principles" — read that section first, before the rest of CANON.md.
+Phase 3 (Findings + Claim Ledger + support/contradiction) is **done,
+live-verified, and committed** as `c929984` ("feat: add evidence-backed
+claims and findings") — accepted by the user as the clean baseline for
+Phase 4. Phase 2 is `7e14cc3`, Phase 1 is `8e525ac`, Ask Sources is
+`98509dc`. See those commits and `docs/ROADMAP.md` Phase 6/6a/4/9/10/5
+for what each covers; this file no longer carries their uncommitted-diff
+details since git history is the source of truth for all four now.
+`principle.md` (Chronium's product constitution) is merged into
+`docs/CANON.md` as "Product Principles" — read that section first,
+before the rest of CANON.md.
 
 Everything from "Previous session's work" onward below reflects an
 earlier session, committed as `8b22ea5` and pushed to `origin/main`.
@@ -46,10 +47,14 @@ Three things, merged into one engine:
    Ledger** (status, subject-tagged, multi-position support/contradict/
    contextualize evidence links) and **Findings** — evidence-backed
    conclusions classified DOCUMENTED_FACT/SUPPORTED_INFERENCE/ALLEGATION/
-   UNRESOLVED_QUESTION/NO_EVIDENCE_LOCATED (Phase 3, new this session —
-   see below) — and generate a deterministic (free) Evidence-Backed
-   Report, now including Findings. AI is a paid, opt-in, last-resort
-   layer (Qualitative Analysis synthesis only).
+   UNRESOLVED_QUESTION/NO_EVIDENCE_LOCATED — and generate a deterministic
+   (free) Evidence-Backed Report, now including Findings. Bulk documents
+   flow through a durable **Ingestion Job/Item** pipeline into a
+   dedicated **Review Queue** (Phase 4, new this session — see below)
+   that assistively surfaces candidate subjects and watchlist-keyword
+   hits for investigator confirmation, never auto-deciding identity or
+   relationships. AI is a paid, opt-in, last-resort layer (Qualitative
+   Analysis synthesis only).
 3. **Ask Sources** (including Discover Sources) — a conversational entry
    point over the same investigation state, source-first and
    deterministic-first. See commit `98509dc`.
@@ -57,127 +62,136 @@ Three things, merged into one engine:
 Copperas Cove, TX is still the proof corpus, not a special case in the
 code — no Copperas-Cove-specific logic outside `data/`.
 
-## In progress this session: Findings + Claim Ledger + support/contradiction — uncommitted, live-verified 2026-09-08
+## In progress this session: Bulk Ingestion + Investigator Review Queue — uncommitted, live-verified 2026-09-08
 
-The user's explicit ask, Phase 3 of `docs/INVESTIGATION_WORKSPACE_PLAN.md`,
-following acceptance of Phase 2: "What do we think the records establish,
-and why?" Core model pasted verbatim:
-**"SOURCE → EVIDENCE → ENTITY MENTION → ENTITY/RELATIONSHIP → CLAIM →
-FINDING → REPORT. A claim is something being tested. A finding is the
-investigator's evidence-backed conclusion about that claim... Neither may
-exist as an unsupported factual conclusion."** Explicit non-negotiable:
-**"Evidence count alone must NEVER determine claim status... For Phase 3,
-claim status remains a deliberate investigator decision."** A permanent
-extension of the Marc/Raymond Payne regression was specified: an
-ambiguous supporting source ("Ray Payne") vs. a contradicting official
-record (Marc Payne), resolved to REFUTED with a DOCUMENTED_FACT finding —
-built as this session's actual core-workflow test content, not a separate
-fixture.
+The user's explicit ask, Phase 4 of `docs/INVESTIGATION_WORKSPACE_PLAN.md`
+(a full 24-section brief), following acceptance of Phase 3, and the
+direction already flagged in this file's own previous "Where to look
+next": "Chronium must help a small investigation team process thousands
+of records without forcing investigators to manually open and classify
+every document." Core principle pasted verbatim: **"Chronium should
+reduce reading burden without reducing evidentiary rigor. The system may
+say: 'This document may mention Raymond Payne.' It must NOT automatically
+say: 'Raymond Payne is connected to X.'"** Explicit non-negotiables
+carried over and extended: the Marc/Raymond Payne identity-collision
+regression, this time run through bulk/automated detection rather than
+manual entry, plus a new co-occurrence regression (two people in one
+document must never auto-create a relationship or finding).
 
-Before writing code: re-read `docs/INVESTIGATION_WORKSPACE_PLAN.md`,
-inspected commit `7e14cc3`, and — the one genuine surprise this
-session — discovered Chronium already had a `claims` store predating
-Phase 1 entirely (inline `links: [{evidenceItemId, stance}]`, 2 stances,
-no status). The brief's "implement a claim model" was written without
-knowing this existed; extending it additively rather than building a
-parallel concept was this session's first real architectural decision
-(see "A pre-existing store, extended rather than duplicated" in the plan
-doc's Phase 3 section).
+Before writing code: re-read `docs/CLAUDE_HANDOFF.md` and
+`docs/INVESTIGATION_WORKSPACE_PLAN.md`, inspected commit `c929984`, and
+the existing ingestion/corpus/dedupe/evidence/search architecture. The
+one genuine architectural decision this session: `ingestionBatches`
+(predating this phase) was extended rather than duplicated with a new
+parallel "job" concept — same precedent as Phase 3 extending the
+pre-existing `claims` store.
 
-**Scoped tightly per explicit instruction**: Findings + Claim Ledger +
-support/contradiction only. Explicitly NOT touched: network
-visualization, automatic NER, automatic identity merging, AI-generated
-accusations, source reliability scoring, timeline engine.
-`#workspaceKebabBtn` (found broken in Phase 1) still NOT fixed. See
-`docs/INVESTIGATION_WORKSPACE_PLAN.md` "Phase 3: as-built" (appended this
-session) for the complete as-built record — schema, the full
-referential-integrity decision table, and full verification detail. This
-handoff section is the condensed pointer; that doc is the detailed
-record.
+**Scoped tightly per explicit instruction**: ingestion job/item tracking,
+Review Queue UI, assistive-only candidate/watchlist detection, dedupe
+provenance, investigator identity, review-history audit log. Explicitly
+NOT built (brief §20): automatic accusation generation, automatic
+relationship generation, automatic claim confirmation, automatic
+contradiction resolution, automatic identity merging.
+`#workspaceKebabBtn` (found broken in Phase 1) still NOT fixed — not
+directly required by this phase. See
+`docs/INVESTIGATION_WORKSPACE_PLAN.md` "Phase 4: as-built" (appended this
+session) for the complete as-built record — schema, the full detection
+decision table, and full verification detail. This handoff section is
+the condensed pointer; that doc is the detailed record.
 
-**Files added:** `public/claims.js` (pure vocabulary + validation,
-mirrors `public/entities.js`), `scripts/test-claims.mjs` (26 unit tests).
-**Files modified:** `public/db.js` (`DB_VERSION` 8→9; new
-`claimEvidence`/`claimFindings`/`claimHistory` stores; two new indexes
-added to the *pre-existing* `claims` store during the same upgrade; a
-one-time idempotent backfill migrating legacy `claims.links` into
-`claimEvidence`; extended `createClaim`/`updateClaim`/`deleteClaim`;
-`deleteEvidenceItem` extended with block-or-trim logic), `public/app.js`,
-`public/index.html`, `public/styles.css`, `package.json` (`test:claims` +
-combined `test` script).
+**Files added:** `public/ingestionReview.js` (pure detection logic, no
+DOM/IndexedDB — strong/weak/ambiguous candidate matching, watchlist
+matching), `scripts/test-ingestion-review.mjs` (21 unit tests),
+`public/reviewQueue.js` (~450-line Review Queue workspace UI, a
+deliberate architectural deviation from prior phases: self-contained
+with its own DOM/event wiring rather than built inline in `app.js`,
+which was already large — imports five render helpers `app.js` now
+exports for this purpose). **Files modified:** `public/db.js`
+(`DB_VERSION` 9→10; new `ingestionItems`/`reviewCandidates`/
+`watchlists`/`watchlistMatches`/`reviewHistory`/`investigators` stores; a
+`status` index added to the pre-existing `ingestionBatches` store in the
+same upgrade pass; `confirmReviewCandidate` chains through the existing,
+unmodified `createEvidenceItem`/`createEntityMention` APIs — every Phase
+1/2 rule still applies to a bulk-confirmed mention), `public/ingest/pipeline.js`
+(byte-read deferred into the per-item try/catch — see failure-recovery
+fix below), `public/app.js`, `public/index.html`, `public/styles.css`,
+`package.json` (`test:ingestion` + combined `test` script extended).
 
-**The core distinction, as implemented**: a Claim may legitimately exist
-with ZERO evidence (status UNVERIFIED — "an unsupported question/lead may
-remain in the claim ledger," brief §11) — this is the one deliberate
-asymmetry versus Phase 1/2's Relationships and Mentions, which both
-require evidence to exist at all. The hard evidence rule instead lives on
-Findings: `createClaimFinding()`/`updateClaimFinding()` reject a
-DOCUMENTED_FACT/SUPPORTED_INFERENCE/ALLEGATION with no cited evidence
-(`FindingEvidenceRequiredError`) exactly like Phase 1's
-`RelationshipEvidenceRequiredError`; UNRESOLVED_QUESTION and
-NO_EVIDENCE_LOCATED are the only classifications exempt, because those
-two classifications ARE the honest "nothing established" statement.
+**The core distinction, as implemented**: detection is strictly
+assistive — `findSubjectCandidates()` and `findWatchlistMatches()` return
+possibility lists only, never a pre-chosen answer. A strong match (full
+registered name/alias) surfaces one named candidate still requiring
+confirmation; a weak match (bare PERSON surname) is a normal single
+candidate only when exactly one registered person has that surname —
+the moment 2+ people share it, state is forced to AMBIGUOUS and every
+possibility renders as its own separate confirm button. This is the same
+identity-safety discipline as Phase 1/2's Relationships/Mentions, applied
+one layer earlier in the pipeline where the automation risk is highest.
 
-**Referential integrity — the brief explicitly offered BLOCK vs.
-auto-downgrade; BLOCK was chosen throughout**, because silently changing
-what a finding asserts is itself an editorial act Chronium has no
-business taking on the investigator's behalf: deleting the only evidence
-behind an evidence-requiring finding is refused entirely (checked for
-every affected finding before any mutation is issued, so a refusal never
-leaves a partial delete behind); deleting one of several is allowed and
-just trims that finding's `evidenceIds`; deleting a claim while a Finding
-still cites it is refused. Full table with all five scenarios in the
-plan doc.
+**Two real, latent bugs found and fixed via the mandated 1,000-record
+scale test** (not features — defects the scale requirement was written
+specifically to catch): (1) search-in-queue only filtered
+already-paginated items, missing anything beyond the loaded pages — fixed
+with a bounded cursor-based full-scan `searchIngestionItems()`; (2) a
+search-input race condition at scale — each keystroke fired an
+independent async scan, and out-of-order resolution let a stale broad
+result overwrite a correct narrow one — fixed with a 250ms debounce plus
+a staleness guard inside the render function, the same bug class
+previously found and fixed in an earlier phase's Subjects search box.
 
-**Two things found and handled that weren't explicitly asked about**:
-(1) the pre-existing `claims` store, handled by extension (see above);
-(2) `deleteEvidenceItem`'s existing call site in `public/app.js` had no
-try/catch — it can now throw when blocked, so a `catch` was added there
-to surface why instead of the delete silently failing.
+**Failure recovery** also surfaced a real fix, not just new behavior: the
+pipeline originally read every file's bytes eagerly, before the per-item
+try/catch, so an unreadable file could throw outside any recoverable
+boundary. Fixed by deferring the read itself into the try/catch — one bad
+document in a batch now correctly produces `COMPLETED_WITH_ERRORS`
+instead of aborting the run.
 
 **VERIFIED (live, Puppeteer against `wrangler dev`, viewport 1280×900):**
-- `npm run check` clean (12 files). `npm test` (new combined script)
-  56/56 pass (30 from Phase 1/2 + 26 new).
-- One Puppeteer run, **49/49 assertions, zero unexpected console errors**
-  (one intentionally-aborted network request from the same migration-seed
-  technique introduced in Phase 2, not an app defect):
-  a genuine v8-shaped database (raw IndexedDB, full Phase 1+2 schema)
-  seeded with a legacy `claims.links`-shaped claim, then the actual app's
-  first load confirmed the v9 migration + new stores + the legacy claim
-  intact with its old `links` field untouched + the backfill copied it
-  into `claimEvidence` exactly once → the full core workflow as one
-  continuous run (create claim → tag subject → attach support +
-  contradict evidence → status → REFUTED, logged to `claimHistory` →
-  create DOCUMENTED_FACT finding, submit button disabled until evidence
-  checked → evidence trail intact → survives reload) → **the Payne claim
-  regression**: entity IDs stay isolated, zero relationship created, the
-  incorrect-but-real supporting source was never deleted, no entity merge
-  → conflicting-evidence regression (2 supports + 1 contradicts coexist,
-  deleting one link never touches the evidence item) → no-evidence test
-  (three asserting classifications rejected with none, NO_EVIDENCE_LOCATED
-  succeeds) → all five referential-integrity scenarios, each as a real
-  blocked→unblocked transition → direct-`db.js` bypass rejection for
-  fabricated claim/evidence ids → Evidence-view "Used in Claims" and
-  Subject-profile "Claims/Findings involving this subject" integration →
-  full **Phase 1+2 regression pass**: everything in the brief's §17 list.
+- `npm run check` clean (14 files). `npm test` (combined script) 77/77
+  pass (30 Phase 1/2 + 26 Phase 3 + 21 new).
+- Two Puppeteer driver runs, **49/49 assertions total, zero unexpected
+  console errors** (the one console entry present each run is the same
+  intentionally-aborted migration-seed network request used since Phase
+  2, not an app defect):
+  a genuine v9-shaped database (raw IndexedDB, full Phase 1-3 schema)
+  seeded with real investigation/entity/claim data confirmed the v9→v10
+  migration + all six new stores + every piece of legacy data intact →
+  bulk-ingested 4 real documents through the actual Add-Research UI →
+  review queue status counts/filters render → investigator created and
+  selected → strong alias candidate ("Ray Payne" → Raymond Payne)
+  confirmed, producing a real `entityMention` with `quotedName` preserved
+  exactly, linked to a real `claimEvidence` row, marked reviewed with
+  notes/reviewer attribution → **the Payne regression**: strong Marc
+  match (not ambiguous), bare "Payne" document forced AMBIGUOUS with both
+  names as separate buttons, no pre-selection anywhere → **co-occurrence
+  regression**: Raymond Payne + Sheena Tanner both surface independently,
+  zero relationships before or after confirming both → watchlist match/
+  acknowledge cycle never creates a Finding → failure recovery (bad file
+  + good file, `COMPLETED_WITH_ERRORS`, good file ingests, bad file
+  recorded with its real error) → second driver run: **1,000-record scale
+  test** (8,955ms ingest, ~9ms/record; 4,588ms re-ingest dedupe of all
+  1,000; 1,242ms queue render; paginated 50-at-a-time; search narrows
+  correctly at scale) → full **Phase 1-3 regression pass**: relationship/
+  finding evidence requirements, quotedName preservation, claim UNVERIFIED
+  default, delete-protection, Marc/Raymond isolation, Ask Sources,
+  investigation persistence all re-confirmed intact.
 
-Driver scripts lived entirely in the scratchpad directory, never in the
-repo.
+Driver scripts and fixtures lived entirely in the scratchpad directory,
+never in the repo.
 
 **Still outstanding:**
 - Not committed as of this writing — see "Where to look next."
-- `docs/ROADMAP.md` (Phases 1/4/9/10) and `docs/INVESTIGATION_WORKSPACE_PLAN.md`
+- `docs/ROADMAP.md` (Phase 6/6a) and `docs/INVESTIGATION_WORKSPACE_PLAN.md`
   were updated this session to reflect the above.
 - `#workspaceKebabBtn` (found in Phase 1) is still a real, known, unfixed
   issue — don't rediscover it from scratch next session.
-- `createdBy`/`updatedBy`/`reviewedBy` were considered (brief §15) and
-  deliberately NOT added — no auth system exists yet, so nullable fields
-  nobody populates would be speculative weight. Nothing about the current
-  schema blocks adding them additively later.
-- Automatic contradiction detection (roadmap Phase 4) is explicitly not
-  built — this session shipped the manual foundation (multi-position
-  claim-evidence stance) it would sit on top of, not the automation
-  itself, per the brief's explicit "no AI-generated accusations."
+- Automatic LLM-driven extraction/conclusions (brief §20) explicitly not
+  built — this session shipped the assistive/manual foundation
+  (candidate + watchlist surfacing, human confirmation required) it would
+  sit on top of, not the automation itself.
+- `createdBy`/`updatedBy` beyond `reviewedBy` were not added to ingestion
+  items — same reasoning as Phase 3's forward-compatible-not-built note;
+  no real auth system exists yet.
 
 ## Previous session's work: Research Outline + Detailed Bibliography + Findings/Report
 
@@ -335,37 +349,25 @@ one exists locally.
 
 ## Where to look next
 
-**Immediate:** commit the Findings + Claim Ledger diff (see "In progress
-this session" above) — it is live-verified and has been sitting
+**Immediate:** commit the Bulk Ingestion + Review Queue diff (see "In
+progress this session" above) — it is live-verified and has been sitting
 uncommitted since being built. Suggested message per the user's own
-instruction: `feat: add evidence-backed claims and findings`.
+instruction: `feat: add bulk ingestion review queue`.
 
 **Then STOP.** The user's own instruction for this phase was explicit:
-*"Do NOT begin Phase 4. Stop after the commit and hand Phase 3 back for
-review."* Do not self-direct into automatic contradiction detection
-(roadmap Phase 4 — this session built its manual foundation only, not
-the automation), timeline events, identity-resolution scoring/source
-tiers, network view, or any other roadmap item, including the still-open,
-explicitly-flagged `#workspaceKebabBtn` bug, without being asked. Report
-back what was built and wait. (Note: the plan doc's original Part 5
-sketch numbered timeline events as "Phase 2" before the actual Phase 2
-request turned out to be entity mentions, and this Phase 3 — Claims/
-Findings — wasn't in that original sketch at all. Treat the plan doc's
-own "Phase 1/2/3: as-built" sections, and whatever number/scope the user
-assigns next, as authoritative over that original sketch's numbering.)
-
-**One user-flagged direction, not yet requested as work:** after Phase 3
-stabilizes, the user wants Chronium to tackle bulk ingestion — an
-automated pipeline that processes many documents at once and surfaces
-detected people/organizations/mentions/relationships/dates into a
-**review queue** the investigator explicitly approves/rejects/merges,
-rather than writing directly into the evidence graph. This is explicitly
-future work ("once Phase 3 is stable"), not scoped or started — don't
-build toward it without being asked, but keep it in mind as the likely
-next real ask, and note that it will need automatic NER/extraction, which
-every phase so far has deliberately excluded from the core evidence model
-until now for exactly this reason ("we need the evidence model correct
-before automation touches it").
+*"Do NOT begin Phase 5. Stop after the commit and hand Phase 4 back for
+review."* Do not self-direct into automatic LLM extraction/conclusions
+(brief §20 — this session shipped the assistive/manual foundation only,
+not the automation), timeline events, identity-resolution scoring/source
+tiers, network view, automatic contradiction detection, or any other
+roadmap item, including the still-open, explicitly-flagged
+`#workspaceKebabBtn` bug, without being asked. Report back what was built
+and wait. (Note: the plan doc's original Part 5 sketch numbered timeline
+events as "Phase 2" before the actual numbered phases turned out to be
+entity mentions/claims-findings/bulk-ingestion instead. Treat the plan
+doc's own "Phase 1/2/3/4: as-built" sections, and whatever number/scope
+the user assigns next, as authoritative over that original sketch's
+numbering.)
 
 Beyond that: the user has said further priorities will come from running a
 real-world Chronium investigation through the workflow, not speculative

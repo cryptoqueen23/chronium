@@ -526,6 +526,91 @@
           </div>
         </div>
 
+        <div id="workspacePanel-review" class="workspace-panel hidden" role="tabpanel">
+          <div id="reviewQueueListView">
+            <div class="panel">
+              <h2>Review queue</h2>
+              <p class="view-subtitle">Bulk-ingested documents, triaged here before anything is treated as evidence. Chronium may surface a possible subject or watchlist hit — it never creates a mention, relationship, or claim on its own. Every confirmation is your decision.</p>
+              <div id="reviewStatusCounts" class="stat-grid"></div>
+            </div>
+
+            <div class="panel">
+              <div class="field-row" style="align-items:flex-end;flex-wrap:wrap">
+                <div class="field"><label for="reviewFilterStatus">Status</label><select id="reviewFilterStatus"></select></div>
+                <div class="field"><label for="reviewFilterBatch">Ingestion batch</label><select id="reviewFilterBatch"><option value="">All batches</option></select></div>
+                <div class="field"><label for="reviewFilterCandidates">Subject candidates</label><select id="reviewFilterCandidates"><option value="">Any</option><option value="has">Has candidates</option><option value="ambiguous">Has ambiguous</option><option value="none">No candidates</option></select></div>
+                <div class="field"><label for="reviewFilterWatchlist">Watchlist hits</label><select id="reviewFilterWatchlist"><option value="">Any</option><option value="has">Has hits</option><option value="none">No hits</option></select></div>
+                <label class="import-zone-checkbox" style="margin:0 0 10px"><input type="checkbox" id="reviewFilterFlagged" /> Flagged only</label>
+              </div>
+              <label class="sr-only" for="reviewSearchInput">Search the review queue</label>
+              <input id="reviewSearchInput" placeholder="Search titles, snippets, and matched text in this queue…" style="margin-bottom:12px" />
+              <div id="reviewQueueList"></div>
+              <div class="dialog-actions dialog-actions-inline"><button type="button" class="btn" id="reviewLoadMoreBtn">Load more</button></div>
+            </div>
+
+            <div class="panel">
+              <h2>Watchlist</h2>
+              <p class="view-subtitle">Investigator-defined terms — a hit is surfaced for review, never converted into a finding automatically.</p>
+              <form id="watchlistForm" class="dialog-form dialog-form-compact">
+                <div class="field-row">
+                  <div class="field"><label for="watchlistTermInput">Term</label><input id="watchlistTermInput" required maxlength="200" placeholder="e.g. Hotel Occupancy Tax" /></div>
+                  <div class="field"><label for="watchlistTypeSelect">Type</label><select id="watchlistTypeSelect"></select></div>
+                </div>
+                <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn">Add watchlist term</button></div>
+              </form>
+              <div id="watchlistList"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Investigator</h2>
+              <p class="view-subtitle">A lightweight identity to attribute review actions to — not an authentication system. Anyone can pick any name.</p>
+              <div class="field-row" style="align-items:flex-end">
+                <div class="field"><label for="investigatorSelect">Reviewing as</label><select id="investigatorSelect"><option value="">Not set</option></select></div>
+                <div class="field"><label for="investigatorNameInput">New investigator</label><input id="investigatorNameInput" maxlength="80" placeholder="Display name" /></div>
+                <button type="button" class="btn btn-small" id="addInvestigatorBtn">Add</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="reviewDetailView" class="hidden">
+            <a href="#" id="reviewBackToQueue" class="hint" style="display:inline-block;margin-bottom:12px">&larr; Back to Review Queue</a>
+            <div class="panel" id="reviewDetailHead"></div>
+
+            <div class="panel">
+              <h2>Possible subjects</h2>
+              <div id="reviewCandidatesList"></div>
+              <details class="research-sources-details">
+                <summary>Not listed? Create a new subject</summary>
+                <form id="reviewCreateSubjectForm" class="dialog-form dialog-form-compact">
+                  <div class="field-row">
+                    <div class="field"><label for="reviewNewSubjectName">Name</label><input id="reviewNewSubjectName" required maxlength="200" /></div>
+                    <div class="field"><label for="reviewNewSubjectType">Type</label><select id="reviewNewSubjectType"></select></div>
+                  </div>
+                  <p class="hint">Creates the subject on the Subjects tab. It won't be linked to this passage automatically — reopen this item after re-importing, or link it manually from the Evidence tab's "Link Subject."</p>
+                  <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-small">Create subject</button></div>
+                </form>
+              </details>
+            </div>
+
+            <div class="panel">
+              <h2>Watchlist hits</h2>
+              <div id="reviewWatchlistMatchesList"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Review</h2>
+              <div class="field"><label for="reviewNotesInput">Notes</label><textarea id="reviewNotesInput" rows="2" maxlength="500"></textarea></div>
+              <div class="dialog-actions dialog-actions-inline" style="flex-wrap:wrap">
+                <button type="button" class="btn" id="reviewPrevBtn">Previous</button>
+                <button type="button" class="btn" id="reviewNextBtn">Next</button>
+                <button type="button" class="btn" id="reviewFlagBtn">Flag for follow-up</button>
+                <button type="button" class="btn" id="reviewSkipBtn">Skip</button>
+                <button type="button" class="btn btn-primary" id="reviewMarkReviewedBtn">Mark reviewed</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div id="workspacePanel-report" class="workspace-panel hidden" role="tabpanel"><div id="reportContent"></div></div>
       </div>
     </section>
@@ -597,6 +682,11 @@
             <p class="hint">Off by default (Local Only): originals stay on your device. Chronium indexes content and metadata, never uploads source bytes to Chronium cloud storage.</p>
           </div>
           <div id="bulkImportProgress" class="hint hidden" aria-live="polite"></div>
+          <div id="bulkImportControls" class="dialog-actions dialog-actions-inline hidden">
+            <button type="button" class="btn btn-small" id="bulkImportPauseBtn">Pause</button>
+            <button type="button" class="btn btn-small" id="bulkImportCancelBtn">Cancel</button>
+            <button type="button" class="btn btn-small btn-primary hidden" id="bulkImportResumeBtn">Resume</button>
+          </div>
         </section>
       </div>
 

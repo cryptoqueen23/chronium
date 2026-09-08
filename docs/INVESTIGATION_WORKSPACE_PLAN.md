@@ -699,3 +699,233 @@ investigator judgment calls indefinitely, not a future automation
 target); a bulk cross-store query for "everything about claim X" (the UI
 currently composes several targeted queries per render, matching the
 established per-row pattern - fine at current scale).
+
+## Phase 4: as-built (2026-09-08)
+
+Shipped, live-verified in a real browser (49/49 assertions across two
+driver runs, zero unexpected console errors). Scoped tightly per
+explicit instruction: bulk ingestion job/item tracking plus an
+investigator Review Queue, with candidate-subject and watchlist
+detection strictly **assistive** - the system may surface a possibility,
+it may never pick one. No automatic accusation/relationship/claim
+generation, no automatic identity merging, no automatic contradiction
+resolution. This is the "bulk ingestion + review queue" direction the
+user flagged as likely-next in `docs/CLAUDE_HANDOFF.md`'s "Where to look
+next" after Phase 3 was accepted, now built to the letter of an explicit
+24-section brief.
+
+### The model, as implemented
+
+```text
+BULK SOURCE -> INGESTION JOB -> INGESTION ITEM -> (scan) -> REVIEW CANDIDATE / WATCHLIST MATCH -> investigator confirms -> ENTITY MENTION / CLAIM LINK -> REVIEWED
+```
+
+An **Ingestion Job** is the existing `ingestionBatches` store (predating
+this phase, same precedent as Phase 3 extending the pre-existing `claims`
+store rather than duplicating it), extended additively with `status`
+(QUEUED/RUNNING/PAUSED/COMPLETED/COMPLETED_WITH_ERRORS/FAILED/CANCELLED),
+`startedAt`, `processedCount`, `failedCount`, `metadata`. An **Ingestion
+Item** (`ingestionItems`, new) is one document's processing record -
+PENDING/PROCESSING/READY_FOR_REVIEW/REVIEWED/FAILED/SKIPPED - pointing at
+the real Record/Evidence rather than duplicating its content. A **Review
+Candidate** (`reviewCandidates`, new) is one detected possible-subject
+occurrence with UNREVIEWED/CONFIRMED/REJECTED/AMBIGUOUS state; a
+**Watchlist Match** (`watchlistMatches`, new) is one detected keyword hit
+that never carries anything implying a finding. Detection is a pure,
+DOM/IndexedDB-free function (`public/ingestionReview.js`) that returns
+possibility lists, never a pre-chosen answer - confirmation is always an
+explicit human click on one named option.
+
+### The identity-safety rule, extended into bulk detection
+
+Phase 1/2's Marc Payne/Raymond Payne regression is Chronium's namesake
+test; this phase extends it into automated-at-scale territory, where the
+risk is highest. `findSubjectCandidates(text, entities)` runs two passes:
+a **strong** pass matching a document's text verbatim against each
+registered entity's name and aliases, and a **weak** pass matching bare
+PERSON surnames (word-boundary checked, ORGANIZATION entities excluded
+entirely - the last word of an org name is not a person's surname).
+Same-offset matches from multiple entities merge into one candidate row;
+if that row's `candidateEntityIds` has more than one entry, its
+`initialState` is `AMBIGUOUS`, never a guess. "Payne" matching both Marc
+and Raymond Payne must - and does - surface both names as two separate,
+independently labeled confirm buttons; there is no code path that picks
+one. This is unit-tested (`THE PAYNE REGRESSION` in
+`scripts/test-ingestion-review.mjs`) and live-tested (bulk-ingest three
+real documents - a strong Marc match, a strong Raymond-alias match, and a
+bare-surname ambiguous document - through the actual UI).
+
+### Files added
+
+`public/ingestionReview.js` (pure vocabulary + detection: job/item
+statuses, candidate states, watchlist types, `findSubjectCandidates`,
+`findWatchlistMatches` - no DOM/IndexedDB, same architectural pattern as
+`public/entities.js`/`public/claims.js`), `scripts/test-ingestion-review.mjs`
+(21 unit tests), `public/reviewQueue.js` (the Review Queue workspace UI -
+~450 lines, self-contained with its own DOM/event wiring; imports
+`esc`/`attr`/`formatBytes`/`formatDate`/`showToast` from `public/app.js`,
+which now exports them for this purpose - a deliberate architectural
+deviation from every prior phase's convention of building UI directly
+inside `app.js`, made because `app.js` was already large and the Review
+Queue is a genuinely separate workspace surface).
+
+### Files modified
+
+`public/db.js` (`DB_VERSION` 9→10; new `ingestionItems`/
+`reviewCandidates`/`watchlists`/`watchlistMatches`/`reviewHistory`/
+`investigators` stores; a `status` index added to the *pre-existing*
+`ingestionBatches` store in the same upgrade pass, same technique Phase 3
+used on `claims`; `scanRecordForReview` runs the pure detectors and
+persists results but never itself calls `createEntityMention`/
+`createRelationship`/`createClaim`; `confirmReviewCandidate` chains
+through the existing, unmodified `createEvidenceItem` →
+`createEntityMention` APIs rather than any shortcut, so every Phase 1/2
+enforcement rule still applies to a bulk-confirmed mention exactly as it
+does to a manually-created one), `public/ingest/pipeline.js` (per-item
+try/catch now wraps a lazily-read file so one unreadable document can't
+abort the whole batch; SKIPPED duplicates record the duplicate
+occurrence path in item metadata rather than discarding that
+provenance), `public/app.js` (new `review` workspace tab, inserted second
+after Research; Pause/Cancel/Resume wiring for bulk imports; five
+previously-private render helpers exported for `reviewQueue.js` to reuse
+rather than reimplement), `public/index.html`, `public/styles.css`,
+`package.json` (`check`/`test` scripts extended).
+
+### Bulk subject candidates and watchlist matching, decided and verified
+
+| Behavior | Implementation | Verified |
+|---|---|---|
+| Strong match (full name or registered alias) | Surfaces one named candidate, state UNREVIEWED, requires an explicit confirm click before any mention exists | ✅ |
+| Weak match, single owner (bare surname, only one registered person has it) | Surfaces as a normal single candidate, not ambiguous | ✅ |
+| Weak match, shared surname (2+ people share it) | State forced to AMBIGUOUS; every possible entity rendered as its own separate confirm button; no pre-selection anywhere in the render path | ✅ (the Payne regression) |
+| Two people co-occurring in one document | Both surface as independent candidates; confirming both never creates a relationship or a finding implying association | ✅ (dedicated co-occurrence regression) |
+| Watchlist term hit | Recorded with matched text/snippet/location only; "acknowledging" a match flips its state to CONFIRMED and nothing else - never auto-creates a Finding | ✅ |
+| ORGANIZATION entities | Never receive weak (surname-style) matching - only strong name/alias matches apply | ✅ (unit test) |
+
+### Duplicate handling and provenance
+
+SHA-256 content-hash dedupe is unchanged from before this phase; what's
+new is that a duplicate occurrence during bulk ingest now creates a
+`SKIPPED` ingestion item carrying `metadata.duplicateOccurrencePath`
+rather than either re-processing the content or silently dropping the
+fact that the document was seen again under a second path/filename.
+Confirmed at scale: re-ingesting an identical 1,000-file batch correctly
+deduped all 1,000 without re-scanning them.
+
+### Failure recovery
+
+The brief's exact scenario ("item 417 fails parsing must not kill the
+batch") surfaced a real latent bug during implementation: the original
+pipeline read every file's bytes eagerly before the per-item try/catch,
+so an unreadable file could throw outside any recoverable boundary.
+Fixed by deferring the byte-read itself into the per-item try/catch.
+Verified live: a batch of one good file + one file that throws on read
+completes as `COMPLETED_WITH_ERRORS` (not aborted), the good file
+ingests normally, and the bad file is recorded FAILED with its real
+error message.
+
+### Scale test (1,000 records)
+
+Measured live against `wrangler dev`, not simulated:
+
+| Measurement | Result |
+|---|---|
+| Ingest 1,000 records | 8,955ms (~9.0ms/record) |
+| Re-ingest identical 1,000 records (dedupe path) | 4,588ms, all 1,000 correctly deduped |
+| Review Queue initial render at 1,000+ items | 1,242ms, does not hang the page |
+| Pagination | First page bounded to 50 rows, not all 1,000 rendered at once; "Load more" appends the next 50 in 831ms |
+| Candidate detection sampled at scale | Correct on a 50-document sample (~1/7 with a candidate, matching the fixture's known ratio) |
+
+No obvious bottleneck beyond the expected linear scan cost of a full
+unfiltered search (bounded to `limit: 200` by design - see below).
+
+### Two real bugs found and fixed during scale testing (not features - latent defects)
+
+1. **Search-in-queue missed unpaged items.** The original search only
+   filtered whatever had already been paginated into memory, so a term
+   that matched an item beyond the loaded pages returned nothing even
+   though the item existed. Fixed with `searchIngestionItems()` in
+   `public/db.js` - a bounded, cursor-based full scan of the (optionally
+   status-filtered) store, independent of pagination state.
+2. **Search race condition at scale.** Each keystroke fired an
+   independent async scan over up to 2,000 items; because these are not
+   guaranteed to resolve in the order they were fired, a later, more
+   specific search could finish before an earlier, broader one, letting
+   the stale broad result overwrite the correct narrow one on screen -
+   the same bug class previously found and fixed in an earlier phase's
+   Subjects search box. Fixed with a 250ms debounce plus a staleness
+   guard inside the render function itself (checked twice - after the
+   async filter step and again after per-item lookups - comparing the
+   live search-input value against what was requested when the render
+   began, bailing without touching the DOM if superseded).
+
+Both were caught by the mandated 1,000-record scale test, not by manual
+testing at small scale - direct justification for why that requirement
+was in the brief.
+
+### Lightweight investigator identity and audit trail
+
+`investigators` (new store, not scoped per-investigation - a small team
+shares one list) is `{investigatorId, displayName}` only, explicitly not
+real authentication, selected via a `<select>` and persisted to
+`localStorage`. Every meaningful review action (mark reviewed, confirm/
+reject a candidate, confirm a watchlist match, link evidence to a claim)
+writes a row to `reviewHistory` - `{action, actor, timestamp, objectType,
+objectId}` - the simplest reliable audit model the brief asked for, not
+an event-sourcing system.
+
+### Verification summary
+
+`npm run check` clean (14 files, `public/ingestionReview.js` and
+`public/reviewQueue.js` added). `npm test` (combined script) - **77/77**
+unit tests pass (30 Phase 1/2 + 26 Phase 3 + 21 new). Live Puppeteer
+against `wrangler dev` across two driver scripts - **49/49 assertions,
+zero unexpected console errors** (the one console entry present is the
+same intentionally-aborted migration-seed network request used in every
+phase since Phase 2, not an app defect):
+
+- **Migration v9→v10** against a genuinely v9-shaped seeded database
+  (raw IndexedDB, full Phase 1-3 schema) carrying real investigation/
+  entity/claim data - confirmed all six new stores exist and every piece
+  of legacy data survives untouched.
+- **The full core workflow**: bulk-ingest four real documents through
+  the actual Add-Research UI, review queue status counts and filters
+  render correctly, an investigator is created and selected, a strong
+  alias candidate ("Ray Payne" → Raymond Payne) is confirmed - producing
+  a real `entityMention` with `quotedName` preserved exactly as
+  "Ray Payne", never rewritten to the entity's canonical name - the
+  resulting evidence is linked to an existing Claim via a real
+  `claimEvidence` row, and the item is marked reviewed with notes and
+  reviewer attribution persisted.
+- **The Payne identity regression**: a strong Marc Payne match (not
+  ambiguous, full name matched), and a bare "Payne" document confirmed
+  AMBIGUOUS with both Marc Payne and Raymond Payne rendered as separate,
+  independently labeled confirm buttons - no pre-selection.
+- **The co-occurrence regression**: Raymond Payne and Sheena Tanner both
+  surface as independent candidates from one document; zero relationships
+  exist between them both before and after confirming both candidates.
+- **Watchlist**: "Hotel Occupancy Tax" correctly matched in both
+  documents containing it, shown in the detail panel, acknowledgeable
+  (state → CONFIRMED) without ever creating a Finding.
+- **Failure recovery**: one bad file alongside one good file - batch
+  completes `COMPLETED_WITH_ERRORS`, good file ingests, bad file recorded
+  FAILED with its real error message.
+- **Scale test + full Phase 1-3 regression** (second driver script,
+  16/16): the numbers in the table above, plus relationship/finding
+  evidence requirements, quotedName preservation, claim UNVERIFIED
+  default, delete-protection, Marc/Raymond isolation, Ask Sources, and
+  investigation persistence all re-confirmed still intact.
+
+### Deferred (explicitly, not silently dropped)
+
+Everything already deferred in Phases 1-3 (timeline events,
+identity-resolution scoring, source tiers, network view,
+`#workspaceKebabBtn` - confirmed not touched, per explicit instruction).
+New this phase, per the brief's explicit §20: automatic accusation
+generation, automatic relationship generation, automatic claim
+confirmation, automatic contradiction resolution, automatic identity
+merging - all deliberately absent; AI extraction can come later once the
+queue and audit semantics the brief asked to stabilize first are actually
+stable. `createdBy`/`updatedBy` on ingestion items beyond `reviewedBy`
+were not added, same reasoning as Phase 3's `Forward-compatible, not
+built` note - no real auth system exists yet.

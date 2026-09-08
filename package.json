@@ -7,10 +7,11 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check": "node --check src/index.js && node --check src/schema.js && node --check public/app.js && node --check public/db.js && node --check public/citations.js && node --check public/artifacts.js && node --check public/askCommands.js && node --check public/discover.js && node --check public/entities.js && node --check public/claims.js && node --check public/ingest/adapters.js && node --check public/ingest/pipeline.js",
+    "check": "node --check src/index.js && node --check src/schema.js && node --check public/app.js && node --check public/db.js && node --check public/citations.js && node --check public/artifacts.js && node --check public/askCommands.js && node --check public/discover.js && node --check public/entities.js && node --check public/claims.js && node --check public/ingestionReview.js && node --check public/reviewQueue.js && node --check public/ingest/adapters.js && node --check public/ingest/pipeline.js",
     "test:entities": "node --test scripts/test-entities.mjs",
     "test:claims": "node --test scripts/test-claims.mjs",
-    "test": "node --test scripts/test-entities.mjs scripts/test-claims.mjs"
+    "test:ingestion": "node --test scripts/test-ingestion-review.mjs",
+    "test": "node --test scripts/test-entities.mjs scripts/test-claims.mjs scripts/test-ingestion-review.mjs"
   },
   "devDependencies": {
     "fflate": "^0.8.3",
