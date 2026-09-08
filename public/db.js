@@ -12,10 +12,16 @@
 // agreement/discrepancy judgments between one of each),
 // qualitativeAnalysis (the last AI-assisted analysis result per
 // investigation, so revisiting the tab doesn't require re-running a paid AI
-// call).
+// call), entities/relationships/entityAliases (docs/INVESTIGATION_WORKSPACE_PLAN.md
+// Phase 1 - the Subjects tab's case-file layer: PERSON/ORGANIZATION/etc.
+// entities, evidence-backed relationships between them, and researcher-
+// asserted alternate names that never auto-merge into an entity - see the
+// "Entities / Relationships" section below for the enforcement rule).
+
+import { validateEntityFields, validateRelationshipFields, normalizeName, normalizeForSearch, RelationshipValidationError } from './entities.js';
 
 const DB_NAME = 'chronium';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 let dbPromise = null;
 
 function openDb() {
@@ -79,6 +85,35 @@ function openDb() {
       if (!db.objectStoreNames.contains('askSourcesHistory')) {
         const ask = db.createObjectStore('askSourcesHistory', { keyPath: 'id' });
         ask.createIndex('investigationId', 'investigationId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('entities')) {
+        const entities = db.createObjectStore('entities', { keyPath: 'id' });
+        entities.createIndex('investigationId', 'investigationId', { unique: false });
+        entities.createIndex('byInvestigationAndType', ['investigationId', 'type'], { unique: false });
+        entities.createIndex('nameNormalized', 'nameNormalized', { unique: false });
+        entities.createIndex('updatedAt', 'updatedAt', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('relationships')) {
+        const relationships = db.createObjectStore('relationships', { keyPath: 'id' });
+        relationships.createIndex('investigationId', 'investigationId', { unique: false });
+        relationships.createIndex('sourceEntityId', 'sourceEntityId', { unique: false });
+        relationships.createIndex('targetEntityId', 'targetEntityId', { unique: false });
+        relationships.createIndex('type', 'type', { unique: false });
+        relationships.createIndex('status', 'status', { unique: false });
+        relationships.createIndex('updatedAt', 'updatedAt', { unique: false });
+        // multiEntry: lets a future "what relationships cite this evidence
+        // item" query (e.g. warning before deleting evidence still in use)
+        // hit an index instead of a full scan. Standard IndexedDB feature,
+        // supported everywhere this app runs - low-risk to add now per
+        // docs/INVESTIGATION_WORKSPACE_PLAN.md's "add useful indexes where
+        // low-risk."
+        relationships.createIndex('evidenceIds', 'evidenceIds', { unique: false, multiEntry: true });
+      }
+      if (!db.objectStoreNames.contains('entityAliases')) {
+        const aliases = db.createObjectStore('entityAliases', { keyPath: 'id' });
+        aliases.createIndex('entityId', 'entityId', { unique: false });
+        aliases.createIndex('investigationId', 'investigationId', { unique: false });
+        aliases.createIndex('aliasNormalized', 'aliasNormalized', { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -701,4 +736,236 @@ export async function createAskSourcesHistoryEntry(investigationId, { question, 
   };
   await tx(db, ['askSourcesHistory'], 'readwrite', (t) => t.objectStore('askSourcesHistory').add(entry));
   return entry;
+}
+
+// ---------------------------------------------------------------------------
+// Entities / Relationships (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 1):
+// the Subjects tab's case-file layer. An Entity is a subject the
+// investigation is tracking (PERSON/ORGANIZATION/etc. - public/entities.js
+// ENTITY_TYPES). A Relationship is a directed, typed edge between two
+// entities.
+//
+// THE HARD RULE, enforced here (not just in the UI - see
+// public/entities.js's file header and the plan doc's "Hard rules the
+// code must enforce, not merely document"): a relationship cannot be
+// persisted without at least one evidence item that actually exists in
+// this investigation. createRelationship()/updateRelationship() are the
+// only way to write to the `relationships` store, and both run the full
+// check - shape (public/entities.js validateRelationshipFields) AND
+// existence (every cited evidenceId, plus both entity ids, looked up
+// inside the SAME readwrite transaction as the eventual write) - so a
+// caller that bypasses the UI and calls these functions directly with
+// evidenceIds: [] or a fabricated evidence id gets the write rejected,
+// not silently downgraded to UNKNOWN or partially saved.
+//
+// Aliases are their own store, not a field on the entity: "Ray Payne" is
+// a claim about a name, not a fact about the entity object, and keeping
+// it separate (same join-don't-duplicate pattern as evidenceItems/records
+// elsewhere in this file) means adding an alias is a small additive
+// write, never a read-modify-write race on the entity itself. Aliases
+// never merge entities - see addEntityAlias() below.
+// ---------------------------------------------------------------------------
+
+export async function createEntity(investigationId, { type, name, description, metadata }) {
+  const fields = validateEntityFields({ investigationId, type, name, description, metadata });
+  const db = await openDb();
+  const now = new Date().toISOString();
+  const entity = { id: genId('ent'), ...fields, createdAt: now, updatedAt: now };
+  await tx(db, ['entities'], 'readwrite', (t) => t.objectStore('entities').add(entity));
+  return entity;
+}
+
+export async function updateEntity(entityId, patch) {
+  const db = await openDb();
+  return tx(db, ['entities'], 'readwrite', async (t) => {
+    const store = t.objectStore('entities');
+    const existing = await reqToPromise(store.get(entityId));
+    if (!existing) return null;
+    // Re-validate the merged result, not just the patch - a patch that
+    // clears `name` must fail the same way a create with no name would.
+    const merged = { ...existing, ...patch };
+    const fields = validateEntityFields({
+      investigationId: merged.investigationId, type: merged.type, name: merged.name,
+      description: merged.description, metadata: merged.metadata
+    });
+    const updated = { ...existing, ...fields, updatedAt: new Date().toISOString() };
+    await reqToPromise(store.put(updated));
+    return updated;
+  });
+}
+
+export async function getEntity(entityId) {
+  const db = await openDb();
+  return tx(db, ['entities'], 'readonly', (t) => reqToPromise(t.objectStore('entities').get(entityId)));
+}
+
+export async function listEntities(investigationId) {
+  const db = await openDb();
+  const rows = await tx(db, ['entities'], 'readonly', (t) =>
+    reqToPromise(t.objectStore('entities').index('investigationId').getAll(investigationId))
+  );
+  return rows.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Deliberately simple substring search over name + normalized aliases -
+// no fuzzy matching, no similarity scoring (that's identity resolution,
+// a later phase per the plan doc). This is what lets "Payne" surface
+// BOTH "Marc Payne" and "Raymond Payne" as separate results without
+// implying any relationship between them.
+export async function findEntities(investigationId, queryText) {
+  const q = normalizeForSearch(queryText);
+  const [entities, aliases] = await Promise.all([listEntities(investigationId), listEntityAliasesForInvestigation(investigationId)]);
+  if (!q) return entities;
+  const aliasesByEntity = new Map();
+  for (const a of aliases) {
+    if (!aliasesByEntity.has(a.entityId)) aliasesByEntity.set(a.entityId, []);
+    aliasesByEntity.get(a.entityId).push(a);
+  }
+  return entities.filter((e) => {
+    if (e.nameNormalized.includes(q)) return true;
+    const entityAliases = aliasesByEntity.get(e.id) || [];
+    return entityAliases.some((a) => a.aliasNormalized.includes(q));
+  });
+}
+
+// Deletes an entity. Does NOT cascade-delete its relationships - a
+// relationship is an evidence-backed factual record (CANON.md "Never
+// Lose the Receipt"); silently deleting one because an entity got
+// deleted would itself lose a receipt. Relationships pointing at a
+// deleted entity render "Entity removed" in the UI, the same convention
+// already used for a removed Evidence Item in the Claims panel
+// (public/app.js renderClaimsList). Aliases ARE deleted, since they have
+// no independent meaning once their entity is gone.
+export async function deleteEntity(entityId) {
+  const db = await openDb();
+  await tx(db, ['entities', 'entityAliases'], 'readwrite', async (t) => {
+    t.objectStore('entities').delete(entityId);
+    const aliasIdx = t.objectStore('entityAliases').index('entityId');
+    const aliases = await reqToPromise(aliasIdx.getAll(entityId));
+    for (const a of aliases) t.objectStore('entityAliases').delete(a.id);
+  });
+}
+
+// The single write path for relationships. See the section header above
+// for the full enforcement rule; this function is the enforcement.
+export async function createRelationship(investigationId, fields) {
+  const shaped = validateRelationshipFields({ investigationId, ...fields });
+  const db = await openDb();
+  return tx(db, ['entities', 'evidenceItems', 'relationships'], 'readwrite', async (t) => {
+    await assertRelationshipReferencesExist(t, shaped);
+    const now = new Date().toISOString();
+    const relationship = { id: genId('rel'), ...shaped, createdAt: now, updatedAt: now };
+    await reqToPromise(t.objectStore('relationships').add(relationship));
+    return relationship;
+  });
+}
+
+export async function updateRelationship(relationshipId, patch) {
+  const db = await openDb();
+  return tx(db, ['entities', 'evidenceItems', 'relationships'], 'readwrite', async (t) => {
+    const store = t.objectStore('relationships');
+    const existing = await reqToPromise(store.get(relationshipId));
+    if (!existing) return null;
+    // Re-validate the FULL merged result every time, not just the changed
+    // fields - an update that sets evidenceIds: [] must be rejected
+    // exactly like a create would be. "No evidence = no relationship"
+    // holds for the entire lifetime of a relationship, not just at
+    // creation.
+    const merged = { ...existing, ...patch };
+    const shaped = validateRelationshipFields({
+      investigationId: merged.investigationId, sourceEntityId: merged.sourceEntityId, targetEntityId: merged.targetEntityId,
+      type: merged.type, status: merged.status, evidenceIds: merged.evidenceIds,
+      dateStart: merged.dateStart, dateEnd: merged.dateEnd, notes: merged.notes, metadata: merged.metadata
+    });
+    await assertRelationshipReferencesExist(t, shaped);
+    const updated = { ...existing, ...shaped, updatedAt: new Date().toISOString() };
+    await reqToPromise(store.put(updated));
+    return updated;
+  });
+}
+
+// Existence half of the enforcement rule, run inside the caller's own
+// transaction so the check and the write are atomic - no window where a
+// referenced evidence item could be deleted between "looks valid" and
+// "actually saved." Throws RelationshipValidationError (not a generic
+// Error) so callers can distinguish "this is malformed" from "IndexedDB
+// itself failed."
+async function assertRelationshipReferencesExist(t, { investigationId, sourceEntityId, targetEntityId, evidenceIds }) {
+  const entities = t.objectStore('entities');
+  const [source, target] = await Promise.all([reqToPromise(entities.get(sourceEntityId)), reqToPromise(entities.get(targetEntityId))]);
+  if (!source || source.investigationId !== investigationId) throw new RelationshipValidationError('Source entity not found in this investigation.');
+  if (!target || target.investigationId !== investigationId) throw new RelationshipValidationError('Target entity not found in this investigation.');
+
+  const evidenceStore = t.objectStore('evidenceItems');
+  for (const evidenceId of evidenceIds) {
+    const item = await reqToPromise(evidenceStore.get(evidenceId));
+    if (!item || item.investigationId !== investigationId) {
+      throw new RelationshipValidationError(`Evidence item "${evidenceId}" was not found in this investigation - a relationship can only cite evidence that actually exists.`);
+    }
+  }
+}
+
+export async function getRelationship(relationshipId) {
+  const db = await openDb();
+  return tx(db, ['relationships'], 'readonly', (t) => reqToPromise(t.objectStore('relationships').get(relationshipId)));
+}
+
+// Returns every relationship touching this entity, each tagged with
+// `direction` so the UI can render Outgoing/Incoming as clearly separate
+// lists (docs/INVESTIGATION_WORKSPACE_PLAN.md Part 4 "Relationship
+// Display": never flatten both directions into one ambiguous list).
+export async function listRelationshipsForEntity(investigationId, entityId) {
+  const db = await openDb();
+  return tx(db, ['relationships'], 'readonly', async (t) => {
+    const [asSource, asTarget] = await Promise.all([
+      reqToPromise(t.objectStore('relationships').index('sourceEntityId').getAll(entityId)),
+      reqToPromise(t.objectStore('relationships').index('targetEntityId').getAll(entityId))
+    ]);
+    const outgoing = asSource.filter((r) => r.investigationId === investigationId).map((r) => ({ ...r, direction: 'outgoing' }));
+    const incoming = asTarget.filter((r) => r.investigationId === investigationId).map((r) => ({ ...r, direction: 'incoming' }));
+    return [...outgoing, ...incoming].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  });
+}
+
+export async function deleteRelationship(relationshipId) {
+  const db = await openDb();
+  await tx(db, ['relationships'], 'readwrite', (t) => t.objectStore('relationships').delete(relationshipId));
+}
+
+// Alternate names for an entity - "Ray Payne" alongside "Raymond Payne."
+// Recording an alias is never identity certainty by itself and never
+// merges/renames the entity (docs/INVESTIGATION_WORKSPACE_PLAN.md
+// section 3.2 "Entity merging is never automatic"). The original
+// human-readable text is preserved; aliasNormalized only supports search
+// (findEntities() above).
+export async function addEntityAlias(investigationId, entityId, alias) {
+  const cleanAlias = normalizeName(alias);
+  if (!cleanAlias) throw new RelationshipValidationError('An alias requires text.');
+  const db = await openDb();
+  return tx(db, ['entities', 'entityAliases'], 'readwrite', async (t) => {
+    const entity = await reqToPromise(t.objectStore('entities').get(entityId));
+    if (!entity || entity.investigationId !== investigationId) throw new RelationshipValidationError('Entity not found in this investigation.');
+    const record = {
+      id: genId('alias'), investigationId, entityId, alias: cleanAlias,
+      aliasNormalized: normalizeForSearch(cleanAlias), createdAt: new Date().toISOString()
+    };
+    await reqToPromise(t.objectStore('entityAliases').add(record));
+    return record;
+  });
+}
+
+export async function listEntityAliases(entityId) {
+  const db = await openDb();
+  const rows = await tx(db, ['entityAliases'], 'readonly', (t) => reqToPromise(t.objectStore('entityAliases').index('entityId').getAll(entityId)));
+  return rows.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+}
+
+async function listEntityAliasesForInvestigation(investigationId) {
+  const db = await openDb();
+  return tx(db, ['entityAliases'], 'readonly', (t) => reqToPromise(t.objectStore('entityAliases').index('investigationId').getAll(investigationId)));
+}
+
+export async function deleteEntityAlias(aliasId) {
+  const db = await openDb();
+  await tx(db, ['entityAliases'], 'readwrite', (t) => t.objectStore('entityAliases').delete(aliasId));
 }

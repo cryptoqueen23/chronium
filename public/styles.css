@@ -504,6 +504,32 @@ footer { border-top: 1px solid var(--border); max-width: var(--max); margin: 40p
 .claim-evidence-option-value { min-height: 44px; width: 96px; flex: 0 0 96px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; font-size: 12.5px; }
 .claim-evidence-option-value:focus-visible { border-color: var(--accent); }
 
+/* ---------- Subjects tab: entities, aliases, relationships (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 1) ---------- */
+.entity-card { display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); padding: 6px 6px 6px 0; margin-bottom: 8px; }
+.entity-card-select { flex: 1; min-width: 0; text-align: left; background: none; border: 0; padding: 10px 12px; color: var(--text); cursor: pointer; min-height: 44px; }
+.entity-card-select:hover, .entity-card-select:focus-visible { background: var(--surface-raised); border-radius: 7px; }
+.entity-card-select strong { display: block; font-size: 14px; margin-top: 4px; }
+.entity-card-select p { margin: 4px 0 0; color: var(--text-secondary); font-size: 12.5px; }
+.entity-type-badge { display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 2px 7px; border-radius: 4px; background: var(--surface-raised); color: var(--text-secondary); border: 1px solid var(--border); }
+
+.alias-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--surface-raised); border: 1px solid var(--border); border-radius: 999px; padding: 4px 6px 4px 12px; margin: 0 6px 6px 0; font-size: 13px; }
+.alias-chip-remove { background: none; border: 0; color: var(--text-secondary); cursor: pointer; font-size: 15px; line-height: 1; min-width: 28px; min-height: 28px; border-radius: 50%; }
+.alias-chip-remove:hover, .alias-chip-remove:focus-visible { color: var(--danger); background: var(--danger-bg); }
+
+.rel-list { list-style: none; margin: 0; padding: 0; }
+.rel-row { border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; font-size: 13.5px; }
+.rel-row a { color: var(--accent); }
+.rel-row .hint { display: block; margin-top: 4px; }
+.rel-row p.hint { margin: 6px 0 0; }
+
+/* Relationship confidence - text label always present (WCAG: never color alone) */
+.status-badge.status-confirmed { background: rgba(101,184,138,.15); color: var(--success); }
+.status-badge.status-probable { background: rgba(101,184,138,.1); color: var(--success); }
+.status-badge.status-possible { background: rgba(214,168,75,.15); color: var(--accent); }
+.status-badge.status-disputed { background: rgba(220,113,105,.12); color: var(--danger); }
+.status-badge.status-refuted { background: rgba(220,113,105,.2); color: var(--danger); }
+.status-badge.status-unknown { background: var(--surface-raised); color: var(--text-secondary); }
+
 /* ---------- Bibliography cards (Evidence tab subpanel) ---------- */
 .biblio-title { font-size: 15px; font-weight: 700; margin: 0 0 10px; }
 .biblio-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 10px 16px; margin: 0; }

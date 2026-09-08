@@ -8,7 +8,10 @@ tested against Product Principles, especially #3 Never Lose the Receipt,
 #11 Separate Fact From Interpretation, #12 Missing Evidence Is Information,
 and #17 Never Fake Coverage).
 
-**Written 2026-09-08, before any code was changed.**
+**Written 2026-09-08, before any code was changed. Phase 1 (below) shipped
+later the same day — see "Phase 1: as-built" appended at the end of this
+document for what actually landed, including two deviations from this
+original plan and two pre-existing bugs found and fixed along the way.**
 
 ## Guiding constraint
 
@@ -248,3 +251,118 @@ Everything is client-side. `src/index.js` is untouched in Phase 1.
   ALLEGATION / UNRESOLVED QUESTION / NO EVIDENCE LOCATED.
 - **Phase 5 — Network view.** Only after the data is trustworthy. Clicking
   any edge reveals its supporting evidence.
+
+---
+
+## Phase 1: as-built (2026-09-08)
+
+Shipped, live-verified in a real browser (21/21 assertions, zero console
+errors — see `docs/CLAUDE_HANDOFF.md`), commit follows this doc. Scoped
+tightly to the entity/relationship foundation per the user's explicit
+instruction — no timeline events, no claims integration, no graph
+visualization, no AI extraction, no report generation.
+
+**Files added:** `public/entities.js` (pure vocabulary + validation, no
+DOM/IndexedDB), `scripts/test-entities.mjs` (21 unit tests, plain
+`node --test`, no new dependency).
+**Files modified:** `public/db.js` (`DB_VERSION` 6→7, three new stores +
+CRUD), `public/app.js` (Subjects tab UI), `public/index.html` (panel
+markup + `icon-user`), `public/styles.css` (entity/alias/relationship
+card styles), `public/ui.js` (see "Bugs found and fixed" below),
+`package.json` (`check` + new `test:entities` script).
+
+### Two deviations from the plan above
+
+1. **Aliases are a real separate `entityAliases` store**, not the inline
+   `aliases: []` array field sketched in Part 4's schema. Same
+   join-don't-duplicate pattern already used for `evidenceItems`/`records`
+   elsewhere in `db.js`; matches the CRUD shape (`addEntityAlias`/
+   `listEntityAliases`) more naturally than a read-modify-write on the
+   entity object would.
+2. **`entityMentions` (the `quotedName`-preserving store described in
+   Part 4, lines ~186-208 above) was NOT built.** It's genuinely valuable
+   for a later phase (automatic entity-mention extraction, search-time
+   collision warnings) but nothing in Phase 1's own test requirements
+   needed it — the Marc/Raymond Payne regression test passes correctly
+   with two plain separate entity records and independent evidence-backed
+   relationships, no mention-tracking required. Deferred, not dropped;
+   revisit when entity-mention extraction is actually being built.
+
+### The hard rule, as actually enforced
+
+`public/db.js` `createRelationship()`/`updateRelationship()` are the only
+write path for the `relationships` store. Both: (1) validate shape via
+`public/entities.js` `validateRelationshipFields()` — throws
+`RelationshipEvidenceRequiredError` if `evidenceIds` is missing, not an
+array, or empty; (2) inside the SAME IndexedDB transaction as the
+eventual write, confirm every cited evidence id and both entity ids
+actually exist in this investigation (`assertRelationshipReferencesExist`)
+— throws `RelationshipValidationError` otherwise. Live-verified by calling
+`createRelationship()` directly via a `page.evaluate(() => import('/db.js'))`
+call that bypasses the UI entirely, exactly as instructed: empty array,
+missing field, and a fabricated evidence id were all rejected, and
+`listRelationshipsForEntity()` afterward confirmed zero of the three
+attempts persisted anything.
+
+### Two pre-existing bugs found and fixed (not scope creep — both directly blocked verifying Phase 1's own test requirements)
+
+1. **`public/ui.js` `confirmDialog()` always resolved `false`, regardless
+   of which button was clicked.** `finish(result)` called `close()`
+   (which synchronously fires `openOverlay`'s `onClose: () => resolve(false)`)
+   *before* calling `resolve(result)` — and a Promise only honors its
+   first settle call, so the Confirm button's `resolve(true)` was always a
+   no-op. This affected every confirm-gated destructive action in the
+   app, including "Delete investigation" (both entry points), not just
+   this session's new "Delete subject" — none of them had ever actually
+   executed via their Confirm button. Fixed with an idempotent `settle()`
+   guard so whichever call happens first (button click vs. Escape/backdrop)
+   wins, instead of a fixed call-order assumption. Live-verified
+   separately from the Phase 1 entity tests: Cancel confirmed to not
+   delete, Confirm confirmed to actually delete, on the *existing*
+   "Delete investigation" feature.
+2. **`#workspaceKebabBtn` (the in-workspace "…" menu, home of
+   `delete-active-investigation`) has no click handler wired up at all** —
+   found while writing the regression check for bug #1 above, when that
+   path turned out to be unreachable independent of the confirmDialog
+   bug. **Not fixed — out of Phase 1 scope**, and the investigations-list
+   page's per-card kebab menu (`data-kebab-toggle` + `delete-investigation`)
+   is a working alternate path to the same feature, so this isn't a
+   dead-end for users, just a broken shortcut. Flagged here for a
+   separate, explicit fix decision.
+
+### Verification summary
+
+`npm run check` clean (11 files, `public/entities.js` added to the list).
+`npm run test:entities` — 21/21 pass (pure validation logic: every
+`ENTITY_TYPES`/`RELATIONSHIP_STATUSES` value, the evidence-required
+rejection in its three shapes, self-relationship rejection, status/type
+normalization, name-normalization non-collision). Live Puppeteer pass
+against `wrangler dev` (viewport 1280×900, per the Ask Sources session's
+own lesson about default-viewport nav collapse) — 21/21 assertions, zero
+console/page errors, covering: DB migration 6→7 survives with all three
+new stores present; Subjects tab loads; entity create + list +
+name/alias search (`findEntities`, single search codepath now used by
+both live-typing and tab re-entry — a consistency bug in the alias search
+was found and fixed mid-session, see the code's own history); relationship
+submit button disabled with zero evidence selected, enables on selection;
+a valid evidence-backed relationship round-trips onto the profile view
+with correct Outgoing/Incoming direction and confidence badge; the
+direct-`db.js`-bypass rejection (§ above); the full Marc Payne/Raymond
+Payne regression — search returns both, no merge, no relationship
+transfer in either direction, confirmed from both entities' profiles
+independently; alias addition doesn't merge or rename; entity deletion
+doesn't corrupt unrelated entities or their relationships; Evidence/Report
+tabs unaffected; full reload persistence.
+
+### Deferred (explicitly, not silently dropped)
+
+`entityMentions`/`quotedName` (see deviation #2 above); timeline events;
+identity resolution/match scoring; source tiers; network view; cascading
+relationship cleanup on entity delete (current behavior: relationships
+pointing at a deleted entity render "Entity removed," the same convention
+already used for a removed Evidence Item in the Claims panel — a
+relationship is itself an evidence-backed record, so silently
+cascade-deleting it because an entity got deleted would lose a receipt);
+`deleteInvestigation()` cascading to entities/relationships/aliases (it
+doesn't cascade to `evidenceItems`/`claims` either — pre-existing gap,
+consistent with, not introduced by, this phase).

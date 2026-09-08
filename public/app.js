@@ -8,8 +8,15 @@ import {
   listQuantitativeFindings, createQuantitativeFinding, deleteQuantitativeFinding,
   listQualitativeFindings, createQualitativeFinding, deleteQualitativeFinding,
   listCrossValidations, createCrossValidation, deleteCrossValidation,
-  listAskSourcesHistory, createAskSourcesHistoryEntry, updateClaim
+  listAskSourcesHistory, createAskSourcesHistoryEntry, updateClaim,
+  createEntity, updateEntity, listEntities, findEntities, deleteEntity,
+  createRelationship, listRelationshipsForEntity, deleteRelationship,
+  addEntityAlias, listEntityAliases, deleteEntityAlias
 } from './db.js';
+import {
+  ENTITY_TYPES, ENTITY_TYPE_LABELS, RELATIONSHIP_STATUSES, RELATIONSHIP_STATUS_LABELS,
+  SUGGESTED_RELATIONSHIP_TYPES
+} from './entities.js';
 import { ingestFiles, ingestZip } from './ingest/pipeline.js';
 import { openOverlay, openMenu, confirmDialog } from './ui.js';
 import { formatCitation, buildFootnotes, CITATION_STYLES, CITATION_STYLE_LABELS } from './citations.js';
@@ -105,6 +112,14 @@ let previousAskAiAnswer = '';
 let lastAskDepth = 'research'; // Adaptive Research Depth (Principle #21) - presentation only, same evidence
 let lastBibliographyRecords = [];
 
+// Subjects tab (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 1): last-loaded
+// entities/evidence for the active investigation, so form handlers don't
+// re-fetch on every keystroke, plus which subject (if any) is currently
+// open - driven by the URL (#/workspace/subjects/:entityId), same
+// hash-as-state convention as Findings/Evidence sub-tabs.
+let lastSubjectsEntities = [];
+let lastSubjectsEvidenceItems = [];
+
 // P0 "Make Investigation Workspace User-Friendly": 4 primary sections
 // instead of 9 - a first-time user shouldn't need to understand Sources,
 // Outline, Gaps, etc. to upload a document and search it. The visible
@@ -115,6 +130,7 @@ let lastBibliographyRecords = [];
 // Research under a "Details"-style disclosure.
 const WORKSPACE_TABS = [
   { id: 'research', label: 'Research', icon: 'icon-search' },
+  { id: 'subjects', label: 'Subjects', icon: 'icon-user' },
   { id: 'evidence', label: 'Evidence', icon: 'icon-flag' },
   { id: 'findings', label: 'Findings', icon: 'icon-bar' },
   { id: 'report', label: 'Report', icon: 'icon-doc-check' }
@@ -1067,6 +1083,8 @@ async function renderWorkspaceView(tab, subtab) {
     askSourcesAnswer.classList.add('hidden');
     investigationQuery.value = '';
     await renderAskSourcesHistory();
+  } else if (tab === 'subjects') {
+    await renderSubjectsPanel(subtab || null);
   } else if (tab === 'evidence') {
     const activeSubtab = EVIDENCE_SUBTABS.some((t) => t.id === subtab) ? subtab : 'items';
     lastEvidenceSubtab = activeSubtab;
@@ -2077,6 +2095,298 @@ document.addEventListener('click', async (e) => {
   if (!btn) return;
   await deleteClaim(btn.dataset.id);
   await renderClaimsPanel();
+});
+
+// ---------------------------------------------------------------------------
+// Subjects (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 1): the entity/
+// relationship case-file layer. List view (create + search + browse
+// subjects) and profile view (one subject's aliases + relationships) are
+// two panels toggled by whether the URL carries an entity id
+// (#/workspace/subjects/:entityId) - selecting a subject just navigates,
+// so the browser back button and reloads both work for free, matching
+// every other sub-view in this app.
+//
+// THE HARD RULE lives in public/db.js createRelationship()/
+// updateRelationship(), not here - this file's job is to make it hard to
+// even attempt a save without evidence (submit button starts disabled,
+// only enables once an evidence checkbox is checked), but the real
+// enforcement is the data-layer boundary. Never assume the UI check is
+// sufficient on its own.
+// ---------------------------------------------------------------------------
+async function renderSubjectsPanel(selectedEntityId) {
+  const [entities, evidenceItems] = await Promise.all([
+    listEntities(activeInvestigationId),
+    listEvidenceItems(activeInvestigationId)
+  ]);
+  lastSubjectsEntities = entities;
+  lastSubjectsEvidenceItems = evidenceItems;
+
+  const entity = selectedEntityId ? entities.find((e) => e.id === selectedEntityId) : null;
+  document.querySelector('#subjectsListView').classList.toggle('hidden', !!entity);
+  document.querySelector('#subjectProfileView').classList.toggle('hidden', !entity);
+
+  if (entity) {
+    await renderEntityProfile(entity, entities, evidenceItems);
+  } else {
+    renderEntityTypeOptions();
+    // Route through findEntities() (name + alias search) whenever there's
+    // a search value, exactly like the live-typing handler below - so
+    // re-entering this tab with a non-empty search box behaves the same
+    // as typing it just did, instead of silently falling back to a
+    // name-only filter that can't see aliases.
+    const searchValue = document.querySelector('#subjectsSearchInput').value.trim();
+    const rows = searchValue ? await findEntities(activeInvestigationId, searchValue) : entities;
+    renderEntityList(rows, searchValue);
+  }
+}
+
+function renderEntityTypeOptions() {
+  const select = document.querySelector('#entityTypeSelect');
+  if (select.options.length) return; // static vocabulary - populate once
+  select.innerHTML = ENTITY_TYPES.map((t) => `<option value="${attr(t)}">${esc(ENTITY_TYPE_LABELS[t])}</option>`).join('');
+}
+
+// `rows` must already be filtered by the caller (findEntities() when
+// there's a search value, the full list otherwise) - this function only
+// renders, it never filters, so there is exactly one search codepath
+// (name + alias, via findEntities) instead of two that could drift apart.
+function renderEntityList(rows, filterText) {
+  const container = document.querySelector('#subjectsList');
+  if (!rows.length) {
+    container.innerHTML = filterText
+      ? `<p class="status">No subjects match “${esc(filterText)}”.</p>`
+      : '<p class="status">No subjects yet — add a person, organization, or other entity above to start building this investigation\'s case file.</p>';
+    return;
+  }
+  container.innerHTML = rows.map((e) => `<article class="entity-card">
+    <button type="button" class="entity-card-select" data-action="select-entity" data-id="${attr(e.id)}">
+      <span class="entity-type-badge">${esc(ENTITY_TYPE_LABELS[e.type] || e.type)}</span>
+      <strong>${esc(e.name)}</strong>
+      ${e.description ? `<p>${esc(e.description)}</p>` : ''}
+    </button>
+    <button type="button" class="btn btn-small card-delete" data-action="delete-entity" data-id="${attr(e.id)}" aria-label="Delete ${esc(e.name)}">Delete</button>
+  </article>`).join('');
+}
+
+// findEntities() does the same substring-over-name-and-aliases search as
+// the list filter above, but goes through the real search path (aliases
+// included) - used so "search 'Payne' returns both entities" is an
+// actual product behavior, not just a list filter side effect.
+document.querySelector('#subjectsSearchInput').addEventListener('input', async (e) => {
+  if (!activeInvestigationId) return;
+  const rows = await findEntities(activeInvestigationId, e.target.value);
+  renderEntityList(rows, e.target.value);
+});
+
+document.querySelector('#entityForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!activeInvestigationId) return;
+  const name = document.querySelector('#entityNameInput').value.trim();
+  const type = document.querySelector('#entityTypeSelect').value;
+  const description = document.querySelector('#entityDescriptionInput').value.trim();
+  if (!name) return;
+  try {
+    const entity = await createEntity(activeInvestigationId, { type, name, description });
+    document.querySelector('#entityForm').reset();
+    await renderSubjectsPanel(null);
+    showToast(`Added subject “${entity.name}”.`);
+  } catch (err) {
+    showToast(err.message || 'Could not add subject.', true);
+  }
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="select-entity"]');
+  if (!btn) return;
+  location.hash = `#/workspace/subjects/${btn.dataset.id}`;
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="delete-entity"]');
+  if (!btn) return;
+  const entity = lastSubjectsEntities.find((x) => x.id === btn.dataset.id);
+  const ok = await confirmDialog({
+    title: 'Delete subject?',
+    message: `Delete “${entity?.name || 'this subject'}”? Its relationships stay in place as evidence-backed records but will show this subject as removed, the same way a deleted evidence item does elsewhere.`,
+    confirmLabel: 'Delete subject', danger: true
+  });
+  if (!ok) return;
+  await deleteEntity(btn.dataset.id);
+  await renderSubjectsPanel(null);
+});
+
+async function renderEntityProfile(entity, allEntities, evidenceItems) {
+  document.querySelector('#subjectProfileHead').innerHTML = `
+    <p class="eyebrow">${esc(ENTITY_TYPE_LABELS[entity.type] || entity.type)}</p>
+    <h1 style="margin:0 0 8px;font-size:22px">${esc(entity.name)}</h1>
+    ${entity.description ? `<p class="view-subtitle">${esc(entity.description)}</p>` : ''}
+  `;
+
+  await renderEntityAliases(entity);
+  renderRelationshipTargetOptions(entity, allEntities);
+  renderRelationshipVocabularyOptions();
+  renderRelationshipEvidencePicker(evidenceItems);
+  await renderEntityRelationships(entity, allEntities);
+}
+
+async function renderEntityAliases(entity) {
+  const aliases = await listEntityAliases(entity.id);
+  const container = document.querySelector('#entityAliasList');
+  container.innerHTML = aliases.length
+    ? aliases.map((a) => `<span class="alias-chip">${esc(a.alias)} <button type="button" class="alias-chip-remove" data-action="delete-alias" data-id="${attr(a.id)}" aria-label="Remove alias ${esc(a.alias)}">×</button></span>`).join('')
+    : '<p class="hint">No aliases yet.</p>';
+}
+
+document.querySelector('#entityAliasForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const entity = currentProfileEntity();
+  if (!entity) return;
+  const input = document.querySelector('#entityAliasInput');
+  const alias = input.value.trim();
+  if (!alias) return;
+  try {
+    await addEntityAlias(activeInvestigationId, entity.id, alias);
+    input.value = '';
+    await renderEntityAliases(entity);
+  } catch (err) {
+    showToast(err.message || 'Could not add alias.', true);
+  }
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="delete-alias"]');
+  if (!btn) return;
+  const entity = currentProfileEntity();
+  await deleteEntityAlias(btn.dataset.id);
+  if (entity) await renderEntityAliases(entity);
+});
+
+// The entity id currently open, read back from the URL - avoids a
+// separate mutable "current entity" variable that could drift from what
+// #/workspace/subjects/:entityId actually says.
+function currentProfileEntity() {
+  const { tab, subtab } = parseHash();
+  if (tab !== 'subjects' || !subtab) return null;
+  return lastSubjectsEntities.find((e) => e.id === subtab) || null;
+}
+
+function renderRelationshipTargetOptions(entity, allEntities) {
+  const select = document.querySelector('#relationshipTargetSelect');
+  const others = allEntities.filter((e) => e.id !== entity.id);
+  select.innerHTML = others.length
+    ? others.map((e) => `<option value="${attr(e.id)}">${esc(e.name)} (${esc(ENTITY_TYPE_LABELS[e.type] || e.type)})</option>`).join('')
+    : '<option value="">Add another subject first</option>';
+}
+
+function renderRelationshipVocabularyOptions() {
+  const statusSelect = document.querySelector('#relationshipStatusSelect');
+  if (!statusSelect.options.length) {
+    statusSelect.innerHTML = RELATIONSHIP_STATUSES.map((s) => `<option value="${attr(s)}"${s === 'UNKNOWN' ? ' selected' : ''}>${esc(RELATIONSHIP_STATUS_LABELS[s])}</option>`).join('');
+  }
+  const datalist = document.querySelector('#relationshipTypeSuggestions');
+  if (!datalist.options.length) {
+    datalist.innerHTML = SUGGESTED_RELATIONSHIP_TYPES.map((t) => `<option value="${attr(t)}"></option>`).join('');
+  }
+}
+
+function renderRelationshipEvidencePicker(evidenceItems) {
+  const container = document.querySelector('#relationshipEvidencePicker');
+  if (!evidenceItems.length) {
+    container.innerHTML = '<p class="status" style="padding:12px;margin:0">Add evidence items first, on the Evidence tab — a relationship can\'t be saved without at least one.</p>';
+  } else {
+    container.innerHTML = evidenceItems.map((item) => `<label class="claim-evidence-option">
+      <input type="checkbox" data-evidence-id="${attr(item.id)}" />
+      <span class="claim-evidence-option-text">${esc(item.excerptText.slice(0, 140))}${item.excerptText.length > 140 ? '…' : ''}<p>${esc(item.excerptType)}${item.location ? ' · ' + esc(item.location) : ''}</p></span>
+    </label>`).join('');
+  }
+  updateRelationshipSubmitState();
+}
+
+// The UI-level half of "no evidence = no relationship": the submit
+// button starts disabled and only enables once ≥1 evidence checkbox is
+// checked. This is a convenience, not the enforcement - db.js rejects
+// the write regardless of what this button's state was.
+function updateRelationshipSubmitState() {
+  const checked = document.querySelectorAll('#relationshipEvidencePicker input[type="checkbox"]:checked').length;
+  const btn = document.querySelector('#relationshipSubmitBtn');
+  const status = document.querySelector('#relationshipFormStatus');
+  btn.disabled = checked === 0;
+  status.textContent = checked === 0 ? 'Select at least one evidence item to enable saving.' : `${checked} evidence item${checked === 1 ? '' : 's'} selected.`;
+}
+document.querySelector('#relationshipEvidencePicker').addEventListener('change', (e) => {
+  if (e.target.matches('input[type="checkbox"]')) updateRelationshipSubmitState();
+});
+
+async function renderEntityRelationships(entity, allEntities) {
+  const entById = new Map(allEntities.map((e) => [e.id, e]));
+  const relationships = await listRelationshipsForEntity(activeInvestigationId, entity.id);
+  const container = document.querySelector('#entityRelationshipsList');
+  if (!relationships.length) { container.innerHTML = '<p class="status">No relationships yet.</p>'; return; }
+
+  const outgoing = relationships.filter((r) => r.direction === 'outgoing');
+  const incoming = relationships.filter((r) => r.direction === 'incoming');
+
+  function relRow(r, otherId, arrow) {
+    const other = entById.get(otherId);
+    const otherLabel = other
+      ? `<a href="#/workspace/subjects/${attr(other.id)}">${esc(other.name)}</a>`
+      : '<span class="hint">Entity removed</span>';
+    return `<li class="rel-row">
+      <span class="status-badge status-${esc(r.status.toLowerCase())}">${esc(RELATIONSHIP_STATUS_LABELS[r.status] || r.status)}</span>
+      <strong>${esc(r.type.replace(/_/g, ' '))}</strong> ${arrow} ${otherLabel}
+      <span class="hint">${r.evidenceIds.length} evidence item${r.evidenceIds.length === 1 ? '' : 's'}${r.dateStart ? ' · from ' + esc(r.dateStart) : ''}${r.dateEnd ? ' to ' + esc(r.dateEnd) : ''}</span>
+      ${r.notes ? `<p class="hint">${esc(r.notes)}</p>` : ''}
+      <button type="button" class="btn btn-small card-delete" data-action="delete-relationship" data-id="${attr(r.id)}">Delete</button>
+    </li>`;
+  }
+
+  container.innerHTML = `
+    ${outgoing.length ? `<h3 style="margin:0 0 8px;font-size:13px">Outgoing</h3><ul class="rel-list">${outgoing.map((r) => relRow(r, r.targetEntityId, '→')).join('')}</ul>` : ''}
+    ${incoming.length ? `<h3 style="margin:${outgoing.length ? '18px' : '0'} 0 8px;font-size:13px">Incoming</h3><ul class="rel-list">${incoming.map((r) => relRow(r, r.sourceEntityId, '←')).join('')}</ul>` : ''}
+  `;
+}
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="delete-relationship"]');
+  if (!btn) return;
+  await deleteRelationship(btn.dataset.id);
+  const entity = currentProfileEntity();
+  if (entity) await renderEntityRelationships(entity, lastSubjectsEntities);
+});
+
+document.querySelector('#relationshipForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const entity = currentProfileEntity();
+  if (!entity || !activeInvestigationId) return;
+  const direction = document.querySelector('#relationshipDirectionSelect').value;
+  const targetId = document.querySelector('#relationshipTargetSelect').value;
+  const type = document.querySelector('#relationshipTypeInput').value;
+  const status = document.querySelector('#relationshipStatusSelect').value;
+  const dateStart = document.querySelector('#relationshipDateStart').value;
+  const dateEnd = document.querySelector('#relationshipDateEnd').value;
+  const notes = document.querySelector('#relationshipNotes').value;
+  const evidenceIds = [...document.querySelectorAll('#relationshipEvidencePicker input[type="checkbox"]:checked')].map((cb) => cb.dataset.evidenceId);
+
+  if (!targetId) { showToast('Add another subject first.', true); return; }
+
+  const sourceEntityId = direction === 'outgoing' ? entity.id : targetId;
+  const targetEntityId = direction === 'outgoing' ? targetId : entity.id;
+
+  try {
+    await createRelationship(activeInvestigationId, { sourceEntityId, targetEntityId, type, status, evidenceIds, dateStart, dateEnd, notes });
+    document.querySelector('#relationshipForm').reset();
+    updateRelationshipSubmitState();
+    await renderEntityRelationships(entity, lastSubjectsEntities);
+    showToast('Added relationship.');
+  } catch (err) {
+    // Reaches here only if something got past the disabled-button guard
+    // (e.g. the evidence picker was empty because there's no evidence at
+    // all yet) - db.js's rejection is still the thing that actually
+    // stopped the write; this just surfaces why. err instanceof
+    // RelationshipValidationError for anything thrown by
+    // createRelationship()/validateRelationshipFields.
+    showToast(err.message || 'Could not add relationship.', true);
+  }
 });
 
 // ---------------------------------------------------------------------------

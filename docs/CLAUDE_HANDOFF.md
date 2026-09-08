@@ -10,30 +10,29 @@ every `CANON RULE` — these are load-bearing, not decoration), then
 investigation-level research loop this session completed most of), then
 skim `src/index.js` and `public/app.js`.
 
-**Last updated:** 2026-09-08. **Ask Sources + Discover Sources is now live-
-verified end-to-end in a real browser** (see "Live verification: what
-actually happened, 2026-09-08" below) — this closes out the "mid-flight"
-status from the 2026-08-31 handoff. Everything under "In progress this
-session" is still uncommitted working-tree changes as of this writing;
-commit it before starting any new feature on top (see "Where to look
-next"). Everything below through "AI-assisted analysis: confirmed working"
-reflects the previous session, committed as `8b22ea5` ("feat: complete
-evidence-backed research methodology workflow") and pushed to
-`origin/main`.
+**Last updated:** 2026-09-08 (second update same day). **Investigation
+Entities (Subjects tab) — Phase 1 of the case-file layer — is built and
+live-verified**, per the user's explicit request following the Ask
+Sources milestone. See "In progress this session: Investigation Entities"
+below. Everything under that heading is uncommitted as of this writing;
+it is the very next thing to commit (see "Where to look next"), separately
+from the Ask Sources commit below.
 
-**Also new this session:** `principle.md` (repo root) was added upstream
-by the user as Chronium's product constitution and merged into
-`docs/CANON.md` as a new top "Product Principles" section that explicitly
-**supersedes the rest of CANON.md on conflict**. Read that section first,
-before the rest of CANON.md — it's 22 numbered principles plus a handful
-of one-line rules. One real conflict was found and fixed this session
-(see "Follow-up context" below); the rest of Ask Sources was already
-broadly aligned since it was designed independently toward the same
-"source-first, AI-last-resort, never lose the receipt" ideas.
+Ask Sources + Discover Sources (Roadmap Phase 5) is **done, live-verified,
+and committed** as `98509dc` ("feat: Ask Sources + Discover Sources,
+live-verified end-to-end") — see that commit and
+`docs/ROADMAP.md` Phase 5 for what it covers; this file no longer carries
+its uncommitted-diff details since git history is now the source of truth
+for it. `principle.md` (repo root, Chronium's product constitution) was
+merged into `docs/CANON.md` as "Product Principles" in that same commit —
+read that section first, before the rest of CANON.md.
+
+Everything from "Previous session's work" onward below reflects the
+session before that, committed as `8b22ea5` and pushed to `origin/main`.
 
 ## What Chronium Mind actually is right now
 
-Two things, merged into one engine — unchanged from the previous handoff:
+Three things, merged into one engine:
 
 1. A federated **historical web search** (Arquivo.pt, Wayback CDX, Common
    Crawl, Memento) with cross-archive dedup, capture-reachability
@@ -41,333 +40,153 @@ Two things, merged into one engine — unchanged from the previous handoff:
    every connector result (found / provider-unavailable /
    no-captures-in-index / verified-gap).
 2. An **Investigation Workspace** — upload/search your own documents, turn
-   a passage into cited Evidence, build Claims, and generate a
-   deterministic (free) Evidence-Backed Report. AI is a paid, opt-in,
-   last-resort layer (Qualitative Analysis synthesis only).
+   a passage into cited Evidence, build Claims, build a **case file of
+   Subjects and evidence-backed Relationships between them** (new this
+   session — see below), and generate a deterministic (free)
+   Evidence-Backed Report. AI is a paid, opt-in, last-resort layer
+   (Qualitative Analysis synthesis only).
+3. **Ask Sources** (including Discover Sources) — a conversational entry
+   point over the same investigation state, source-first and
+   deterministic-first. See commit `98509dc`.
 
 Copperas Cove, TX is still the proof corpus, not a special case in the
 code — no Copperas-Cove-specific logic outside `data/`.
 
-A third capability, **Ask Sources** (including Discover Sources), is
-written and **now live-verified in a real browser** — see "Live
-verification: what actually happened, 2026-09-08" below for exactly what
-was tested. Still uncommitted.
+## In progress this session: Investigation Entities (Subjects tab) — uncommitted, live-verified 2026-09-08
 
-## In progress this session: Ask Sources (uncommitted, syntax-checked, live-verified 2026-09-08)
+The user's explicit ask, following the Ask Sources milestone: evolve
+Chronium from "archive search" into a real investigation workspace —
+subjects (people, organizations, government bodies, etc.), a relationship
+graph between them, with one hard non-negotiable rule pasted verbatim:
+**"A relationship MUST NOT be persisted unless it references at least one
+valid evidence item... Enforce this at the data-layer boundary, not just
+the UI."** The user also specified a permanent regression test: create
+Marc Payne and Raymond Payne as separate people, give each an independent
+evidence-backed relationship, and verify Chronium never merges them,
+transfers a relationship between them, or infers a connection neither
+piece of evidence supports — modeling a real research error from an
+earlier Copperas Cove session (a secondary source conflated "Marc Payne"
+with "Raymond Payne").
 
-The user's ask, across several messages: (1) the Research tab's search
-box should be a genuinely conversational **"Ask Sources"** entry point,
-not an "AI chat" — source-first and deterministic-first; (2) it should
-also be the single place to *produce* every research artifact from that
-same research state ("Research once, reuse everywhere"); (3) after
-`principle.md` landed as the binding product constitution
-(`docs/CANON.md` "Product Principles"), four more things explicitly:
-first-class **Investigative Lead**/**Unresolved** finding states,
-**Adaptive Research Depth** (Quick/Explain/Research/Professional - same
-evidence, different presentation), a proper **citation/footnote engine**,
-and everything testable conversationally through Ask Sources, not forms.
-This is Roadmap Phase 5 ("Research Agent") plus all of the above, done
-together because the user asked for it explicitly across this session
-(not self-directed scope increase - see the previous handoff's note
-about not self-directing into new phases; this session's asks override
-that for Ask Sources specifically).
+Before writing code: read `docs/INVESTIGATION_WORKSPACE_PLAN.md` in full
+(a same-session audit of what already existed toward this — more than
+expected, see that doc's Part 1 — plus the phased plan), inspected
+`public/db.js`'s existing store/CRUD conventions, the Evidence Items data
+shape, the hash-based nav/routing convention (`#/workspace/:tab/:subtab`),
+and confirmed there is no unit-test runner beyond `npm run check` (syntax
+only) — see "Test conventions" below for what this session added.
 
-Full original design is in the approved plan file this session used
-(`tranquil-shimmying-teapot.md` in Claude Code's plan history) — this
-section is the condensed, updated as-built version covering everything
-built since, including the post-principle.md additions.
+**Scoped tightly, per explicit instruction**: entity + relationship data
+model and a Subjects tab UI only. Explicitly NOT touched: timeline events,
+claims integration, graph visualization, AI extraction, report generation.
+See `docs/INVESTIGATION_WORKSPACE_PLAN.md` "Phase 1: as-built" (appended
+to that doc this session) for the complete as-built record — file list,
+schema, the two deliberate deviations from the original plan (aliases as
+a real `entityAliases` store rather than an inline array field;
+`entityMentions`/`quotedName` deferred, not built), and full verification
+detail. This handoff section is the condensed pointer; that doc is the
+detailed record — don't let the two drift apart.
 
-**Files touched** (`git status --short` right now):
+**Files touched:**
 ```
- M docs/CANON.md         - merged principle.md as "Product Principles" (supersedes on conflict)
- M docs/CLAUDE_HANDOFF.md - this file
- M package.json           - `check` script covers all 4 new public/*.js files
- M public/app.js          - Ask Sources core, Discover Sources, fact-state labels, adaptive depth, footnotes
- M public/db.js           - DB_VERSION 5->6, askSourcesHistory store (+factState), updateClaim()
- M public/index.html      - Research tab hero reworked into Ask Sources, My Sources/Discovered sections
- M public/styles.css      - .ask-sources-*, .fact-badge-*, .biblio-cite, .depth-explain
- M src/index.js           - POST /api/analyze/ask-sources (mirrors qualitative), follow-up context
-?? public/artifacts.js    - new: deterministic table artifact renderers
-?? public/askCommands.js  - new: command router, fact-state classifier, depth parser
-?? public/citations.js    - new: APA/MLA/Chicago/Turabian/legal citations + footnotes
-?? public/discover.js     - new: provider-neutral Discover Sources seam over /api/search
+ M package.json    - `check` gains entities.js; new `test:entities` script
+ M public/app.js   - Subjects tab: entity/alias/relationship CRUD UI
+ M public/db.js    - DB_VERSION 6->7, entities/relationships/entityAliases stores + CRUD
+ M public/index.html - Subjects panel markup, icon-user symbol
+ M public/styles.css - .entity-card/.alias-chip/.rel-row/.status-badge.status-* styles
+ M public/ui.js    - confirmDialog() bug fix (see below) - NOT feature scope, a blocking dependency fix
+?? public/entities.js       - new: pure vocabulary + validation, no DOM/IndexedDB
+?? scripts/test-entities.mjs - new: 21 unit tests, plain `node --test`, no new dependency
 ```
-`principle.md` itself is committed upstream (pulled via fast-forward,
-commits `4262054`/`bb2a435`/`0ed5225`/`546750e` on `origin/main`) - not
-part of this session's uncommitted diff. No commit of the diff above has
-been made.
 
-**Deterministic core** (`public/app.js` `runAskSourcesQuestion`,
-`public/askCommands.js` `parseAskSourcesCommand`): a typed question is
-parsed by a fixed, keyword/regex rule table (no NLU, no AI) into one of
-`search` / `create` / `add-to` / `exclude-from-report` / `clarify-table`
-/ `leads` / `unresolved`. Plain search reuses the existing
-`searchInvestigation()` (`public/db.js`) and `resultRow()`
-(`public/app.js`) — the Source Fact layer. `computeDeterministicFact()`
-adds a Computed Fact line for count/earliest/latest questions. Zero
-matches states insufficiency plainly, never invents an answer.
+**The hard rule, where it actually lives**: `public/entities.js`
+`validateRelationshipFields()` throws `RelationshipEvidenceRequiredError`
+for missing/non-array/empty `evidenceIds` (shape check, no DB access).
+`public/db.js` `createRelationship()`/`updateRelationship()` — the ONLY
+write path to the `relationships` store — call that, then, inside the
+SAME IndexedDB transaction as the eventual write,
+`assertRelationshipReferencesExist()` confirms every cited evidence id
+and both entity ids actually exist in this investigation, throwing
+`RelationshipValidationError` otherwise. Verified by calling
+`createRelationship()` directly via `page.evaluate(() => import('/db.js'))`
+— bypassing the UI entirely, exactly as instructed — with an empty
+array, a missing field, and a fabricated evidence id: all three rejected,
+zero relationships persisted.
 
-**Follow-up context (Principle #1 fix)**: Ask Sources was originally
-built single-turn/stateless per an earlier explicit decision in this
-same session - `principle.md` then required "follow-up questions must
-understand the context of the conversation," which is a real conflict
-("this document wins" per the user). Fixed narrowly, not with full chat
-memory: `previousAskQuestion`/`previousAskAiAnswer` hold exactly one
-prior turn; if a question alone matches nothing, `searchInvestigation()`
-is retried once with the previous+current question's terms combined
-(still deterministic, no AI); the AI endpoint optionally receives
-`previousQuestion`/`previousAnswer` purely to resolve pronouns like "why
-did it change," and its system prompt explicitly forbids treating the
-previous answer as evidence for the new one.
+**Two pre-existing bugs found and fixed** (both directly blocked
+verifying this phase's own test requirements — not scope creep):
+1. `public/ui.js` `confirmDialog()` always resolved `false` regardless of
+   which button was clicked (a Promise-settle-ordering bug: `close()`'s
+   `onClose: () => resolve(false)` fired before the real
+   `resolve(result)`, and only a promise's first settle call counts).
+   This affected every confirm-gated destructive action in the app,
+   including "Delete investigation" — **which had never actually worked
+   via its Confirm button, in any previous session**, not just this
+   feature's new "Delete subject." Fixed with an idempotent `settle()`
+   guard. Verified on both the new Delete Subject flow AND the
+   pre-existing Delete Investigation flow (Cancel confirmed to not
+   delete, Confirm confirmed to actually delete).
+2. `#workspaceKebabBtn` (the in-workspace "…" menu, home of
+   `delete-active-investigation`) has **no click handler wired up at
+   all** — found while writing the regression check for bug #1, when
+   that specific path turned out to be unreachable independent of the
+   confirmDialog bug. **NOT fixed — explicitly out of scope for this
+   phase.** The investigations-list page's per-card kebab menu is a
+   working alternate path to the same delete feature, so this isn't a
+   product dead-end, just a broken shortcut worth a deliberate fix
+   decision later.
 
-**Five fact states (Principle #11)**: `classifyAskAnswer()`
-(`askCommands.js`) labels every answer Confirmed Fact / Computed Fact /
-Investigative Lead / Unresolved / AI Analysis - rendered as a
-`.fact-badge` pill on the provenance line, on the AI answer card, and in
-the history log. Rule: passages matched -> confirmed; sources matched by
-metadata only, no passage -> lead; nothing matched, or AI says
-`insufficient` -> unresolved; a real (non-insufficient) AI answer ->
-ai-analysis. `docs/CANON.md` Evidence Rules section was updated to the
-same 5 categories (was 3) so the two don't drift apart.
+**A UI consistency bug found and fixed mid-session** (not pre-existing —
+introduced and caught within this same session): the Subjects list's
+search box called the alias-aware `findEntities()` while live-typing, but
+re-entering the tab with a non-empty search box fell back to a
+plain name-only filter that couldn't see aliases — same visible search
+box, two different behaviors depending on how you got there. Fixed by
+routing both paths through `findEntities()`; `renderEntityList()` no
+longer filters, only renders what it's given.
 
-**Leads/Unresolved as commands, feeding Gaps**: "what should I
-investigate next?" -> `handleLeadsIntent()` (least-covered outline
-lanes first, deterministically sorted, plus past questions whose
-`factState` was `lead`); "what don't we know?" -> `handleUnresolvedIntent()`
-(existing `computeGapWarnings()` output plus past `unresolved` questions).
-Both read `askSourcesHistory` (now carries `factState` per entry) so
-today's questions become tomorrow's aggregated leads/gaps automatically,
-per Principle #11's "must automatically feed Gaps."
+**Test conventions established this session**: `public/entities.js` has
+zero DOM/IndexedDB dependency by design specifically so it could be unit
+tested with plain Node (`node:test` + `node:assert/strict`, both built
+in — no new dependency), wired as `npm run test:entities`. This is a
+reusable pattern for future pure-logic modules; the DB/UI layers still
+need the existing Puppeteer-against-`wrangler dev` approach (see Ask
+Sources' verification method, `98509dc`).
 
-**Adaptive Research Depth (Principle #21)**: `parseDepthRequest()`
-detects quick/explain/research(default)/professional from phrasing.
-Critically this is **one result set, one render path**
-(`renderAskSourcesResultsAtDepth()`), not four engines - depth only
-changes how much of `results` is shown and whether a Footnotes block is
-appended; "explain" never paraphrases source text (that would risk
-misquoting - only hides technical clutter via a `.depth-explain` CSS
-rule). A pure re-presentation request ("now give me the professional
-version") re-renders `lastAskResults` with **no new search or AI call** -
-verified by an `isRepresentOnly` heuristic in `parseDepthRequest`. Found
-and fixed a real bug here during implementation: a *contextless* bare
-depth phrase ("explain it simply" as the very first message) would have
-had its filler words survive `extractSearchTerms`'s stopword-stripping
-fallback and get sent to `searchInvestigation()` as literal substring
-terms - "it" alone would match nearly every record. Fixed by adding
-pronouns to the stopword list AND adding an explicit `isBareDepthPhrase`
-guard in `runAskSourcesQuestion` that short-circuits to zero results
-instead of ever running that search. **This exact scenario is priority
-test (j) in the live-verification pass currently running (see below) -
-confirm it actually holds in a real browser, not just by code reading.**
+**VERIFIED (live, Puppeteer against `wrangler dev`, viewport 1280×900 —
+same lesson from the Ask Sources session about default-viewport nav
+collapse):**
+- `npm run check` clean (11 files). `npm run test:entities` 21/21 pass.
+- One Puppeteer run, 21/21 assertions, zero console/page errors:
+  6→7 DB migration survives with all three new stores present → Subjects
+  tab loads → entity create + list → search "Payne" returns BOTH Marc and
+  Raymond → entity profile opens → relationship submit button disabled
+  with zero evidence selected, enables on selection → a valid
+  evidence-backed relationship round-trips with correct
+  Outgoing/Incoming direction and confidence badge → the direct-`db.js`
+  bypass rejection (§ above) → **the full Marc/Raymond Payne regression**:
+  search returns both, no merge, no relationship transfer in either
+  direction, confirmed independently from both profiles → alias added,
+  displayed, doesn't merge or rename → deleting Marc Payne doesn't
+  corrupt Raymond's entity or his (unrelated) relationship → Evidence/
+  Report tabs unaffected → full reload persistence.
+- A separate short regression run confirmed the `confirmDialog()` fix
+  specifically: Cancel does not delete, Confirm does delete (on the
+  pre-existing "Delete investigation" feature), and an Ask Sources smoke
+  check (the priority bare-depth-phrase regression from the previous
+  session) still holds — `public/ui.js` is a shared dependency, worth the
+  extra check.
 
-**Citations/Footnotes (Principle #14)**: `public/citations.js`
-`formatCitation(record, style, location?)` (APA/MLA/Chicago/Turabian/
-legal, real stored metadata only, each style's own "no date" convention
-for missing fields, optional page/passage locator appended) and
-`buildFootnotes(records, style, locationOf?)` (first-appearance-order,
-deduped). Wired into: a "Cite" control on every Bibliography card, the
-Ask Sources "cite this" command, and an automatic Footnotes block
-appended under results at `professional` depth.
-
-**Create menu / artifacts**: "Save Evidence · Add to… ▾" and "Create… ▾"
-dropdowns (reusing the existing `openMenu`/`.menu-wrap` pattern) sit
-under the answer, driven by the same intent vocabulary the typed-command
-parser produces (`ADD_TO_TARGETS`/`CREATE_TARGETS` in `askCommands.js`).
-Source Index, Evidence Table, Claim/Evidence Matrix, and Quantitative
-Table are pure renderers in `public/artifacts.js`, always computed live
-from already-loaded state (no new storage - "research once, reuse
-everywhere" is true by construction, nothing to go stale).
-
-**Living-artifact mutations** (narrow, deterministic, always echoed back
-in `#askSourcesStatus`, never silent): "Add to Evidence/Outline/Findings/
-Report" and "remove this from the report" call existing mutation
-functions or a new `updateClaim(claimId, {excludedFromReport})` - the
-Report's Claims section now filters on that flag while the claim stays
-fully visible in Findings > Claims (also given a manual Include/Exclude
-toggle there, not just via Ask Sources commands).
-
-**Q&A history**: `askSourcesHistory` IndexedDB store (`DB_VERSION` 5→6),
-one row per question including its `factState`, rendered as a
-reverse-chronological `<details>` list under the answer area.
-
-**Discover Sources (added after the above, per explicit follow-up asks -
-"do not hard-wire Ask Sources to /api/search as though it represented
-all external research"):**
-- `public/discover.js` exports `discoverSources(query, {limit})` - the
-  ONLY thing Ask Sources calls to search outward. It wraps `/api/search`
-  today (which already aggregates Arquivo.pt full-text, the bundled
-  Copperas Cove reference corpus, and, in URL mode, Wayback/Common
-  Crawl), but adding a future provider means changing this file (or the
-  server-side `ARCHIVE_PROVIDERS` list it delegates to) - never
-  `public/app.js` or `public/askCommands.js`. Also exports
-  `summarizeDiscoverCoverage(connectors)` (found/no-match/unavailable
-  buckets), reused for both the "Discovered via..." note and the
-  Unresolved coverage message.
-- `runAskSourcesQuestion()`'s plain-search branch now runs
-  `searchInvestigation()` (My Sources) first, then `discoverSources()`
-  (Discover Sources) - rendered as two visually distinct sections
-  (`#askMySourcesHeading`+`#investigationSearchResults`, then
-  `#askSourcesDiscover`). Discover results are deduped against
-  `savedKeys`/My-Sources canonical keys (a source already saved never
-  shows up twice), and sorted with a light, honest `authorityRank()`
-  heuristic (`.gov`/`.mil` domains and archive-connector captures before
-  everything else - never a fabricated reliability score).
-- **Discovery is never "Confirmed"** - `classifyAskAnswer()` caps a
-  Discover-only result at `lead` (Investigative Lead), never
-  `confirmed`, per the explicit product rule that search-result metadata
-  is discovery, not evidence, until reviewed. But a discovered result
-  WITH real retrieved content (a connector's own full-text snippet) is
-  immediately usable - `passageTextOf(r)` (`= matchPassageRaw ||
-  matchPassage || snippet`) is now the uniform accessor used everywhere
-  passages are read (AI-analysis passage builder, footnotes, the
-  Analyze-with-AI enable/disable check) so a discovered-but-unsaved
-  source never has to be saved first just to be asked about, cited, or
-  AI-analyzed. Saving it into the investigation is a separate, explicit
-  one-click action: `.save-discover-evidence-btn` (new, only rendered on
-  a Discover row with real snippet content) atomically calls
-  `saveRecordToInvestigation` then `createEvidenceItem` against the
-  *real* new record id, so an Evidence Item's `sourceRecordId` is never
-  left pointing at nothing.
-- **Unresolved now names coverage**: `describeSearchCoverage()`
-  (`public/app.js`) turns the zero-results case into "Searched: your
-  sources. No matches at: X, Y. Unavailable right now (coverage unknown,
-  not confirmed absent): Z. Not searched: Wayback/Common Crawl only
-  search by URL, not topic." - never a bare "no results," per the
-  explicit product requirement and CANON's existing "Never Fake
-  Coverage" rule.
-- Bug found and fixed mid-implementation (before any live test): the
-  depth re-presentation path (`renderAskSourcesResultsAtDepth`) was
-  about to treat `lastAskResults` (now a My-Sources+Discover *merge*) as
-  if it were all My-Sources rows when re-rendering at a new depth -
-  wrong section, wrong action buttons. Fixed by tracking
-  `lastAskMyResults`/`lastAskDiscoverResults`/`lastAskDiscoverConnectors`
-  as separate module state alongside the merged `lastAskResults`, and
-  changing `renderAskSourcesResultsAtDepth`'s signature to take both
-  arrays explicitly.
-
-**VERIFIED (concretely, not just by code review):**
-- `npm run check` passes clean - all 4 new `public/*.js` files plus
-  everything else, repeatedly re-run through the session.
-- `POST /api/analyze/ask-sources`: raw `curl` confirmed the
-  deterministic-skip response with zero passages, and that it reaches
-  the real AI-provider call path with one passage (fails gracefully -
-  expected locally, no `.dev.vars`/`ANTHROPIC_API_KEY` in this repo,
-  same documented limitation as Qualitative Analysis).
-- `GET /api/search` (what `discoverSources()` calls): raw `curl` timed
-  at **exactly 16.4s**, HTTP 200, clean JSON:
-  `{"query":"copperas cove water debt","mode":"topic","tookMs":16186,
-  "total":0,"connectors":[{"source":"Arquivo.pt",...,"error":"The
-  operation was aborted",...,"verdict":"provider-unavailable"},
-  {"source":"Copperas Cove Investigation Corpus",...,"verdict":
-  "no-captures-in-index"}],"results":[]}`. This proves two things at
-  once: (1) the backend is not hung/broken - it fails a specific,
-  unreachable external connector (Arquivo.pt) correctly and reports it
-  as `provider-unavailable`, never a false "nothing archived"; (2) **any
-  Ask Sources question that triggers Discover Sources costs ~16-20s in
-  this specific sandboxed dev environment**, because it has no real path
-  to the live internet - this is an environment limitation, not a code
-  bug, but it makes browser-driven testing of Discover-triggering
-  questions slow, and matters for how the next session should scope a
-  live test (see below).
-
-**VERIFIED IN A REAL BROWSER, 2026-09-08** (this closes out the two failed
-attempts documented below the line further down, kept for the record).
-Driven with Puppeteer directly via Bash (not a background agent - the prior
-session's own recommendation), against the `wrangler dev` instance already
-running on `:8787`, viewport 1280×900 (a smaller/default viewport collapses
-the sidebar nav into a hidden duplicate and produces false click failures -
-not an app bug, a driver-script gotcha worth recording). Two runs, 25
-assertions total, all passing, zero console/page errors across both:
-
-- **Run A** (deterministic paths, no Discover): app loads → create
-  investigation → ingest a real `.txt` fixture (a synthetic council-minutes
-  excerpt, never committed) → **priority test (j)**, a bare depth phrase
-  ("explain it simply") as the very first message, confirmed to short-
-  circuit to zero results with an `Unresolved` badge instead of the
-  literal-"it"-substring-match bug the previous session found and fixed -
-  **this was the single most important thing to confirm and it holds** →
-  a real question against the ingested passage renders with a `Confirmed
-  Fact` badge and the actual matched text → "now give me the professional
-  version" re-presents the same results in 8ms (confirmed no new
-  search/AI call, per Adaptive Research Depth's design) with a Footnotes
-  block appended → Ask history logs both turns → reload persists the
-  investigation and history → Evidence/Findings/Report tabs still render
-  (regression check against everything from the previous milestone).
-- **Run B** (Discover Sources + mutations + leads/unresolved): a
-  Discover-triggering question took 16.5s (matches the previously measured
-  Arquivo.pt timeout almost exactly) and returned a `Confirmed Fact` from
-  My Sources while Discover legitimately found nothing for that query →
-  all four inline "Create" artifacts rendered real content (Source Index,
-  Evidence Table, Citations, Claim/Evidence Matrix - correctly showing
-  "No claims yet." where true, never fabricated rows) → "Add to Evidence"
-  saved a real Evidence Item, independently confirmed present in the
-  Evidence tab afterward → "what should I investigate next?" and "what
-  don't we know?" were re-tested against an investigation with seeded
-  outline lanes (a first pass under-tested this and produced a false
-  "empty" read from a too-short text assertion, not an app bug -
-  corrected in the second pass) and both rendered correctly: leads sorted
-  weakest-coverage-first with the right `Investigative Lead` badge,
-  unresolved listed the same lanes as "no evidence linked yet" with the
-  right `Unresolved` badge and the CANON #12 framing text → Report tab
-  still generates.
-- The `create` intent's `outline`/`bibliography`/`timeline`/
-  `findings-summary`/`gaps`/`report` targets are **navigation, not inline
-  artifacts** (`NAV` map, `handleCreateIntent`, `public/app.js`) - by
-  design, confirmed by reading the code after a test run flagged an empty
-  artifact div for `outline` as a false failure.
-- Not exercised this pass: the AI endpoint (`askRunAiBtn` - no
-  `ANTHROPIC_API_KEY`/`.dev.vars` in this local `wrangler dev`, same
-  documented limitation as every prior AI check in this file; would need
-  `wrangler dev --remote` as the previous "AI-assisted analysis" section
-  did), citation-style switching beyond the default, and the compound
-  cross-artifact follow-up scenario from the original ~12-step design (not
-  needed to clear the "does it actually render" bar this pass was set to
-  clear).
-
-Driver scripts lived entirely in the scratchpad directory
-(`C:\Users\insur\AppData\Local\Temp\claude\...\scratchpad\`), never in the
-repo - `git status` was clean of stray files throughout and after.
+Driver scripts lived entirely in the scratchpad directory, never in the
+repo — confirmed via `git status` throughout.
 
 **Still outstanding:**
-- `docs/ROADMAP.md` Phase 5 status line not yet updated to reflect the
-  above - do that alongside committing this work.
-- No commit has been made yet as of this writing - see "Where to look
-  next".
-- The AI-analysis path within Ask Sources (`/api/analyze/ask-sources`)
-  is confirmed reachable via `curl` (previous session) but not re-driven
-  through the browser this session - lower risk than the rest since it
-  reuses the same request path as the already-browser-confirmed
-  Qualitative Analysis feature, but worth a quick pass with
-  `wrangler dev --remote` before calling Ask Sources fully closed out.
-- Gaps/Leads aggregation only looks at `askSourcesHistory` entries
-  created via Ask Sources itself - metadata-only search hits from a
-  single turn aren't separately persisted as standalone "lead" records,
-  only as history rows. Fine for the current scope; revisit only if a
-  real investigation shows this is insufficient.
-
----
-
-### Live verification: what went wrong twice before (2026-08-31, kept for the record)
-
-1. First attempt: a background agent was dispatched to install
-   Puppeteer (`npm install --no-save puppeteer` + `node
-   node_modules/puppeteer/install.mjs` directly, since this repo's
-   `allowScripts` gate blocks the normal postinstall Chromium download -
-   this workaround is proven and reusable) and drive a ~12-step version
-   of the full loop. It was killed by Claude at the ~3-hour mark on the
-   assumption it was stuck - **this was a mistake**: its final message
-   showed it had actually finished. Root cause of the 3 hours: almost
-   certainly the ~16-20s Arquivo.pt timeout, multiplied across roughly
-   10 Discover-triggering questions in that script, not a hang.
-2. Second attempt: a trimmed version genuinely stalled under the
-   platform's 600s watchdog. Cause not investigated further.
-3. A third attempt was set up but never run before the session ended.
-
-**What fixed it this time:** far fewer Discover-triggering questions per
-run (1 per run, not ~10), driving Puppeteer directly via Bash with an
-explicit `waitForFunction` on the answer actually appearing (not a fixed
-sleep) so the real ~16s wait was never mistaken for a hang, and a correct
-1280×900 viewport.
+- Not committed as of this writing — see "Where to look next."
+- `docs/ROADMAP.md` Phase 6 and `docs/INVESTIGATION_WORKSPACE_PLAN.md`
+  were updated this session to reflect the above — keep them in sync if
+  Phase 2+ of that plan gets built later.
+- Bug #2 above (`#workspaceKebabBtn`) is a real, known, unfixed issue —
+  don't rediscover it from scratch next session.
 
 ## Previous session's work: Research Outline + Detailed Bibliography + Findings/Report
 
@@ -525,36 +344,23 @@ one exists locally.
 
 ## Where to look next
 
-**Immediate:** commit the Ask Sources + Discover Sources diff — it is now
-live-verified (see above) and has been sitting uncommitted since
-2026-08-31. Update `docs/ROADMAP.md` Phase 5 status and fold the Ask
-Sources summary into "What Chronium Mind actually is right now" as part
-of that commit, not as a follow-up.
+**Immediate:** commit the Investigation Entities diff (see "In progress
+this session" above) — it is live-verified and has been sitting
+uncommitted since being built. Suggested message per the user's own
+instruction: `feat: add evidence-backed investigation entities`.
 
-**Explicitly requested next, once that's committed:** the user has asked
-for Chronium to grow a **case-file / entity-relationship layer** — subjects
-(people, organizations, government bodies, contracts, etc.), a
-relationship graph with confidence states (never auto-inferred from
-co-occurrence, never auto-confirmed), timeline events, identity resolution
-requiring researcher confirmation before merging, source-reliability tiers,
-and a report generator that separates documented fact from inference. This
-is real, explicit scope — it overrides the previous session's "don't
-self-direct beyond Ask Sources" note for this specific area. A full audit
-of what's already built toward this (more than expected — Evidence Ledger,
-Claim Ledger, Coverage Verdict, and the five fact states already cover
-several of the requested pieces) plus a phased implementation plan is in
-`docs/INVESTIGATION_WORKSPACE_PLAN.md` — read that before writing any
-entity/relationship code. Two decisions already made there, confirmed with
-the user: relationships require at least one evidence item to save (hard
-validation, not a warning), and Subjects gets its own 5th top-level
-workspace tab (Research / Subjects / Evidence / Findings / Report) rather
-than being squeezed into existing sub-tabs.
+**Then STOP.** The user's own instruction for this phase was explicit:
+*"Do not begin Phase 2 after committing... Stop and hand Phase 1 back to
+me for review."* Do not self-direct into Phase 2 of
+`docs/INVESTIGATION_WORKSPACE_PLAN.md` (timeline events), Phase 3
+(identity-resolution scoring / source tiers), Phase 4 (network view), or
+any other roadmap item — including the still-open, explicitly-flagged
+`#workspaceKebabBtn` bug — without being asked. Report back what was
+built, the two pre-existing bugs found, and wait.
 
 Beyond that: the user has said further priorities will come from running a
 real-world Chronium investigation through the workflow, not speculative
-feature expansion. Still don't self-direct into Phase 2 (Evidence Vault),
-Phase 3 (Compare Engine), or other roadmap items beyond what's explicitly
-scoped above.
+feature expansion.
 
 ## Product language
 

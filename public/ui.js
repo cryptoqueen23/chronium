@@ -105,17 +105,31 @@ export function confirmDialog({ title, message, confirmLabel = 'Confirm', danger
   confirmBtn.classList.toggle('btn-danger', danger);
 
   return new Promise((resolve) => {
+    // A Promise only honors its FIRST settle call - every later one is a
+    // silent no-op. `close()` (from openOverlay) synchronously fires
+    // `onClose`, so calling close() before resolve(result) meant onClose's
+    // resolve(false) always won, even on Confirm - every confirmDialog()
+    // call in this app (including "Delete investigation") always resolved
+    // false, regardless of which button was clicked. `settled` makes the
+    // real answer win no matter which order the two callbacks fire in.
+    let settled = false;
     let close;
-    function finish(result) {
-      close();
-      confirmBtn.removeEventListener('click', onConfirm);
-      cancelBtn.removeEventListener('click', onCancel);
+    function settle(result) {
+      if (settled) return;
+      settled = true;
       resolve(result);
     }
-    function onConfirm() { finish(true); }
-    function onCancel() { finish(false); }
+    function onConfirm() { settle(true); close(); }
+    function onCancel() { settle(false); close(); }
     confirmBtn.addEventListener('click', onConfirm);
     cancelBtn.addEventListener('click', onCancel);
-    close = openOverlay(overlay, panel, { initialFocusEl: cancelBtn, onClose: () => resolve(false) });
+    close = openOverlay(overlay, panel, {
+      initialFocusEl: cancelBtn,
+      onClose: () => {
+        settle(false); // Escape/backdrop click - never button-triggered
+        confirmBtn.removeEventListener('click', onConfirm);
+        cancelBtn.removeEventListener('click', onCancel);
+      }
+    });
   });
 }

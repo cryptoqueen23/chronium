@@ -34,6 +34,7 @@
     <symbol id="icon-kebab" viewBox="0 0 20 20"><circle cx="10" cy="4.5" r="1.4" style="fill:currentColor;stroke:none"/><circle cx="10" cy="10" r="1.4" style="fill:currentColor;stroke:none"/><circle cx="10" cy="15.5" r="1.4" style="fill:currentColor;stroke:none"/></symbol>
     <symbol id="icon-chevron" viewBox="0 0 20 20"><polyline points="7,4 13,10 7,16"/></symbol>
     <symbol id="icon-dragon-outline" viewBox="0 0 20 20"><path d="M6 15c0-4 2-8 5-9 2 0 3 1.5 3 3-2 0-4 1-4 3 1 0 2 .5 2 1.5S11 15 9.5 15c-1.5 2-3.5 2.5-5 1Z"/><circle cx="9.7" cy="8" r="0.6" style="fill:currentColor;stroke:none"/></symbol>
+    <symbol id="icon-user" viewBox="0 0 20 20"><circle cx="10" cy="6.5" r="3.3"/><path d="M3.5 17c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/></symbol>
   </svg>
 
   <!-- ============ NAV: persistent sidebar (desktop) / off-canvas drawer (mobile) ============ -->
@@ -297,6 +298,72 @@
             <div id="facetBar" class="tab-strip tab-strip-sub" role="tablist" aria-label="Source facets"></div>
             <div id="reportList" class="report-table"></div>
           </details>
+        </div>
+
+        <div id="workspacePanel-subjects" class="workspace-panel hidden" role="tabpanel">
+          <div id="subjectsListView">
+            <div class="panel">
+              <h2>New subject</h2>
+              <p class="view-subtitle">A person, organization, government body, or other entity this investigation is tracking. Adding a subject doesn't assert anything on its own — relationships are what carry claims, and every relationship requires evidence.</p>
+              <form id="entityForm" class="dialog-form dialog-form-compact">
+                <div class="field-row">
+                  <div class="field"><label for="entityNameInput">Name</label><input id="entityNameInput" required maxlength="200" placeholder="e.g. Raymond Payne" /></div>
+                  <div class="field"><label for="entityTypeSelect">Type</label><select id="entityTypeSelect"></select></div>
+                </div>
+                <div class="field"><label for="entityDescriptionInput">Description (optional)</label><input id="entityDescriptionInput" maxlength="300" /></div>
+                <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-primary">Add subject</button></div>
+              </form>
+            </div>
+            <div class="panel">
+              <h2>Subjects</h2>
+              <label class="sr-only" for="subjectsSearchInput">Search subjects by name or alias</label>
+              <input id="subjectsSearchInput" placeholder="Search by name or alias…" style="margin-bottom:12px" />
+              <div id="subjectsList"></div>
+            </div>
+          </div>
+
+          <div id="subjectProfileView" class="hidden">
+            <a href="#/workspace/subjects" class="hint" style="display:inline-block;margin-bottom:12px">&larr; Back to Subjects</a>
+            <div class="panel" id="subjectProfileHead"></div>
+
+            <div class="panel">
+              <h2>Aliases</h2>
+              <p class="view-subtitle">Known alternate names for this subject. An alias never merges records or implies two names are the same person/organization — it's a note for a researcher to weigh, not a fact Chronium asserts.</p>
+              <form id="entityAliasForm" class="dialog-form dialog-form-compact">
+                <div class="field"><label for="entityAliasInput">Add a known alternate name</label><input id="entityAliasInput" maxlength="200" placeholder="e.g. Ray Payne" /></div>
+                <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn">Add alias</button></div>
+              </form>
+              <div id="entityAliasList"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Add relationship</h2>
+              <p class="view-subtitle">Every relationship must cite at least one evidence item — Chronium never records a connection with nothing behind it.</p>
+              <form id="relationshipForm" class="dialog-form dialog-form-compact">
+                <div class="field-row">
+                  <div class="field"><label for="relationshipDirectionSelect">Direction</label><select id="relationshipDirectionSelect"><option value="outgoing">This subject →</option><option value="incoming">→ This subject</option></select></div>
+                  <div class="field"><label for="relationshipTargetSelect">Other subject</label><select id="relationshipTargetSelect" required></select></div>
+                </div>
+                <div class="field-row">
+                  <div class="field"><label for="relationshipTypeInput">Relationship type</label><input id="relationshipTypeInput" list="relationshipTypeSuggestions" required maxlength="60" placeholder="e.g. EMPLOYED_BY" /><datalist id="relationshipTypeSuggestions"></datalist></div>
+                  <div class="field"><label for="relationshipStatusSelect">Confidence</label><select id="relationshipStatusSelect"></select></div>
+                </div>
+                <div class="field-row">
+                  <div class="field"><label for="relationshipDateStart">Date start (optional)</label><input id="relationshipDateStart" type="date" /></div>
+                  <div class="field"><label for="relationshipDateEnd">Date end (optional)</label><input id="relationshipDateEnd" type="date" /></div>
+                </div>
+                <div class="field"><label for="relationshipNotes">Notes (optional)</label><textarea id="relationshipNotes" rows="2" maxlength="500"></textarea></div>
+                <div class="field"><label id="relationshipEvidencePickerLabel">Evidence (required — select at least one)</label><div id="relationshipEvidencePicker" class="claim-evidence-picker" role="group" aria-labelledby="relationshipEvidencePickerLabel"></div></div>
+                <p id="relationshipFormStatus" class="hint"></p>
+                <div class="dialog-actions dialog-actions-inline"><button type="submit" class="btn btn-primary" id="relationshipSubmitBtn" disabled>Add relationship</button></div>
+              </form>
+            </div>
+
+            <div class="panel">
+              <h2>Relationships</h2>
+              <div id="entityRelationshipsList"></div>
+            </div>
+          </div>
         </div>
 
         <div id="workspacePanel-evidence" class="workspace-panel hidden" role="tabpanel">
