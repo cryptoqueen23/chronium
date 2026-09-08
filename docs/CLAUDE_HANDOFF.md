@@ -10,22 +10,22 @@ every `CANON RULE` — these are load-bearing, not decoration), then
 investigation-level research loop this session completed most of), then
 skim `src/index.js` and `public/app.js`.
 
-**Last updated:** 2026-09-08 (fifth update same day). **Bulk Ingestion +
-Investigator Review Queue — Phase 4 of the case-file layer — is built
-and live-verified**, per the user's explicit 24-section brief after
-accepting Phase 3. See "In progress this session: Bulk Ingestion +
-Review Queue" below. Uncommitted as of this writing; the very next thing
-to commit (see "Where to look next").
+**Last updated:** 2026-09-08 (sixth update same day). **Bulk Ingestion +
+Investigator Review Queue — Phase 4 of the case-file layer — is done,
+live-verified, and committed** as `83cc986` ("feat: add bulk ingestion
+review queue") — accepted by the user as the clean baseline for whatever
+comes next. Per the user's own explicit instruction, work **stopped
+after that commit** — nothing is in progress, nothing is uncommitted.
+See `docs/INVESTIGATION_WORKSPACE_PLAN.md` "Phase 4: as-built" for the
+full schema/verification record; see "Where to look next" below for
+what a new session should do first.
 
-Phase 3 (Findings + Claim Ledger + support/contradiction) is **done,
-live-verified, and committed** as `c929984` ("feat: add evidence-backed
-claims and findings") — accepted by the user as the clean baseline for
-Phase 4. Phase 2 is `7e14cc3`, Phase 1 is `8e525ac`, Ask Sources is
-`98509dc`. See those commits and `docs/ROADMAP.md` Phase 6/6a/4/9/10/5
-for what each covers; this file no longer carries their uncommitted-diff
-details since git history is the source of truth for all four now.
-`principle.md` (Chronium's product constitution) is merged into
-`docs/CANON.md` as "Product Principles" — read that section first,
+Phase 3 is `c929984`, Phase 2 is `7e14cc3`, Phase 1 is `8e525ac`, Ask
+Sources is `98509dc`. See those commits and `docs/ROADMAP.md` Phase
+6/6a/4/9/10/5 for what each covers; this file no longer carries their
+uncommitted-diff details since git history is the source of truth for
+all five now. `principle.md` (Chronium's product constitution) is merged
+into `docs/CANON.md` as "Product Principles" — read that section first,
 before the rest of CANON.md.
 
 Everything from "Previous session's work" onward below reflects an
@@ -50,11 +50,10 @@ Three things, merged into one engine:
    UNRESOLVED_QUESTION/NO_EVIDENCE_LOCATED — and generate a deterministic
    (free) Evidence-Backed Report, now including Findings. Bulk documents
    flow through a durable **Ingestion Job/Item** pipeline into a
-   dedicated **Review Queue** (Phase 4, new this session — see below)
-   that assistively surfaces candidate subjects and watchlist-keyword
-   hits for investigator confirmation, never auto-deciding identity or
-   relationships. AI is a paid, opt-in, last-resort layer (Qualitative
-   Analysis synthesis only).
+   dedicated **Review Queue** that assistively surfaces candidate
+   subjects and watchlist-keyword hits for investigator confirmation,
+   never auto-deciding identity or relationships. AI is a paid, opt-in,
+   last-resort layer (Qualitative Analysis synthesis only).
 3. **Ask Sources** (including Discover Sources) — a conversational entry
    point over the same investigation state, source-first and
    deterministic-first. See commit `98509dc`.
@@ -62,136 +61,41 @@ Three things, merged into one engine:
 Copperas Cove, TX is still the proof corpus, not a special case in the
 code — no Copperas-Cove-specific logic outside `data/`.
 
-## In progress this session: Bulk Ingestion + Investigator Review Queue — uncommitted, live-verified 2026-09-08
+## Most recent session's work: Bulk Ingestion + Investigator Review Queue (Phase 4) — done, committed `83cc986`
 
-The user's explicit ask, Phase 4 of `docs/INVESTIGATION_WORKSPACE_PLAN.md`
-(a full 24-section brief), following acceptance of Phase 3, and the
-direction already flagged in this file's own previous "Where to look
-next": "Chronium must help a small investigation team process thousands
-of records without forcing investigators to manually open and classify
-every document." Core principle pasted verbatim: **"Chronium should
-reduce reading burden without reducing evidentiary rigor. The system may
-say: 'This document may mention Raymond Payne.' It must NOT automatically
-say: 'Raymond Payne is connected to X.'"** Explicit non-negotiables
-carried over and extended: the Marc/Raymond Payne identity-collision
-regression, this time run through bulk/automated detection rather than
-manual entry, plus a new co-occurrence regression (two people in one
-document must never auto-create a relationship or finding).
+Built to a full 24-section user brief following acceptance of Phase 3,
+delivering the bulk-ingestion direction this file had flagged as likely
+next. Shipped: a durable Ingestion Job/Item model (extends the
+pre-existing `ingestionBatches` store rather than duplicating it, same
+precedent as Phase 3 extending `claims`), a Review Queue workspace tab,
+assistive-only bulk subject-candidate detection (strong/weak/AMBIGUOUS
+matching — a bare shared surname like "Payne" always surfaces every
+matching person as a separate button, never auto-picks one), an
+investigator-defined watchlist/keyword system that never auto-converts a
+hit into a Finding, SHA-256 dedupe with duplicate-occurrence provenance,
+lightweight non-authenticating investigator identity, and a
+`reviewHistory` audit log. Explicitly NOT built, per the brief's own
+§20: automatic accusation/relationship/claim-confirmation/contradiction-
+resolution/identity-merging generation anywhere in this pipeline.
 
-Before writing code: re-read `docs/CLAUDE_HANDOFF.md` and
-`docs/INVESTIGATION_WORKSPACE_PLAN.md`, inspected commit `c929984`, and
-the existing ingestion/corpus/dedupe/evidence/search architecture. The
-one genuine architectural decision this session: `ingestionBatches`
-(predating this phase) was extended rather than duplicated with a new
-parallel "job" concept — same precedent as Phase 3 extending the
-pre-existing `claims` store.
+`DB_VERSION` 9→10 (additive — `ingestionItems`, `reviewCandidates`,
+`watchlists`, `watchlistMatches`, `reviewHistory`, `investigators`,
+plus a new index on the pre-existing `ingestionBatches` store). New
+files: `public/ingestionReview.js` (pure detection logic),
+`public/reviewQueue.js` (self-contained Review Queue UI — a deliberate
+architectural deviation from prior phases, since `app.js` was already
+large), `scripts/test-ingestion-review.mjs`. A mandated 1,000-record
+scale test caught and fixed two real latent bugs (search missing
+unpaged items; a search-input race condition — same bug class as an
+earlier phase's Subjects search box) and confirmed a genuine
+failure-recovery fix (one unreadable file no longer aborts a batch).
 
-**Scoped tightly per explicit instruction**: ingestion job/item tracking,
-Review Queue UI, assistive-only candidate/watchlist detection, dedupe
-provenance, investigator identity, review-history audit log. Explicitly
-NOT built (brief §20): automatic accusation generation, automatic
-relationship generation, automatic claim confirmation, automatic
-contradiction resolution, automatic identity merging.
-`#workspaceKebabBtn` (found broken in Phase 1) still NOT fixed — not
-directly required by this phase. See
-`docs/INVESTIGATION_WORKSPACE_PLAN.md` "Phase 4: as-built" (appended this
-session) for the complete as-built record — schema, the full detection
-decision table, and full verification detail. This handoff section is
-the condensed pointer; that doc is the detailed record.
-
-**Files added:** `public/ingestionReview.js` (pure detection logic, no
-DOM/IndexedDB — strong/weak/ambiguous candidate matching, watchlist
-matching), `scripts/test-ingestion-review.mjs` (21 unit tests),
-`public/reviewQueue.js` (~450-line Review Queue workspace UI, a
-deliberate architectural deviation from prior phases: self-contained
-with its own DOM/event wiring rather than built inline in `app.js`,
-which was already large — imports five render helpers `app.js` now
-exports for this purpose). **Files modified:** `public/db.js`
-(`DB_VERSION` 9→10; new `ingestionItems`/`reviewCandidates`/
-`watchlists`/`watchlistMatches`/`reviewHistory`/`investigators` stores; a
-`status` index added to the pre-existing `ingestionBatches` store in the
-same upgrade pass; `confirmReviewCandidate` chains through the existing,
-unmodified `createEvidenceItem`/`createEntityMention` APIs — every Phase
-1/2 rule still applies to a bulk-confirmed mention), `public/ingest/pipeline.js`
-(byte-read deferred into the per-item try/catch — see failure-recovery
-fix below), `public/app.js`, `public/index.html`, `public/styles.css`,
-`package.json` (`test:ingestion` + combined `test` script extended).
-
-**The core distinction, as implemented**: detection is strictly
-assistive — `findSubjectCandidates()` and `findWatchlistMatches()` return
-possibility lists only, never a pre-chosen answer. A strong match (full
-registered name/alias) surfaces one named candidate still requiring
-confirmation; a weak match (bare PERSON surname) is a normal single
-candidate only when exactly one registered person has that surname —
-the moment 2+ people share it, state is forced to AMBIGUOUS and every
-possibility renders as its own separate confirm button. This is the same
-identity-safety discipline as Phase 1/2's Relationships/Mentions, applied
-one layer earlier in the pipeline where the automation risk is highest.
-
-**Two real, latent bugs found and fixed via the mandated 1,000-record
-scale test** (not features — defects the scale requirement was written
-specifically to catch): (1) search-in-queue only filtered
-already-paginated items, missing anything beyond the loaded pages — fixed
-with a bounded cursor-based full-scan `searchIngestionItems()`; (2) a
-search-input race condition at scale — each keystroke fired an
-independent async scan, and out-of-order resolution let a stale broad
-result overwrite a correct narrow one — fixed with a 250ms debounce plus
-a staleness guard inside the render function, the same bug class
-previously found and fixed in an earlier phase's Subjects search box.
-
-**Failure recovery** also surfaced a real fix, not just new behavior: the
-pipeline originally read every file's bytes eagerly, before the per-item
-try/catch, so an unreadable file could throw outside any recoverable
-boundary. Fixed by deferring the read itself into the try/catch — one bad
-document in a batch now correctly produces `COMPLETED_WITH_ERRORS`
-instead of aborting the run.
-
-**VERIFIED (live, Puppeteer against `wrangler dev`, viewport 1280×900):**
-- `npm run check` clean (14 files). `npm test` (combined script) 77/77
-  pass (30 Phase 1/2 + 26 Phase 3 + 21 new).
-- Two Puppeteer driver runs, **49/49 assertions total, zero unexpected
-  console errors** (the one console entry present each run is the same
-  intentionally-aborted migration-seed network request used since Phase
-  2, not an app defect):
-  a genuine v9-shaped database (raw IndexedDB, full Phase 1-3 schema)
-  seeded with real investigation/entity/claim data confirmed the v9→v10
-  migration + all six new stores + every piece of legacy data intact →
-  bulk-ingested 4 real documents through the actual Add-Research UI →
-  review queue status counts/filters render → investigator created and
-  selected → strong alias candidate ("Ray Payne" → Raymond Payne)
-  confirmed, producing a real `entityMention` with `quotedName` preserved
-  exactly, linked to a real `claimEvidence` row, marked reviewed with
-  notes/reviewer attribution → **the Payne regression**: strong Marc
-  match (not ambiguous), bare "Payne" document forced AMBIGUOUS with both
-  names as separate buttons, no pre-selection anywhere → **co-occurrence
-  regression**: Raymond Payne + Sheena Tanner both surface independently,
-  zero relationships before or after confirming both → watchlist match/
-  acknowledge cycle never creates a Finding → failure recovery (bad file
-  + good file, `COMPLETED_WITH_ERRORS`, good file ingests, bad file
-  recorded with its real error) → second driver run: **1,000-record scale
-  test** (8,955ms ingest, ~9ms/record; 4,588ms re-ingest dedupe of all
-  1,000; 1,242ms queue render; paginated 50-at-a-time; search narrows
-  correctly at scale) → full **Phase 1-3 regression pass**: relationship/
-  finding evidence requirements, quotedName preservation, claim UNVERIFIED
-  default, delete-protection, Marc/Raymond isolation, Ask Sources,
-  investigation persistence all re-confirmed intact.
-
-Driver scripts and fixtures lived entirely in the scratchpad directory,
-never in the repo.
-
-**Still outstanding:**
-- Not committed as of this writing — see "Where to look next."
-- `docs/ROADMAP.md` (Phase 6/6a) and `docs/INVESTIGATION_WORKSPACE_PLAN.md`
-  were updated this session to reflect the above.
-- `#workspaceKebabBtn` (found in Phase 1) is still a real, known, unfixed
-  issue — don't rediscover it from scratch next session.
-- Automatic LLM-driven extraction/conclusions (brief §20) explicitly not
-  built — this session shipped the assistive/manual foundation
-  (candidate + watchlist surfacing, human confirmation required) it would
-  sit on top of, not the automation itself.
-- `createdBy`/`updatedBy` beyond `reviewedBy` were not added to ingestion
-  items — same reasoning as Phase 3's forward-compatible-not-built note;
-  no real auth system exists yet.
+`npm test` 77/77, two live Puppeteer driver runs 49/49 assertions, zero
+unexpected console errors, full Phase 1-3 regression re-confirmed
+intact. `#workspaceKebabBtn` (Phase 1) still open, not touched — out of
+this phase's scope. Full schema, the detection decision table, and the
+complete verification log live in `docs/INVESTIGATION_WORKSPACE_PLAN.md`
+"Phase 4: as-built" — read that before touching any of this phase's code.
 
 ## Previous session's work: Research Outline + Detailed Bibliography + Findings/Report
 
@@ -349,25 +253,26 @@ one exists locally.
 
 ## Where to look next
 
-**Immediate:** commit the Bulk Ingestion + Review Queue diff (see "In
-progress this session" above) — it is live-verified and has been sitting
-uncommitted since being built. Suggested message per the user's own
-instruction: `feat: add bulk ingestion review queue`.
+**Nothing is in progress.** Phase 4 is committed (`83cc986`) and the
+working tree is clean. The user's own instruction after accepting this
+phase was explicit: *"Do NOT begin Phase 5. Stop after the commit and
+hand Phase 4 back for review."* A new session should **wait for the
+user's next explicit direction** rather than self-directing into
+automatic LLM extraction/conclusions (brief §20 — Phase 4 shipped the
+assistive/manual foundation only, not the automation), timeline events,
+identity-resolution scoring/source tiers, network view, automatic
+contradiction detection, or any other roadmap item — including the
+still-open, explicitly-flagged `#workspaceKebabBtn` bug. (Note: the plan
+doc's original Part 5 sketch numbered timeline events as "Phase 2"
+before the actual numbered phases turned out to be entity mentions/
+claims-findings/bulk-ingestion instead. Treat the plan doc's own "Phase
+1/2/3/4: as-built" sections, and whatever number/scope the user assigns
+next, as authoritative over that original sketch's numbering.)
 
-**Then STOP.** The user's own instruction for this phase was explicit:
-*"Do NOT begin Phase 5. Stop after the commit and hand Phase 4 back for
-review."* Do not self-direct into automatic LLM extraction/conclusions
-(brief §20 — this session shipped the assistive/manual foundation only,
-not the automation), timeline events, identity-resolution scoring/source
-tiers, network view, automatic contradiction detection, or any other
-roadmap item, including the still-open, explicitly-flagged
-`#workspaceKebabBtn` bug, without being asked. Report back what was built
-and wait. (Note: the plan doc's original Part 5 sketch numbered timeline
-events as "Phase 2" before the actual numbered phases turned out to be
-entity mentions/claims-findings/bulk-ingestion instead. Treat the plan
-doc's own "Phase 1/2/3/4: as-built" sections, and whatever number/scope
-the user assigns next, as authoritative over that original sketch's
-numbering.)
+If the user opens a new session referencing this handoff cold: read this
+file, then `docs/CANON.md`, then `docs/ROADMAP.md`, then
+`docs/INVESTIGATION_WORKSPACE_PLAN.md`'s "Phase 4: as-built" for the most
+recent detailed work, then ask what they want next rather than guessing.
 
 Beyond that: the user has said further priorities will come from running a
 real-world Chronium investigation through the workflow, not speculative
