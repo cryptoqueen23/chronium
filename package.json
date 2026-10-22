@@ -15,10 +15,13 @@
     "test": "node --test scripts/test-entities.mjs scripts/test-claims.mjs scripts/test-ingestion-review.mjs scripts/test-portable.mjs"
   },
   "devDependencies": {
+    "axe-core": "^4.14.0",
     "fake-indexeddb": "^6.2.6",
     "fflate": "^0.8.3",
     "mammoth": "^1.12.1",
     "pdfjs-dist": "^6.2.108",
+    "puppeteer": "^25.16.0",
+    "puppeteer-core": "^25.16.0",
     "wrangler": "^4.31.0",
     "xlsx": "^0.18.5"
   }

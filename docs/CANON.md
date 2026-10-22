@@ -787,3 +787,7 @@ Before building a feature ask:
 **Does this help find, connect, compare, verify, or reuse research faster?**
 
 If not, don't build it yet.
+
+## Accessibility & Responsive Standard
+
+Binding for all work: see `docs/ACCESSIBILITY.md` (WCAG 2.2 AA, 320px-ultrawide, extension side panel, plain language, EN/ES, test log).
