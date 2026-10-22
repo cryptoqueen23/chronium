@@ -147,7 +147,11 @@
     <section id="view-investigations" class="view hidden" data-view="investigations" tabindex="-1">
       <div class="view-head">
         <h1>Investigations</h1>
-        <button type="button" class="btn btn-primary" data-action="new-investigation"><svg width="16" height="16"><use href="#icon-plus"/></svg>New Investigation</button>
+        <div class="workspace-head-actions">
+          <button type="button" class="btn" data-action="import-case-file"><svg width="16" height="16"><use href="#icon-upload"/></svg>Import case file</button>
+          <button type="button" class="btn btn-primary" data-action="new-investigation"><svg width="16" height="16"><use href="#icon-plus"/></svg>New Investigation</button>
+        </div>
+        <input type="file" id="caseFileInput" class="hidden" accept=".json,application/json" aria-label="Choose a Chronium case file to import" />
       </div>
       <div id="allInvestigationsList" class="investigation-grid"></div>
     </section>
@@ -212,6 +216,7 @@
             <div class="menu-wrap">
               <button type="button" id="workspaceKebabBtn" class="icon-btn" aria-haspopup="true" aria-expanded="false" aria-controls="workspaceKebabMenu" aria-label="Investigation actions"><svg width="18" height="18"><use href="#icon-kebab"/></svg></button>
               <ul id="workspaceKebabMenu" class="menu hidden" role="menu" aria-label="Investigation actions">
+                <li role="none"><button type="button" role="menuitem" class="menu-item" data-action="export-active-investigation">Export case file…</button></li>
                 <li role="none"><button type="button" role="menuitem" class="menu-item menu-item-danger" data-action="delete-active-investigation">Delete investigation…</button></li>
               </ul>
             </div>
@@ -835,7 +840,7 @@
       <div class="dialog-head">
         <h2 id="confirmDialogTitle">Are you sure?</h2>
       </div>
-      <p id="confirmDialogMessage" class="dialog-message"></p>
+      <p id="confirmDialogMessage" style="white-space:pre-line" class="dialog-message"></p>
       <div class="dialog-actions">
         <button type="button" id="confirmDialogCancel" class="btn">Cancel</button>
         <button type="button" id="confirmDialogConfirm" class="btn btn-danger">Confirm</button>

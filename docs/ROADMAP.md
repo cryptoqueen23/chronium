@@ -134,3 +134,13 @@ corporations, nonprofits/tax-exempt entities, public filings. Chronium never
 claims to have searched the whole internet: it reports sources searched,
 unavailable, and coverage gaps. Core search/evidence/compare/report work
 without any paid API or AI.
+
+### Three-level investigation views (captured 2026-10-22, build AFTER case portability)
+
+Three views of the SAME investigation data (no separate stores/processes); main nav stays Search / Compare / My Research / Reports; moving between levels keeps your place; clicking a finding in High View opens its supporting records in Deep View.
+- **High View (big picture):** concise source-grounded summary: subject, major findings, important figures, coverage status, unresolved questions.
+- **Overview (how it connects):** timelines, financial flows, government decisions, organizations, related documents, discrepancies, progress. Every relationship is evidence-backed or explicitly marked unverified.
+- **Deep View (examine evidence):** original documents, exact passages, page numbers, financial calculations, archived versions, document hashes, conflicting records, provenance.
+Rules: never state a conclusion without accessible supporting evidence; distinguish MISSING information from NOT YET REVIEWED. Reuse existing evidence/claims infrastructure; implement incrementally.
+
+**Case portability (2026-10-22): built.** `.chronium.json` (versioned, format `chronium-investigation` v1) exports/imports between the website and the extension; preview-first, merge-only (never overwrites; same-id rows kept local, differing ones reported as conflicts), sources deduped by canonical URL, clashing source/claim numbers renumbered. Optional embedded file copies. No cloud, no accounts. Not built: optional encrypted sync. Website changes need a deploy to reach the live site.

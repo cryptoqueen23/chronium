@@ -2,6 +2,7 @@ import {
   listInvestigations, createInvestigation, deleteInvestigation,
   saveRecordToInvestigation, listInvestigationRecords, getSavedCanonicalKeys, searchLibrary
 } from './lib/db.js';
+import { exportInvestigationFile, previewImport, importBundle, describeReport, PortableFileError } from './lib/portable.js';
 
 const DEFAULT_WORKER = 'https://chronium-mind.truewolfflix777.workers.dev';
 const $ = (s) => document.querySelector(s);
@@ -58,6 +59,7 @@ async function renderCases() {
     <span class="row-actions">
       ${c.id === activeCaseId ? '' : `<button type="button" data-use="${esc(c.id)}">Use</button>`}
       <button type="button" data-open="${esc(c.id)}">Sources</button>
+      <button type="button" data-export="${esc(c.id)}">Export</button>
       <button type="button" data-del="${esc(c.id)}" aria-label="Delete case ${esc(c.name)}">Delete</button>
     </span></li>`).join('')}</ul>` : '<p class="hint">No cases yet. A case holds the sources you save while researching one subject.</p>';
   $('#caseDetail').innerHTML = '';
@@ -73,9 +75,48 @@ $('#caseList').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.use) { activeCaseId = b.dataset.use; await setStore('activeCaseId', activeCaseId); renderCases(); }
   if (b.dataset.del && confirm('Delete this case and its saved sources? This cannot be undone.')) { await deleteInvestigation(b.dataset.del); renderCases(); }
+  if (b.dataset.export) {
+    try {
+      const { filename, text } = await exportInvestigationFile(b.dataset.export);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = filename; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      $('#importBox').textContent = `Saved ${filename}. Open it on the website or another device with Import case file.`;
+    } catch (err) { $('#importBox').textContent = `Could not export: ${err.message}`; }
+  }
   if (b.dataset.open) {
     const rows = await listInvestigationRecords(b.dataset.open);
     $('#caseDetail').innerHTML = rows.length ? `<h3>Saved sources</h3><ul class="list">${rows.map((r) => `<li><span>${esc(r.title || r.originalUrl)}</span>${linkHtml(r.archiveUrl, 'Open snapshot')}${linkHtml(r.originalUrl, 'Current page')}</li>`).join('')}</ul>` : '<p class="hint">Nothing saved in this case yet.</p>';
+  }
+});
+
+// ---- import a case file (preview first, never overwrites) ----
+let pendingBundle = null;
+$('#importCaseBtn').addEventListener('click', () => $('#caseFileInput').click());
+$('#caseFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  pendingBundle = null;
+  if (!file) return;
+  try {
+    const { bundle, report } = await previewImport(await file.text());
+    pendingBundle = bundle;
+    $('#importBox').innerHTML = `<div class="notice"><p><strong>Import this case?</strong></p>${describeReport(report).map((l) => `<p>${esc(l)}</p>`).join('')}
+      <p class="actions"><button type="button" id="confirmImport" class="primary">Import</button> <button type="button" id="cancelImport">Cancel</button></p></div>`;
+    $('#confirmImport').focus();
+  } catch (err) {
+    $('#importBox').innerHTML = `<p class="notice">${esc(err instanceof PortableFileError ? err.message : 'Import failed: ' + err.message)}</p>`;
+  }
+});
+$('#importBox').addEventListener('click', async (e) => {
+  if (e.target.id === 'cancelImport') { pendingBundle = null; $('#importBox').innerHTML = ''; }
+  if (e.target.id === 'confirmImport' && pendingBundle) {
+    try {
+      const done = await importBundle(pendingBundle);
+      pendingBundle = null;
+      $('#importBox').innerHTML = `<div class="notice">${describeReport(done, { done: true }).map((l) => `<p>${esc(l)}</p>`).join('')}</div>`;
+      await renderCases();
+    } catch (err) { $('#importBox').innerHTML = `<p class="notice">Import failed: ${esc(err.message)}</p>`; }
   }
 });
 

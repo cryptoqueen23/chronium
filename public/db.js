@@ -58,8 +58,11 @@ import {
 const DB_NAME = 'chronium';
 const DB_VERSION = 10;
 let dbPromise = null;
+// Drops the cached connection so the next call reopens the database. Used by
+// tests that swap in a fresh IndexedDB to simulate a second device.
+export function resetDbConnection() { dbPromise = null; }
 
-function openDb() {
+export function openDb() {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -282,7 +285,7 @@ async function ensureClaimEvidenceBackfill(db) {
   });
 }
 
-function tx(db, stores, mode, work) {
+export function tx(db, stores, mode, work) {
   return new Promise((resolve, reject) => {
     const t = db.transaction(stores, mode);
     let result;
@@ -293,7 +296,7 @@ function tx(db, stores, mode, work) {
   });
 }
 
-function reqToPromise(req) {
+export function reqToPromise(req) {
   return new Promise((resolve, reject) => {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);

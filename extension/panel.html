@@ -47,6 +47,11 @@
         <input id="newCaseName" type="text" placeholder="New case name" maxlength="120" required />
         <button type="submit">Create</button>
       </form>
+      <div class="importrow">
+        <button type="button" id="importCaseBtn">Import case file</button>
+        <input type="file" id="caseFileInput" class="sr-only" accept=".json,application/json" aria-label="Choose a Chronium case file to import" tabindex="-1" />
+      </div>
+      <div id="importBox" role="status" aria-live="polite"></div>
       <div id="caseList"></div>
       <div id="caseDetail"></div>
     </section>

@@ -28,6 +28,7 @@ import {
 import { ingestFiles, ingestZip } from './ingest/pipeline.js';
 import { renderReviewQueuePanel } from './reviewQueue.js';
 import { openOverlay, openMenu, confirmDialog } from './ui.js';
+import { exportInvestigationFile, previewImport, importBundle, describeReport, PortableFileError } from './portable.js';
 import { formatCitation, buildFootnotes, CITATION_STYLES, CITATION_STYLE_LABELS } from './citations.js';
 import { renderSourceIndex, renderEvidenceTable, renderClaimEvidenceMatrix, renderQuantitativeTable } from './artifacts.js';
 import {
@@ -380,6 +381,15 @@ document.addEventListener('click', async (e) => {
     if (activeInvestigationId === id) await setActiveInvestigation('');
     showToast(`Deleted investigation “${name}”.`);
     await loadViewContent(parseHash());
+  } else if (action === 'export-active-investigation') {
+    if (!activeInvestigationId) return;
+    try {
+      const { filename, text } = await exportInvestigationFile(activeInvestigationId);
+      downloadTextFile(filename, text);
+      showToast('Case file saved. Open it in the Chronium extension or on another device with Import case file.');
+    } catch (err) { showToast(`Could not export: ${err.message}`, true); }
+  } else if (action === 'import-case-file') {
+    document.querySelector('#caseFileInput').click();
   } else if (action === 'delete-active-investigation') {
     if (!activeInvestigationId) return;
     const investigations = await listInvestigations();
@@ -391,6 +401,32 @@ document.addEventListener('click', async (e) => {
     await setActiveInvestigation('');
     showToast(`Deleted investigation “${name}”.`);
     location.hash = '#/investigations';
+  }
+});
+
+
+function downloadTextFile(filename, text) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// Import a .chronium.json case file: always preview first, never overwrite.
+document.querySelector('#caseFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const { bundle, report } = await previewImport(await file.text());
+    const ok = await confirmDialog({ title: 'Import this case?', message: describeReport(report).join('\n'), confirmLabel: 'Import' });
+    if (!ok) return;
+    const done = await importBundle(bundle);
+    showToast(describeReport(done, { done: true })[0]);
+    await loadViewContent(parseHash());
+  } catch (err) {
+    showToast(err instanceof PortableFileError ? err.message : `Import failed: ${err.message}`, true);
   }
 });
 

@@ -39,3 +39,4 @@ a{color:var(--accent);display:inline-flex;align-items:center;min-height:44px}
 .foot{padding:8px 16px 16px;color:var(--muted)}
 .foot summary{min-height:44px;display:flex;align-items:center;cursor:pointer}
 .foot input{width:100%;margin:6px 0}
+.importrow{margin:0 0 8px}
