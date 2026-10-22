@@ -25,7 +25,7 @@
 
   --link: #8bb7e8;
   --success: #65b88a;
-  --danger: #dc7169;
+  --danger: #e2807a;
   --danger-bg: #2a1613;
 
   --max: 1180px;
@@ -631,3 +631,33 @@ footer { border-top: 1px solid var(--border); max-width: var(--max); margin: 40p
 #workspaceTabStrip { overflow-x: auto; }
 .vw-crumb-list li { display: inline-flex; align-items: center; min-height: 44px; }
 .vw-crumb-list li + li::before { display: inline-block; }
+
+/* Light theme: follows the system setting (prefers-color-scheme). Same tokens,
+   different values; contrast checked with axe in both themes. */
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --bg: #f6f4ee; --surface: #ffffff; --surface-raised: #efece3; --border: #b8b3a4;
+    --text: #1b1a16; --text-secondary: #4f4c43; --text-muted: #6a665b;
+    --accent: #8a5a00; --accent-hover: #6e4800; --on-accent: #ffffff;
+    --link: #0b57b0; --success: #1b6e3f; --danger: #a82a20; --danger-bg: #fdecea;
+  }
+  .btn:hover, .investigation-card:hover { border-color: #7d796c; }
+  .btn-danger:hover { background: #fbd9d4; }
+  .status.status-bad, .toast.toast-bad { border-color: #e0a39d; }
+  .status.status-warn { border-color: #d9b36a; }
+  .tag.kind-corpus, .fact-badge-ai-analysis, .ai-badge { border-color: #9a8cc4; color: #4b3a85; }
+  .tag.kind-library { border-color: #78b093; }
+  .gap-card { border-color: #d9b36a; }
+}
+.ask-source-links a { display: inline-flex; align-items: center; min-height: 44px; margin-right: 14px; }
+
+/* Missing / Not reviewed yet / Unresolved: different words, different edge, different tag. */
+.vw-q { margin: 12px 0; padding-left: 12px; border-left: 4px solid var(--border); }
+.vw-q h4 { margin: 0 0 6px; }
+.vw-q-missing { border-left-color: var(--danger); }
+.vw-q-notreviewed { border-left-color: var(--accent); }
+.vw-q-unresolved { border-left-color: var(--link); }
+.vw-q-missing .ask-tag { border-color: var(--danger); }
+.vw-q-notreviewed .ask-tag { border-color: var(--accent); }
+.vw-q-unresolved .ask-tag { border-color: var(--link); }

@@ -112,6 +112,8 @@ try {
   await web.evaluate(() => { location.hash = '#/investigations'; });
   await web.waitForSelector('[data-open-investigation]');
   await web.evaluate(() => document.querySelector('[data-open-investigation]').click());
+  await web.waitForSelector('#tab-research');
+  await web.click('#tab-research'); // opening an investigation now lands on Big Picture; Ask lives on the Research tab
   await web.waitForSelector('#investigationQuery', { visible: true });
   const wout = () => web.$eval('#askRouterBox', (e) => e.innerText);
 

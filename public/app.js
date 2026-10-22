@@ -445,7 +445,7 @@ const VIEW_TITLES = { home: 'Chronium Mind', investigations: 'Investigations', l
 function parseHash() {
   const path = (location.hash || '#/').slice(1) || '/';
   const parts = path.split('/').filter(Boolean);
-  if (parts[0] === 'workspace') return { view: 'workspace', tab: parts[1] || 'research', subtab: parts[2] || null, arg: parts.slice(3).join('/') || null };
+  if (parts[0] === 'workspace') return { view: 'workspace', tab: parts[1] || 'bigpicture', subtab: parts[2] || null, arg: parts.slice(3).join('/') || null };
   if (['investigations', 'library', 'settings'].includes(parts[0])) return { view: parts[0] };
   return { view: 'home' };
 }
@@ -881,7 +881,7 @@ async function investigationCardHtml(inv) {
   const records = await listInvestigationRecords(inv.id);
   const n = records.length;
   return `<div class="investigation-card">
-    <a class="investigation-card-link" href="#/workspace/research" data-open-investigation="${attr(inv.id)}">${esc(inv.name)}</a>
+    <a class="investigation-card-link" href="#/workspace/bigpicture" data-open-investigation="${attr(inv.id)}">${esc(inv.name)}</a>
     ${inv.description ? `<p class="investigation-card-desc">${esc(inv.description)}</p>` : ''}
     <p class="investigation-card-meta">${n} source${n === 1 ? '' : 's'} · updated ${esc(formatDate(inv.updatedAt))}</p>
     <div class="menu-wrap">
@@ -908,7 +908,7 @@ document.addEventListener('click', async (e) => {
   if (!link) return;
   e.preventDefault();
   await setActiveInvestigation(link.dataset.openInvestigation);
-  location.hash = '#/workspace/research';
+  location.hash = '#/workspace/bigpicture'; // opening an investigation lands on the Big Picture
 });
 
 async function renderHomeRecent() {

@@ -80,3 +80,20 @@ a{color:var(--accent);display:inline-flex;align-items:center;min-height:44px}
 .how-link{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}
 .btn.btn-small{min-height:44px}
 .vw-crumb-list li{display:inline-flex;align-items:center}
+
+/* Light theme: follows the system setting. */
+@media (prefers-color-scheme: light){
+  :root{color-scheme:light;--bg:#f6f4ee;--panel:#ffffff;--text:#1b1a16;--muted:#4f4c43;--accent:#8a5a00;--bad:#a82a20;--line:#b8b3a4}
+  button.primary,.badge,.skip-link:focus{color:#fff}
+}
+#caseDetail{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+
+.vw-q{margin:12px 0;padding-left:10px;border-left:4px solid var(--line)}
+.vw-q h4{margin:0 0 6px}
+.vw-q-missing{border-left-color:var(--bad)}
+.vw-q-notreviewed{border-left-color:var(--accent)}
+.vw-q-unresolved{border-left-color:#4f8fd6}
+.vw-q-missing .ask-tag{border-color:var(--bad)}
+.vw-q-notreviewed .ask-tag{border-color:var(--accent)}
+.vw-q-unresolved .ask-tag{border-color:#4f8fd6}
+.how-link{border:1px solid var(--line);border-radius:8px;padding:0 14px;background:var(--panel);color:var(--text);text-decoration:none;font-weight:600}

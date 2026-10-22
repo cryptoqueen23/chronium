@@ -80,9 +80,18 @@ try {
   await web.waitForSelector('[data-open-investigation]');
   await web.evaluate(() => document.querySelector('[data-open-investigation]').click());
   await web.waitForSelector('#tab-bigpicture');
+  await web.waitForFunction(() => document.querySelector('#viewBody-bigpicture')?.innerText.length > 50);
+  check('website: opening an investigation lands on Big Picture', await web.evaluate(() => location.hash === '#/workspace/bigpicture' && document.querySelector('#tab-bigpicture').getAttribute('aria-selected') === 'true'));
   const tabs = await web.$$eval('#workspaceTabStrip button', (bs) => bs.map((x) => x.textContent.trim()));
   check('website: the three views are tabs inside the investigation', tabs.slice(0, 3).join('|') === 'Big Picture|Overview|Deep Dive', tabs.join('|'));
 
+  // Research stays one click away, and the browser Back button returns to the view you came from.
+  await web.click('#tab-research');
+  await web.waitForSelector('#investigationQuery', { visible: true });
+  check('website: Research is still available as its own tab', await web.evaluate(() => location.hash === '#/workspace/research'));
+  await web.goBack();
+  const backOk = await web.waitForFunction(() => location.hash === '#/workspace/bigpicture' && document.querySelector('#viewBody-bigpicture')?.innerText.length > 50, { timeout: 8000 }).then(() => true, () => false);
+  check('website: browser Back returns to Big Picture', backOk);
   await web.click('#tab-bigpicture');
   await web.waitForFunction(() => /What the records document/.test(document.querySelector('#viewBody-bigpicture')?.innerText || ''), { timeout: 10000 });
   let bp = await web.$eval('#viewBody-bigpicture', (e) => e.innerText);

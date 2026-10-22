@@ -90,12 +90,23 @@ export function buildModel(snapshot) {
   const dates = ix.records.map((r) => documentDate(r)).filter(Boolean).sort();
   const timeline = [];
   const seen = new Set();
-  const push = (e) => { const k = `${e.kind}:${e.recordId}`; if (e.date && !seen.has(k)) { seen.add(k); timeline.push(e); } };
-  for (const v of votes) push({ date: v.date, kind: 'vote', label: `Vote recorded: ${v.source.title}`, recordId: v.recordId, target: `vote/${v.recordId}` });
+  // One row per document: a minutes file that records a vote AND supplies saved
+  // evidence is one event with both tags, not two rows.
+  const byDoc = new Map();
+  const push = (e) => {
+    if (!e.date) return;
+    const cur = byDoc.get(e.recordId);
+    if (cur) { cur.kinds.add(e.kind); if (e.kind === 'vote') cur.target = e.target; return; }
+    const row = { ...e, kinds: new Set([e.kind]) };
+    byDoc.set(e.recordId, row);
+    timeline.push(row);
+  };
+  for (const v of votes) push({ date: v.date, kind: 'vote', title: v.source.title, recordId: v.recordId, target: `vote/${v.recordId}` });
   for (const ev of snap.evidenceItems || []) {
     const r = ix.recordById.get(ev.sourceRecordId);
-    if (r) push({ date: documentDate(r), kind: 'evidence', label: `Evidence from: ${r.title || r.originalUrl}`, recordId: r.id, target: `source/${r.id}` });
+    if (r) push({ date: documentDate(r), kind: 'evidence', title: r.title || r.originalUrl, recordId: r.id, target: `source/${r.id}` });
   }
+  for (const e of timeline) { e.kinds = [...e.kinds].sort(); e.label = e.title; }
   timeline.sort((a, b) => a.date.localeCompare(b.date));
 
   const groupsMap = new Map();
@@ -211,13 +222,13 @@ export function bigPictureHtml(m) {
   const other = m.findings.filter((f) => !key.includes(f));
   const findingItem = (f) => `<li class="vw-item"><p>${esc(f.conclusion)}</p><p class="vw-meta">${tag(f.label)} ${f.claimLabel ? `About claim ${esc(f.claimLabel)} · ` : ''}${f.sources.length} source${f.sources.length === 1 ? '' : 's'}</p>${how('finding/' + f.id, f.conclusion)}</li>`;
   const findings = section('findings', 'What the records document',
-    key.length ? list(key.map(findingItem)) : empty(m.findings.length ? 'No finding has been recorded as a documented fact or supported inference yet.' : 'No findings have been recorded yet. A finding is a conclusion you write down together with its evidence.'),
+    key.length ? list(key.map(findingItem)) : empty(m.findings.length ? 'No finding has been recorded as a documented fact or supported inference yet.' : 'No findings have been recorded yet. A finding is a conclusion you write down together with its evidence (the Findings tab on the Chronium website).'),
     'Each statement below is a conclusion someone recorded with evidence attached. Select "How do we know?" to see the source.')
     + (other.length ? section('findings-other', 'Allegations and open findings', list(other.map(findingItem)), 'These are not established facts.') : '');
 
   const amountItems = m.figures.slice(0, 6).map((f) => `<li class="vw-item"><p><strong>${esc(f.amounts.join(', '))}</strong> in ${esc(f.source.title)}${f.source.date ? ` (${esc(f.source.date)})` : ''}</p><p class="vw-meta">${esc(f.text)}</p>${how('figure/' + f.evidenceId, f.amounts.join(', '))}</li>`);
   const dateItems = [];
-  if (m.dates.earliest) dateItems.push(`<li class="vw-item"><p>Documents in this case are dated from <strong>${esc(m.dates.earliest)}</strong> to <strong>${esc(m.dates.latest)}</strong>.</p></li>`);
+  if (m.dates.earliest) dateItems.push(`<li class="vw-item"><p>${m.dates.earliest === m.dates.latest ? `Documents in this case are dated <strong>${esc(m.dates.earliest)}</strong>.` : `Documents in this case are dated from <strong>${esc(m.dates.earliest)}</strong> to <strong>${esc(m.dates.latest)}</strong>.`}</p></li>`);
   for (const v of m.votes.slice(0, 5)) dateItems.push(`<li class="vw-item"><p>${v.date ? `<strong>${esc(v.date)}</strong>: ` : ''}vote wording found in ${esc(v.source.title)}</p>${how('vote/' + v.recordId, v.source.title)}</li>`);
   const figures = section('figures', 'Important figures and dates',
     (amountItems.length || dateItems.length) ? list([...amountItems, ...dateItems]) : empty('No dollar amounts have been saved as evidence, and no dated documents were found.'),
@@ -227,11 +238,12 @@ export function bigPictureHtml(m) {
     m.discrepancies.length ? list(m.discrepancies.map((c) => `<li class="vw-item"><p>${esc(c.text)}</p><p class="vw-meta">${tag('Records disagree')} ${c.supports.length} supporting · ${c.contradicts.length} contradicting</p>${how('discrepancy/' + c.id, c.text)}</li>`)) : empty('No claim has evidence linked as contradicting it. That reflects linked evidence only.'));
 
   const q = m.questions;
-  const qItems = (rows) => rows.slice(0, 6).map((r) => `<li class="vw-item"><p>${esc(r.text)}</p>${r.target ? how(r.target, r.text) : ''}</li>`);
+  const qItems = (rows, label) => rows.slice(0, 6).map((r) => `<li class="vw-item"><p>${tag(label)} ${esc(r.text)}</p>${r.target ? how(r.target, r.text) : ''}</li>`);
+  const group = (cls, heading, rows, label, none) => `<div class="vw-q vw-q-${cls}"><h4>${esc(heading)}</h4>${rows.length ? list(qItems(rows, label)) : empty(none)}</div>`;
   const open = section('open', 'What is still unanswered',
-    `<h4>Missing: nothing was located</h4>${q.missing.length ? list(qItems(q.missing)) : empty('Nothing known to be missing.')}
-     <h4>Not reviewed yet: material exists, nobody has looked</h4>${q.notReviewed.length ? list(qItems(q.notReviewed)) : empty('Nothing waiting for review.')}
-     <h4>Unresolved: looked at, evidence is not enough</h4>${q.unresolved.length ? list(qItems(q.unresolved)) : empty('No unresolved findings.')}`,
+    group('missing', 'Missing: nothing was located', q.missing, 'Missing', 'Nothing known to be missing.')
+    + group('notreviewed', 'Not reviewed yet: material exists, nobody has looked', q.notReviewed, 'Not reviewed yet', 'Nothing waiting for review.')
+    + group('unresolved', 'Unresolved: looked at, evidence is not enough', q.unresolved, 'Unresolved', 'No unresolved findings.'),
     'These three are different: a missing record is not the same as one nobody has read yet.');
 
   const c = m.coverage;
@@ -251,7 +263,7 @@ export function overviewHtml(m) {
   const byYear = new Map();
   for (const e of m.timeline) { const y = e.date.slice(0, 4); if (!byYear.has(y)) byYear.set(y, []); byYear.get(y).push(e); }
   const timeline = section('timeline', 'Timeline',
-    m.timeline.length ? [...byYear.entries()].map(([y, ev]) => `<h4>${esc(y)}</h4>${list(ev.map((e) => `<li class="vw-item"><p><time datetime="${esc(e.date)}">${esc(e.date)}</time> ${tag(e.kind === 'vote' ? 'Vote' : 'Evidence')} ${esc(e.label)}</p>${how(e.target, e.label)}</li>`))}`).join('') : empty('No dated documents are linked to evidence or votes yet.'),
+    m.timeline.length ? [...byYear.entries()].map(([y, ev]) => `<h4>${esc(y)}</h4>${list(ev.map((e) => `<li class="vw-item"><p><time datetime="${esc(e.date)}">${esc(e.date)}</time> ${e.kinds.map((k) => tag(k === 'vote' ? 'Vote recorded' : 'Evidence saved')).join(' ')} ${esc(e.label)}</p>${how(e.target, e.label)}</li>`))}`).join('') : empty('No dated documents are linked to evidence or votes yet.'),
     'In date order, as a list. Only documents with a vote or saved evidence are shown; the date is the one read from the document.');
 
   const decisions = section('decisions', 'Government decisions and votes',

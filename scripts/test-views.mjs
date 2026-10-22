@@ -213,3 +213,30 @@ test('export then import into a fresh device gives identical views at every leve
   for (const v of ['bigpicture', 'overview', 'deepdive']) assert.equal(viewHtml(v, after, null), viewHtml(v, before, null), v);
   assert.equal(before.counts.findings, 1);
 });
+
+test('timeline: a document that records a vote and supplies saved evidence is one row with both tags', () => {
+  const m = buildModel(fixture());
+  const rows = m.timeline.filter((e) => e.recordId === m.votes[0].recordId);
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0].kinds, ['evidence', 'vote']);
+  const ov = overviewHtml(m);
+  assert.match(ov, /Evidence saved<\/span> <span class="ask-tag">Vote recorded/);
+  assert.equal((ov.match(/minutes-2024-03-12\.txt/g) || []).length >= 1, true);
+});
+
+test('missing, not reviewed yet and unresolved are visually separate groups with their own tag', () => {
+  const m = buildModel(fixture());
+  const bp = bigPictureHtml(m);
+  for (const cls of ['missing', 'notreviewed', 'unresolved']) assert.match(bp, new RegExp(`class="vw-q vw-q-${cls}"`));
+  assert.match(bp, /vw-q-missing[\s\S]*<span class="ask-tag">Missing<\/span>/);
+  assert.match(bp, /vw-q-notreviewed[\s\S]*<span class="ask-tag">Not reviewed yet<\/span>/);
+  assert.match(bp, /vw-q-unresolved[\s\S]*<span class="ask-tag">Unresolved<\/span>/);
+});
+
+test('a one-day date range reads naturally', () => {
+  const snap = fixture();
+  snap.records = [snap.records[0]];
+  snap.evidenceItems = [snap.evidenceItems[0]];
+  const m = buildModel(snap);
+  assert.match(bigPictureHtml(m), /Documents in this case are dated <strong>2024-03-12<\/strong>\./);
+});

@@ -57,7 +57,15 @@ pressing **Back to Big Picture** returns to where you were. A breadcrumb
 - `scripts/test-views-browser.mjs` (53 checks, real Chrome): website and extension; links land on the right evidence; focus moves to the evidence; Back restores scroll; breadcrumb; a case exported from the website shows an identical Big Picture in the extension; arrow-key tab switching; no horizontal scroll and no axe-core violations at 320/375/768/1280/1920 (website) and 320/375/480/768 (side panel) for each view; every control at least 24x24 CSS px; Ask Chronium still works beside the views.
 - Screenshots: `docs/screenshots/` (website Big Picture 320/768/1280, Deep Dive "How do we know?" 1280, extension Big Picture and Deep Dive at 320).
 
-## Accessibility status: automated and emulated checks only
+## Review changes (pre-deployment)
+
+- Landing: opening an investigation now opens Big Picture; sidebar links added for the three views.
+- Missing / Not reviewed yet / Unresolved are visually separate groups (own edge colour and a text tag in each item), never colour alone.
+- Timeline: a document that records a vote and supplies saved evidence is one row with both tags.
+- Light theme added for the website and the extension (follows the system setting).
+- Screenshots: 20 real screenshots in `docs/screenshots/` (`scripts/screenshots-views.mjs`) plus two real 400%-zoom shots.
+
+## Accessibility status: automated and emulated checks only (see docs/ACCESSIBILITY.md and docs/MANUAL_A11Y_TESTS.md)
 
 Done: axe-core (WCAG 2.0 to 2.2 A/AA rules) on every view at the widths above; no horizontal scroll; 24 px minimum target size verified by measurement; keyboard-only use of links, tabs (arrow keys), disclosures, and Back; visible focus; focus management after navigation; breadcrumb landmark; dark theme contrast through axe.
 
@@ -71,5 +79,5 @@ Done: axe-core (WCAG 2.0 to 2.2 A/AA rules) on every view at the widths above; n
 - Votes and shared-item groups are found by wording and shared identifiers; unusual wording is missed.
 - The model loads the whole case per view; fine for hundreds of documents, untested at tens of thousands.
 - The Overview is lists, not diagrams or charts. A visual timeline or relationship map could be added later but must keep these lists as the primary form.
-- Default landing for an opened investigation is still the existing Research tab; the three views are the first three tabs.
+- Opening an investigation lands on Big Picture (`#/workspace/bigpicture`). Research, Review Queue, Subjects, Evidence, Findings and Report remain separate tabs, and the browser Back button returns to the view you came from. Creating a new investigation, or finishing an import, still goes to Research because that is where files are added.
 - Not deployed; not pushed.

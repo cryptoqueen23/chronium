@@ -167,3 +167,5 @@ Build lean, stay independent, keep free access within reasonable limits, let pay
 5. Real historical document comparison in the Compare tab (still a placeholder).
 6. Spanish-language question understanding (and Spanish localization generally).
 7. Complete manual accessibility testing (screen readers, real touch, true 400% zoom, light theme); see `docs/ACCESSIBILITY.md`.
+
+**Pre-deployment review (2026-10-22):** opening an investigation lands on Big Picture; light theme added; missing/not-reviewed/unresolved made visually distinct; 400% zoom, theme, keyboard and emulated-touch checks automated (`scripts/test-a11y-deep.mjs`). **NVDA, VoiceOver and real-device touch testing are NOT done** (checklist in `docs/MANUAL_A11Y_TESTS.md`); no WCAG conformance claim.
