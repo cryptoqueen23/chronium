@@ -144,3 +144,5 @@ Three views of the SAME investigation data (no separate stores/processes); main 
 Rules: never state a conclusion without accessible supporting evidence; distinguish MISSING information from NOT YET REVIEWED. Reuse existing evidence/claims infrastructure; implement incrementally.
 
 **Case portability (2026-10-22): built.** `.chronium.json` (versioned, format `chronium-investigation` v1) exports/imports between the website and the extension; preview-first, merge-only (never overwrites; same-id rows kept local, differing ones reported as conflicts), sources deduped by canonical URL, clashing source/claim numbers renumbered. Optional embedded file copies. No cloud, no accounts. Not built: optional encrypted sync. Website changes need a deploy to reach the live site.
+
+**Ask Chronium (2026-10-22): built** (`public/askRouter.js`, `askRender.js`; website Research tab + extension My Research). See `docs/ASK_CHRONIUM.md` for scope, safeguards, benchmark, limitations. Next: three-level views (Big Picture / Overview / Deep Dive), then free connectors in the order given.

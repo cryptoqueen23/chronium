@@ -243,6 +243,7 @@
 
           <div id="askSourcesAnswer" class="ask-sources-answer hidden">
             <p id="askSourcesProvenance" class="hint"></p>
+            <div id="askRouterBox" class="ask-router-box hidden" tabindex="-1" aria-label="Ask Chronium answer"></div>
             <p id="askSourcesComputedFact" class="hint hidden"></p>
             <h3 id="askMySourcesHeading" class="ask-sources-section-heading hidden">My Sources</h3>
             <div id="investigationSearchResults" class="result-list"></div>
@@ -264,7 +265,7 @@
               <button type="button" class="btn btn-small" id="askRunAiBtn">Analyze with AI</button>
             </div>
 
-            <p id="askSourcesStatus" class="hint"></p>
+            <p id="askSourcesStatus" class="hint" role="status" aria-live="polite"></p>
             <div id="askSourcesAiResult"></div>
             <div id="askSourcesArtifact"></div>
           </div>

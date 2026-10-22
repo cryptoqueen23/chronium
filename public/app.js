@@ -28,6 +28,9 @@ import {
 import { ingestFiles, ingestZip } from './ingest/pipeline.js';
 import { renderReviewQueuePanel } from './reviewQueue.js';
 import { openOverlay, openMenu, confirmDialog } from './ui.js';
+import { answerQuestion } from './askRouter.js';
+import { answerHeaderHtml, answerFooterHtml, itemHtml } from './askRender.js';
+import { readInvestigationForExport } from './portableDb.js';
 import { exportInvestigationFile, previewImport, importBundle, describeReport, PortableFileError } from './portable.js';
 import { formatCitation, buildFootnotes, CITATION_STYLES, CITATION_STYLE_LABELS } from './citations.js';
 import { renderSourceIndex, renderEvidenceTable, renderClaimEvidenceMatrix, renderQuantitativeTable } from './artifacts.js';
@@ -1384,6 +1387,51 @@ investigationSearchForm.addEventListener('submit', async (e) => {
   await runAskSourcesQuestion(q);
 });
 
+
+// ---------------------------------------------------------------------------
+// Ask Chronium (deterministic question router) - see public/askRouter.js
+// ---------------------------------------------------------------------------
+const askRouterBox = document.querySelector('#askRouterBox');
+let askChroniumContext = {};
+let askChroniumLastIntent = '';
+
+async function tryAskChronium(q) {
+  askRouterBox.classList.add('hidden');
+  askRouterBox.innerHTML = '';
+  askSourcesAnswer.removeAttribute('data-intent');
+  askSourcesAnswer.removeAttribute('data-state');
+  let answer;
+  try {
+    const snapshot = await readInvestigationForExport(activeInvestigationId);
+    answer = snapshot ? answerQuestion(q, snapshot, askChroniumContext) : null;
+  } catch (err) {
+    console.error('Ask Chronium router failed; falling back to document search', err);
+    return false;
+  }
+  if (!answer) return false;
+  askChroniumContext = { ...askChroniumContext, ...answer.context };
+  askChroniumLastIntent = answer.intent;
+  askSourcesAnswer.dataset.intent = answer.intent;
+  askSourcesAnswer.dataset.state = answer.state;
+  askSourcesProvenance.textContent = `${answer.title}. ${answer.summary}`;
+  askRouterBox.innerHTML = answerHeaderHtml(answer) + answerFooterHtml(answer);
+  askRouterBox.classList.remove('hidden');
+  investigationSearchResults.innerHTML = answer.items.map(itemHtml).join('');
+  askMySourcesHeading.classList.toggle('hidden', !answer.items.length);
+  askSourcesStatus.textContent = answer.state === 'NEEDS_CLARIFICATION' ? 'Chronium needs one more detail before it can answer.' : `Answer ready: ${answer.title}`;
+  await appendAskHistory(q, 'router:' + answer.intent, answer.title, null);
+  return true;
+}
+
+// Clarification buttons re-ask with the chosen detail.
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-ask-followup]');
+  if (!b) return;
+  const input = document.querySelector('#investigationQuery');
+  input.value = b.dataset.askFollowup;
+  document.querySelector('#investigationSearchForm').requestSubmit();
+});
+
 async function runAskSourcesQuestion(q) {
   // Principle #1 ("Conversation First"): follow-up questions must
   // understand conversation context - captured before lastAskQuestion is
@@ -1452,6 +1500,12 @@ async function runAskSourcesQuestion(q) {
     await handleExcludeFromReport(q);
     return;
   }
+
+  // Ask Chronium: investigative-intent questions (claims, contradictions,
+  // relationships, payments, before/after, progress...) are answered from the
+  // investigation's own structured data by public/askRouter.js. Anything it
+  // does not recognise as such falls through to ranked document search below.
+  if (await tryAskChronium(q)) return;
 
   // Deterministic search - the Source Fact layer, over My Sources first
   // (docs/CANON.md Product Principles: search priority is existing

@@ -419,7 +419,13 @@ async function askSourcesQuery(question) {
     computedFact: document.querySelector('#askSourcesComputedFact')?.textContent || '',
     resultTitles: [...document.querySelectorAll('#investigationSearchResults .result-row, #investigationSearchResults [data-record-id], #investigationSearchResults .result-item')].map((el) => el.textContent.trim().slice(0, 200)),
     resultCount: document.querySelectorAll('#investigationSearchResults > *').length,
-    answerVisible: !document.querySelector('#askSourcesAnswer')?.classList.contains('hidden')
+    answerVisible: !document.querySelector('#askSourcesAnswer')?.classList.contains('hidden'),
+    // Additive (Ask Chronium): what the router decided and said, so answers can be
+    // graded by reading them, not only by counting rows. Does not change classification.
+    routedIntent: document.querySelector('#askSourcesAnswer')?.dataset.intent || '',
+    routedState: document.querySelector('#askSourcesAnswer')?.dataset.state || '',
+    answerText: (document.querySelector('#askRouterBox')?.innerText || '').slice(0, 1500),
+    itemTexts: [...document.querySelectorAll('#investigationSearchResults > *')].slice(0, 5).map((el) => el.innerText.slice(0, 400))
   }));
   return { question, elapsedMs: t1 - t0, timedOut, ...result };
 }
@@ -661,7 +667,7 @@ const askQuestions = [
 for (const q of askQuestions) {
   const r = await askSourcesQuery(q);
   const classification = r.timedOut ? 'DOES NOT WORK (timed out)' : r.resultCount > 0 && !/No matches/i.test(r.provenance) ? (r.resultCount >= 2 ? 'WORKS' : 'PARTIALLY WORKS') : 'DOES NOT WORK';
-  report.askSources.push({ question: q, classification, resultCount: r.resultCount, provenance: r.provenance, computedFact: r.computedFact, elapsedMs: r.elapsedMs, timedOut: r.timedOut });
+  report.askSources.push({ question: q, classification, resultCount: r.resultCount, provenance: r.provenance, computedFact: r.computedFact, elapsedMs: r.elapsedMs, timedOut: r.timedOut, routedIntent: r.routedIntent, routedState: r.routedState, answerText: r.answerText, itemTexts: r.itemTexts });
   log('askSources', `"${q}"`, classification);
 }
 

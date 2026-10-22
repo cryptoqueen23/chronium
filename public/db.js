@@ -410,6 +410,7 @@ export async function searchInvestigation(investigationId, query, limit = 50) {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   const rows = await listInvestigationRecords(investigationId);
   if (!terms.length) return rows.slice(0, limit);
+  const identifierTerms = terms.filter((t) => /\d/.test(t) && t.length >= 4);
   const matches = [];
   for (const r of rows) {
     const extractedText = r.extractedText || '';
@@ -419,6 +420,10 @@ export async function searchInvestigation(investigationId, query, limit = 50) {
     // terms (min 1), then sort best-covered first below.
     const matchedTerms = terms.filter((term) => haystack.includes(term));
     if (matchedTerms.length < Math.max(1, Math.ceil(terms.length / 2))) continue;
+    // A term with a digit is a specific identifier (2026-29, 2021, HC-0091):
+    // a document that lacks it is not an answer, however well it matches the
+    // other words (Ordinance 2024-31 is not Ordinance 2026-29).
+    if (identifierTerms.some((term) => !haystack.includes(term))) continue;
     const titleLower = `${r.title || ''}`.toLowerCase();
     const rankScore = matchedTerms.length * 10 + matchedTerms.filter((term) => titleLower.includes(term)).length;
 

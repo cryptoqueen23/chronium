@@ -53,6 +53,16 @@
       </div>
       <div id="importBox" role="status" aria-live="polite"></div>
       <div id="caseList"></div>
+      <section id="askBox" aria-labelledby="askHeading" class="askbox">
+        <h3 id="askHeading">Ask Chronium</h3>
+        <p class="hint" id="askCaseLine"></p>
+        <form id="askForm" role="search">
+          <label for="askQ" class="sr-only">Ask a question about the active case</label>
+          <input id="askQ" type="search" placeholder="Ask about this case..." autocomplete="off" maxlength="300" required />
+          <button type="submit" class="primary">Ask</button>
+        </form>
+        <div id="askOut" role="region" aria-live="polite" aria-label="Answer" tabindex="-1"></div>
+      </section>
       <div id="caseDetail"></div>
     </section>
 

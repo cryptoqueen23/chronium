@@ -1,7 +1,11 @@
 import {
   listInvestigations, createInvestigation, deleteInvestigation,
-  saveRecordToInvestigation, listInvestigationRecords, getSavedCanonicalKeys, searchLibrary
+  saveRecordToInvestigation, listInvestigationRecords, getSavedCanonicalKeys, searchLibrary, searchInvestigation
 } from './lib/db.js';
+import { answerQuestion } from './lib/askRouter.js';
+import { answerHtml } from './lib/askRender.js';
+import { extractSearchTerms } from './lib/askCommands.js';
+import { readInvestigationForExport } from './lib/portableDb.js';
 import { exportInvestigationFile, previewImport, importBundle, describeReport, PortableFileError } from './lib/portable.js';
 
 const DEFAULT_WORKER = 'https://chronium-mind.truewolfflix777.workers.dev';
@@ -63,6 +67,8 @@ async function renderCases() {
       <button type="button" data-del="${esc(c.id)}" aria-label="Delete case ${esc(c.name)}">Delete</button>
     </span></li>`).join('')}</ul>` : '<p class="hint">No cases yet. A case holds the sources you save while researching one subject.</p>';
   $('#caseDetail').innerHTML = '';
+  const active = cases.find((c) => c.id === activeCaseId);
+  $('#askCaseLine').textContent = active ? `Asking about: ${active.name}` : 'No case selected.';
 }
 $('#newCaseForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -118,6 +124,35 @@ $('#importBox').addEventListener('click', async (e) => {
       await renderCases();
     } catch (err) { $('#importBox').innerHTML = `<p class="notice">Import failed: ${esc(err.message)}</p>`; }
   }
+});
+
+// ---- Ask Chronium (questions about the active case) ----
+let askContext = {};
+async function askChronium(q) {
+  const out = $('#askOut');
+  if (!activeCaseId) { out.innerHTML = '<p class="notice">Create or choose a case first. Ask Chronium answers from the sources in a case.</p>'; return; }
+  out.textContent = 'Working on it...';
+  try {
+    const snapshot = await readInvestigationForExport(activeCaseId);
+    const answer = answerQuestion(q, snapshot, askContext);
+    if (answer) {
+      askContext = { ...askContext, ...answer.context };
+      out.innerHTML = answerHtml(answer);
+    } else {
+      const hits = await searchInvestigation(activeCaseId, extractSearchTerms(q), 10);
+      out.innerHTML = hits.length
+        ? `<h3 class="ask-title">${hits.length} source${hits.length === 1 ? '' : 's'} mention this</h3><p class="ask-summary">Best matches first. These are text matches, not conclusions.</p>${hits.map((h) => `<article class="ask-item"><h4>${esc(h.title || h.originalUrl || 'Source')}</h4>${h.matchPassage ? `<blockquote class="ask-excerpt">${esc(h.matchPassage)}</blockquote>` : ''}<p>${linkHtml(h.originalUrl, 'Open original')} ${linkHtml(h.archiveUrl, 'Open archived copy')}</p></article>`).join('')}`
+        : '<h3 class="ask-title">No saved source matches this</h3><p class="ask-summary">That does not show the record does not exist: only that nothing saved in this case matches. Try other words, or add more documents.</p>';
+    }
+  } catch (err) {
+    out.innerHTML = `<p class="notice">Could not answer: ${esc(err.message)}</p>`;
+  }
+  out.focus();
+}
+$('#askForm').addEventListener('submit', (e) => { e.preventDefault(); const q = $('#askQ').value.trim(); if (q) askChronium(q); });
+$('#askOut').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-ask-followup]');
+  if (b) { $('#askQ').value = b.dataset.askFollowup; askChronium(b.dataset.askFollowup); }
 });
 
 // ---- search ----

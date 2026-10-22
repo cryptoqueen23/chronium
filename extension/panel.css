@@ -40,3 +40,20 @@ a{color:var(--accent);display:inline-flex;align-items:center;min-height:44px}
 .foot summary{min-height:44px;display:flex;align-items:center;cursor:pointer}
 .foot input{width:100%;margin:6px 0}
 .importrow{margin:0 0 8px}
+
+.askbox{margin-top:20px;border-top:1px solid var(--line);padding-top:12px}
+.ask-title{font-size:1rem;margin:8px 0 4px}
+.ask-summary{margin:0 0 10px}
+.ask-tag{display:inline-block;font-size:.75rem;padding:1px 8px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}
+.ask-item{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;margin:10px 0}
+.ask-item h4{margin:0 0 4px;font-size:.9rem;overflow-wrap:anywhere}
+.ask-sources{list-style:none;padding:0;margin:8px 0 0}
+.ask-source{border-top:1px solid var(--line);padding-top:6px;margin-top:6px}
+.ask-source-title,.ask-source-links,.ask-source-meta{margin:2px 0;overflow-wrap:anywhere}
+.ask-source-meta{color:var(--muted);font-size:.8rem}
+.ask-excerpt{margin:6px 0;padding:6px 10px;border-left:3px solid var(--accent);overflow-wrap:anywhere}
+.ask-missing,.ask-clarify{border-left:4px solid var(--accent);padding:4px 10px;margin:12px 0}
+.ask-searched{color:var(--muted);font-size:.8rem}
+.ask-options{list-style:none;padding:0;display:grid;gap:8px}
+.ask-options button{width:100%;text-align:left;white-space:normal}
+#askOut:focus{outline:none}

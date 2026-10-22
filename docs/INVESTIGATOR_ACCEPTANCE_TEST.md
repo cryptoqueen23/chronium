@@ -607,3 +607,4 @@ row dropping to "Fixed" — not just watching unit tests stay green.
 Rerun `scripts/run-acceptance-test.mjs` and add a Benchmark History row.
 
 | Fix pass (`20a6b2e`) | 2026-10-22 | 6/12 WORKS (was 0/12) | 6/6 | 6/6 correct | Mitigated in UI (NAME ONLY badge, "Same person:" wording); harness still flags it because detection state is unchanged | 378ms/record | Remaining 6 fails are intent questions (payments, "what changed", unreviewed items), not keyword matching. |
+| Ask Chronium (`c09c768` + working tree) | 2026-10-22 | 7 WORKS + 2 partial of 12 by harness; **10 correct / 2 partial / 0 wrong** hand-graded (see `docs/ASK_CHRONIUM.md`) | 6/6 | 6/6 correct | NAME ONLY warning in review queue; router never verifies identity from a surname | 376ms/record | Router answers in ~0.5s. The earlier 6/12 included a false positive (Ordinance 2026-29 matched 23 unrelated ordinances); fixed. Q7 and Q9 are correct "nothing in the case" answers (grep-verified). |
