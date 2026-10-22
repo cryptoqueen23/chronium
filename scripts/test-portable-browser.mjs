@@ -91,15 +91,26 @@ try {
   // ---- website -> extension (export via the website's real menu) ----
   const webInv = await web.evaluate(BUILD, '/db.js', 'WebCase');
   const webDir = await newDownloadDir(web);
-  const webExport = await web.evaluate(async (id) => {
-    const p = await import('/portable.js');
-    const { filename, text } = await p.exportInvestigationFile(id);
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = filename; a.click();
-    return filename;
-  }, webInv);
+  // Background tabs do not run animation frames, which stalls clicks.
+  await web.bringToFront();
+  // Real UI path: open the case from the Investigations list, then use the
+  // investigation menu's "Export case file..." item.
+  await web.evaluate(() => { location.hash = '#/settings'; });
+  await sleep(300);
+  await web.evaluate(() => { location.hash = '#/investigations'; });
+  await web.waitForSelector('[data-open-investigation]', { timeout: 10000 });
+  await web.evaluate((id) => document.querySelector(`[data-open-investigation="${id}"]`).click(), webInv);
+  await web.waitForSelector('#workspaceKebabBtn', { visible: true, timeout: 10000 });
+  await web.click('#workspaceKebabBtn');
+  await web.waitForSelector('[data-action="export-active-investigation"]', { visible: true });
+  const menuLabel = await web.$eval('[data-action="export-active-investigation"]', (e) => e.textContent.trim());
+  check('website menu has an "Export case file…" item', /Export case file/.test(menuLabel), menuLabel);
+  await web.click('[data-action="export-active-investigation"]');
+  const webExport = 'WebCase.chronium.json';
   const webFile = await waitForFile(webDir);
   check('website exported a .chronium.json file', !!webFile && webExport.endsWith('.chronium.json'), webExport);
 
+  await panel.bringToFront();
   const input = await panel.$('#caseFileInput');
   await input.uploadFile(webFile);
   await panel.waitForSelector('#confirmImport', { timeout: 10000 });
@@ -121,6 +132,7 @@ try {
   check('no duplicates after second import', (await panel.evaluate(COUNTS, './lib/db.js', webInv)) === extCounts);
 
   // ---- extension -> website (export via the extension's real Export button) ----
+  await panel.bringToFront();
   const extInv = await panel.evaluate(BUILD, './lib/db.js', 'ExtCase');
   await panel.reload({ waitUntil: 'domcontentloaded' });
   await panel.click('#tab-research');
@@ -135,7 +147,7 @@ try {
   await web.bringToFront();
   const webInput = await web.$('#caseFileInput');
   await webInput.uploadFile(extFile);
-  await web.waitForSelector('#confirmDialog:not(.hidden)', { timeout: 10000 });
+  await web.waitForSelector('#confirmDialog:not(.hidden)', { timeout: 10000 }).catch(async (e) => { throw new Error(e.message + ' | toast: ' + (await web.$eval('#toast', (t) => t.textContent).catch(() => '?'))); });
   const webPreview = await web.$eval('#confirmDialogMessage', (e) => e.innerText);
   check('website shows a preview before importing', /will be added as a new case/.test(webPreview), webPreview.split('\n')[0]);
   await web.click('#confirmDialogConfirm');
@@ -144,6 +156,7 @@ try {
   check('case arrived on website with all parts', webCounts === JSON.stringify({ cases: 2, sources: 1, evidence: 1, claims: 1, entities: 2, findings: 1 }), webCounts);
 
   // ---- corrupt file ----
+  await panel.bringToFront();
   const bad = path.join(dl, 'broken.json');
   fs.writeFileSync(bad, '{ this is not a case file');
   await (await panel.$('#caseFileInput')).uploadFile(bad);
