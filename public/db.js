@@ -411,18 +411,24 @@ export async function searchInvestigation(investigationId, query, limit = 50) {
   for (const r of rows) {
     const extractedText = r.extractedText || '';
     const haystack = `${r.title || ''} ${r.description || r.snippet || ''} ${r.category || ''} ${r.originalUrl || ''} ${extractedText}`.toLowerCase();
-    if (!terms.every((term) => haystack.includes(term))) continue;
+    // Ranked, not all-or-nothing: a natural-language question rarely has
+    // every extracted word in one document. Require at least half the
+    // terms (min 1), then sort best-covered first below.
+    const matchedTerms = terms.filter((term) => haystack.includes(term));
+    if (matchedTerms.length < Math.max(1, Math.ceil(terms.length / 2))) continue;
+    const titleLower = `${r.title || ''}`.toLowerCase();
+    const rankScore = matchedTerms.length * 10 + matchedTerms.filter((term) => titleLower.includes(term)).length;
 
     // Find the first search term that actually hits inside the document body
     // (not just the title/category) so the passage points at real content.
     const textLower = extractedText.toLowerCase();
     let matchOffset = -1, matchTerm = null;
-    for (const term of terms) {
+    for (const term of matchedTerms) {
       const idx = textLower.indexOf(term);
       if (idx >= 0) { matchOffset = idx; matchTerm = term; break; }
     }
 
-    if (matchOffset < 0) { matches.push(r); continue; } // matched only title/category/url - no in-document passage to show
+    if (matchOffset < 0) { matches.push({ ...r, rankScore, matchedTermCount: matchedTerms.length, queryTermCount: terms.length }); continue; } // matched only title/category/url - no in-document passage to show
     const { raw, display } = buildPassage(extractedText, matchOffset, matchTerm.length);
     matches.push({
       ...r,
@@ -430,9 +436,11 @@ export async function searchInvestigation(investigationId, query, limit = 50) {
       matchPassageRaw: raw,
       matchOffset,
       matchTerm,
-      matchPage: pageForOffset(r.metadata?.pageOffsets, matchOffset)
+      matchPage: pageForOffset(r.metadata?.pageOffsets, matchOffset),
+      rankScore, matchedTermCount: matchedTerms.length, queryTermCount: terms.length
     });
   }
+  matches.sort((a, b) => (b.rankScore || 0) - (a.rankScore || 0));
   return matches.slice(0, limit);
 }
 

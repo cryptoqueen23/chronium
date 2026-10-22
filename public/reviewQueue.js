@@ -316,7 +316,7 @@ function renderCandidatesList(candidates) {
   container.innerHTML = candidates.map((c) => {
     const options = c.candidateEntityIds.map((id) => {
       const e = entitiesById.get(id);
-      return e ? `<button type="button" class="btn btn-small" data-action="confirm-candidate" data-id="${attr(c.id)}" data-entity="${attr(id)}">Confirm as ${esc(e.name)}</button>` : '';
+      return e ? `<button type="button" class="btn btn-small" data-action="confirm-candidate" data-id="${attr(c.id)}" data-entity="${attr(id)}">${c.matchStrength === 'weak' ? 'Same person: ' : 'Confirm as '}${esc(e.name)}</button>` : '';
     }).join(' ');
     const resolvedLabel = c.state === 'CONFIRMED' ? `Confirmed: ${esc(entitiesById.get(c.confirmedEntityId)?.name || 'Entity removed')}` : c.state === 'REJECTED' ? 'Rejected' : '';
     // A confirmed candidate's new Evidence Item can be linked straight to
@@ -336,7 +336,9 @@ function renderCandidatesList(candidates) {
       : '';
     return `<div class="rel-row">
       <span class="fact-badge ${c.state === 'AMBIGUOUS' ? 'fact-badge-lead' : c.state === 'CONFIRMED' ? 'fact-badge-confirmed' : c.state === 'REJECTED' ? 'fact-badge-unresolved' : ''}">${esc(c.state)}</span>
+      ${c.matchStrength === 'weak' ? '<span class="fact-badge fact-badge-lead">NAME ONLY</span>' : ''}
       <strong>“${esc(c.matchedText)}”</strong>
+      ${c.matchStrength === 'weak' && c.state !== 'CONFIRMED' && c.state !== 'REJECTED' ? '<p class="hint">Only a shared name matched. Read the passage: it may be a different person with the same name.</p>' : ''}
       <p class="hint">${esc(c.snippet)}</p>
       ${c.state === 'UNREVIEWED' || c.state === 'AMBIGUOUS' ? `<div class="dialog-actions dialog-actions-inline" style="flex-wrap:wrap">${options} <button type="button" class="btn btn-small" data-action="reject-candidate" data-id="${attr(c.id)}">Not a match</button></div>` : `<p class="hint">${resolvedLabel}</p>${claimLinkHtml}`}
     </div>`;

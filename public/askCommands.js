@@ -154,7 +154,7 @@ const STOPWORDS = new Set(['what', 'whats', 'how', 'many', 'much', 'when', 'who'
   // for the AND of "sources mention X" and failed even when X was
   // genuinely present, because no real document contains the word
   // "mention" - the computed-fact question's own framing broke itself.
-  'sources', 'source', 'mention', 'mentions', 'mentioned', 'documents', 'document', 'records', 'record', 'files', 'file', 'discuss', 'discusses', 'reference', 'references']);
+  'sources', 'source', 'mention', 'mentions', 'mentioned', 'mentioning', 'every', 'each', 'any', 'all', 'which', 'with', 'have', 'has', 'and', 'or', 'to', 'from', 'by', 'at', 'as', 'be', 'been', 'i', 'we', 'them', 'their', 'anything', 'something', 'list', 'get', 'need', 'want', 'look', 'looking', 'containing', 'contain', 'contains', 'named', 'involving', 'involve', 'involves', 'documents', 'document', 'records', 'record', 'files', 'file', 'discuss', 'discusses', 'reference', 'references']);
 export function extractSearchTerms(rawQuestion) {
   const words = (rawQuestion || '').toLowerCase().replace(/[?.,!']/g, '').split(/\s+/).filter(Boolean);
   const kept = words.filter((w) => !STOPWORDS.has(w));

@@ -595,3 +595,13 @@ run's, and add a row to the table below.
 Add one row per future rerun. The goal is watching this table's numbers
 improve — 0/12 → some/12 → 12/12 on Ask Sources, the false-confidence risk
 row dropping to "Fixed" — not just watching unit tests stay green.
+
+## Fixes applied 2026-10-22 (not yet re-benchmarked)
+
+- Bug (Ask Sources 0/12): `searchInvestigation` now ranks by matched-term
+  coverage (needs at least half the terms) instead of requiring all; more
+  framing words stopworded ("mentioning", "every", ...).
+- Bug #1: weak (bare-surname) candidates now show a NAME ONLY badge, a
+  "may be a different person" warning, and "Same person: X" instead of
+  "Confirm as X". Detection engine unchanged.
+Rerun `scripts/run-acceptance-test.mjs` and add a Benchmark History row.

@@ -66,3 +66,39 @@ not the product boundary. The generic Research Workspace (Search → Discover
 product; specialized verticals like Legislative Intelligence, legal,
 medical, and academic research plug into it as connectors and domain
 vocabulary layered on the same core, not separate rebuilds.
+
+## Unified Research Extension (captured 2026-10-22, brief from Mari)
+
+Goal: a free, beginner-friendly Chromium Manifest V3 **side-panel extension**
+over the existing Worker, IndexedDB workspace and archive connectors (nothing
+replaced). One search box; query is classified and connectors chosen
+automatically. Primary nav: **Search, Compare, My Research, Reports**.
+Advanced controls hidden until requested.
+
+User-facing vocabulary: Investigation Workspace → My Cases · Ask Sources →
+Ask Chronium · Discover Sources → Find Sources · Claim Ledger → Check Facts ·
+Entity Mentions → Name Matches · Coverage Verdict → Search Status · Bulk
+Ingestion → Add Files · Evidence Inspector → Source Details · Compare Mode →
+What Changed? · Review Queue → Needs Review. Logic underneath is unchanged.
+
+Build order:
+1. Fix Ask Sources zero-result matching and bare-surname identity risk. (done 2026-10-22, see below)
+2. Side-panel interface (Search / History / My Cases; advanced inside details).
+3. Free connectors: OpenAlex, Crossref, GDELT, Data.gov, Congress.gov, state bills, city budgets/financial records, Internet Archive Advanced Search + Metadata API, Open Library, Google Books, Gutendex, Wikisource.
+4. Comparison tools (documents, financial years, bill versions, webpage captures), media discovery, full-text indexing (OCR where practical), evidence exports.
+5. Acceptance tests, validate extension against the Worker, push to GitHub.
+
+Literary/historical research (same panel, same engine): author recognition
+(e.g. "T. S. Eliot"), Find All Editions (group scans under one work), Find
+Where It's Quoted (full-text search of accessible collections), Compare
+Editions (OCR-tolerant), Trace References (who cites a work). Each hit
+records book, author, year, page/location, link, and whether it is a direct
+quotation, paraphrase, citation or mere mention; **OCR match is labelled
+distinct from visually verified**. "All books found" always means "indexed
+by the sources Chronium successfully checked", never every book published.
+
+Non-negotiables: free (no mandatory paid API), source-first, every finding
+shows origin / what was verified / what is uncertain, connector failures and
+incomplete searches are shown not hidden, original URL + title + date +
+retrieval time + hash + page + archive link preserved, respect copyright,
+site terms and rate limits, identity matches require human confirmation.
