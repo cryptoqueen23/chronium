@@ -146,3 +146,13 @@ Rules: never state a conclusion without accessible supporting evidence; distingu
 **Case portability (2026-10-22): built.** `.chronium.json` (versioned, format `chronium-investigation` v1) exports/imports between the website and the extension; preview-first, merge-only (never overwrites; same-id rows kept local, differing ones reported as conflicts), sources deduped by canonical URL, clashing source/claim numbers renumbered. Optional embedded file copies. No cloud, no accounts. Not built: optional encrypted sync. Website changes need a deploy to reach the live site.
 
 **Ask Chronium (2026-10-22): built** (`public/askRouter.js`, `askRender.js`; website Research tab + extension My Research). See `docs/ASK_CHRONIUM.md` for scope, safeguards, benchmark, limitations. Next: three-level views (Big Picture / Overview / Deep Dive), then free connectors in the order given.
+
+## Bootstrap Rule (added 2026-10-22; text in `docs/CANON.md`)
+
+Build lean, stay independent, keep free access within reasonable limits, let paying customers fund expansion. Practical effect on the roadmap:
+- Every connector/operation gets a row in `docs/COST_DRIVERS.md` when built (class, who pays, ceiling, mitigation, which tier the heavy form belongs to).
+- Browser-local first; cache and rate-limit anything that touches the Worker or a third party; degrade gracefully.
+- Billing, paywalls and mandatory accounts are NOT built; premium entitlements stay a seam (named capabilities with cost classes) so plans can be added later without touching the research engine.
+- Export/import (`.chronium.json`) is always free and complete: the portability guarantee.
+- Connector order (municipal, EMMA, Texas, federal, nonprofit, books) each start with a terms-of-use + rate-limit check and a cost entry before any code.
+- Candidate premium tiers (heavy crawling, large-scale analysis, cloud storage, monitoring, server OCR) are listed in COST_DRIVERS.md; nothing is gated today.

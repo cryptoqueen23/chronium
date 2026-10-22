@@ -643,6 +643,28 @@ Bibliography/deterministic Quantitative & Qualitative Findings/deterministic
 evidence-backed Reports, 2026-08-29) — this list is a real, mostly-shipped
 baseline to hold the line on, not just an aspiration.
 
+## Bootstrap Rule (binding)
+
+**Build lean. Stay independent. Keep access free within reasonable limits. Let paying customers fund expansion.**
+
+1. **Free access always exists.** Everyone has meaningful research capability without a subscription, subject to reasonable usage limits.
+2. **Free infrastructure first.** Open-source software, public datasets, browser-local processing, caching, free hosting allowances.
+3. **Minimize operating expenses.** No unnecessary servers, paid APIs, recurring software subscriptions, or expensive AI processing.
+4. **Heavy usage funds itself.** Premium plans cover the extra cost of intensive crawling, large-scale analysis, cloud storage, automated monitoring, and advanced processing.
+5. **Build before monetizing.** Complete and test the investigative platform before any payments or subscriptions. No billing, paywalls, or mandatory accounts until asked.
+6. **Research stays portable.** Saved evidence, citations, and case exports (`.chronium.json`) remain the user's even if they stop paying.
+7. **Sustainable growth.** Caching, quotas, request limits, local processing, and efficient connectors prevent uncontrolled infrastructure cost.
+8. **No dependency on investors.** Customer-funded growth, voluntary support, reinvested revenue.
+9. **Transparent pricing.** No surprise charges, hidden usage fees, or misleading "unlimited" claims.
+10. **Public-interest mission.** Basic source discovery and verification stay available to free users.
+
+How this is applied while building:
+
+* Every connector and processing operation has an entry in `docs/COST_DRIVERS.md` (who pays, what scales it, free-tier ceiling, mitigation, and which tier the heavy form would belong to). Adding or changing one means updating that file in the same change.
+* Default to browser-local work. A feature that needs Chronium's servers or a paid API must say so in its cost entry, be cached or rate-limited, and degrade gracefully when over budget.
+* Premium entitlements are a seam, not a build: any operation with real marginal cost is a named capability with a cost class (`local`, `edge-cached`, `edge-uncached`, `third-party-metered`, `paid-ai`), so a quota or plan check can later wrap it without touching the research engine. Nothing is gated today.
+* Export/import is always free and complete; it is the guarantee behind point 6.
+
 ## Cost Principle
 
 **Make the expensive part valuable before making the valuable part expensive.**
