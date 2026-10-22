@@ -607,3 +607,27 @@ footer { border-top: 1px solid var(--border); max-width: var(--max); margin: 40p
 .ask-searched { color: var(--text-secondary); font-size: 12.5px; }
 .ask-options { list-style: none; padding: 0; display: grid; gap: 8px; }
 .ask-options .btn { width: 100%; text-align: left; white-space: normal; min-height: 44px; }
+
+/* Investigation views: Big Picture / Overview / Deep Dive */
+.vw-title { font-size: clamp(1.15rem, 2.5vw, 1.4rem); margin: 4px 0 12px; }
+.vw-crumbs { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary); }
+.vw-crumb-list { display: flex; flex-wrap: wrap; gap: 4px 6px; list-style: none; padding: 0; margin: 0; }
+.vw-crumb-list li + li::before { content: "›"; margin-right: 6px; color: var(--text-secondary); }
+.vw-crumb-list a { color: var(--link); display: inline-flex; align-items: center; min-height: 44px; }
+.vw-section { margin: 20px 0; }
+.vw-section h3 { font-size: 1.05rem; margin: 0 0 6px; }
+.vw-section h4 { font-size: 0.95rem; margin: 14px 0 4px; }
+.vw-intro, .vw-meta { color: var(--text-secondary); font-size: 13.5px; margin: 4px 0; overflow-wrap: anywhere; }
+.vw-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 8px; }
+.vw-item { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 10px 12px; overflow-wrap: anywhere; }
+.vw-item p { margin: 0 0 6px; }
+.vw-empty { color: var(--text-secondary); border-left: 3px solid var(--border); padding: 4px 10px; margin: 6px 0; }
+.vw-how { border: 2px solid var(--accent); border-radius: 12px; padding: 12px 14px; margin: 0 0 18px; background: var(--surface-raised); }
+.vw-how:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
+.vw-details { border: 1px solid var(--border); border-radius: 10px; margin: 10px 0; padding: 0 12px; background: var(--surface); }
+.vw-details > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; }
+.vw-count { color: var(--text-secondary); font-weight: 400; margin-left: 6px; }
+.how-link { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; }
+#workspaceTabStrip { overflow-x: auto; }
+.vw-crumb-list li { display: inline-flex; align-items: center; min-height: 44px; }
+.vw-crumb-list li + li::before { display: inline-block; }

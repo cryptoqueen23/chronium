@@ -156,3 +156,14 @@ Build lean, stay independent, keep free access within reasonable limits, let pay
 - Export/import (`.chronium.json`) is always free and complete: the portability guarantee.
 - Connector order (municipal, EMMA, Texas, federal, nonprofit, books) each start with a terms-of-use + rate-limit check and a cost entry before any code.
 - Candidate premium tiers (heavy crawling, large-scale analysis, cloud storage, monitoring, server OCR) are listed in COST_DRIVERS.md; nothing is gated today.
+
+**Investigation views (2026-10-22): built, not pushed/deployed.** Big Picture / Overview / Deep Dive plus a "How do we know?" action on every key statement; one model, no new storage. See `docs/INVESTIGATION_VIEWS.md`.
+
+### Open follow-up work (kept on purpose; none of these are done)
+1. Improve the benchmark harness to tell correct abstentions ("no evidence located", verified against the corpus) from retrieval failures. Official result stays: 7 WORKS, 2 PARTIAL, 3 DOES NOT WORK; the hand-graded 10 correct / 2 partial is supporting evidence, not a replacement.
+2. Expand financial extraction beyond dollar-sign amounts (amounts without `$`, tables split across lines, scanned documents).
+3. Improve structured vote identification (unusual wording, outcome and tally parsing).
+4. Evidence-based contradiction analysis (finding conflicting passages without them being hand-linked).
+5. Real historical document comparison in the Compare tab (still a placeholder).
+6. Spanish-language question understanding (and Spanish localization generally).
+7. Complete manual accessibility testing (screen readers, real touch, true 400% zoom, light theme); see `docs/ACCESSIBILITY.md`.

@@ -41,8 +41,8 @@ const MAX_OPTIONS = 8;
 const norm = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}$.\- ]+/gu, ' ').replace(/\s+/g, ' ').trim();
 // Matching form that ignores "No." in "Ordinance No. 2024-31".
 const loose = (s) => norm(s).replace(/\bno\.? ?(?=\d)/g, '');
-const clip = (s, n = 260) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
-const textOf = (r) => `${r.extractedText || ''}`;
+export const clip = (s, n = 260) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+export const textOf = (r) => `${r.extractedText || ''}`;
 
 const SENTENCE_OPENERS = new Set(['what', 'who', 'whom', 'which', 'where', 'when', 'why', 'how', 'did', 'does', 'do', 'is', 'are', 'was', 'were', 'show', 'find', 'list', 'tell', 'give', 'compare', 'has', 'have', 'can', 'could', 'please', 'any', 'all', 'every']);
 const NOISE_WORDS = new Set(['a', 'an', 'the', 'of', 'in', 'on', 'for', 'to', 'at', 'by', 'with', 'and', 'or', 'me', 'my', 'we', 'us', 'our', 'is', 'are', 'was', 'were', 'be', 'been', 'it', 'its', 'that', 'this', 'these', 'those', 'there', 'about', 'from', 'into', 'than', 'then',
@@ -86,7 +86,7 @@ function occurrences(haystackLower, needleLower, max = 400) {
 // ---------------------------------------------------------------------------
 // Snapshot indexes
 // ---------------------------------------------------------------------------
-function indexSnapshot(snap) {
+export function indexSnapshot(snap) {
   const records = snap.records || [];
   const recordById = new Map(records.map((r) => [r.id, r]));
   const evidenceById = new Map((snap.evidenceItems || []).map((e) => [e.id, e]));
@@ -117,21 +117,21 @@ export function documentDate(r) {
   return null;
 }
 
-function sourceFor(ix, record, { excerpt = '', location = '' } = {}) {
+export function sourceFor(ix, record, { excerpt = '', location = '' } = {}) {
   return {
     recordId: record.id, sourceId: record.sourceId || null, title: record.title || record.originalUrl || 'Untitled source',
     url: record.originalUrl || null, archiveUrl: record.archiveUrl || null, date: documentDate(record),
     location: location || '', excerpt: clip(excerpt, 300), hash: record.fileHash || null
   };
 }
-function sourceForEvidence(ix, ev) {
+export function sourceForEvidence(ix, ev) {
   const rec = ix.recordById.get(ev.sourceRecordId);
   if (!rec) return { recordId: null, sourceId: null, title: 'Source no longer in this case', url: null, archiveUrl: null, date: null, location: ev.location || '', excerpt: clip(ev.excerptText, 300), hash: null };
   return sourceFor(ix, rec, { excerpt: ev.excerptText, location: ev.location });
 }
 
 // Passages of `phrase` in a record's text, with surrounding context.
-function passagesIn(record, phraseLower, radius = 140, max = 2) {
+export function passagesIn(record, phraseLower, radius = 140, max = 2) {
   const text = textOf(record);
   const lower = text.toLowerCase();
   return occurrences(lower, phraseLower, max).map((i) => text.slice(Math.max(0, i - radius), Math.min(text.length, i + phraseLower.length + radius)));
@@ -259,7 +259,7 @@ function noDataAnswer(intent, what) {
 // ---------------------------------------------------------------------------
 // Claims and contradictions
 // ---------------------------------------------------------------------------
-function claimLinks(ix, claim) {
+export function claimLinks(ix, claim) {
   return (ix.snap.claimEvidence || []).filter((l) => l.claimId === claim.id);
 }
 function claimItem(ix, claim, stances = ['supports', 'contradicts', 'contextualizes']) {
@@ -511,10 +511,10 @@ function answerFrequency(ix, question) {
 // ---------------------------------------------------------------------------
 // Financial records
 // ---------------------------------------------------------------------------
-const AMOUNT_RE = /\$\s?\d[\d,]*(?:\.\d{1,2})?(?:\s?(?:million|billion|thousand|[kKmM])\b)?/g;
+export const AMOUNT_RE = /\$\s?\d[\d,]*(?:\.\d{1,2})?(?:\s?(?:million|billion|thousand|[kKmM])\b)?/g;
 const PAY_WORDS = /\b(paid|payment|pay|check|cheque|invoice|warrant|disburse\w*|expenditure|expense|grant|award\w*|contract|bond\w*|transfer\w*|fund\w*|budget\w*|reimburs\w*|purchase|appropriat\w*|approved)\b/i;
 
-function amountLines(record, subjectLower) {
+export function amountLines(record, subjectLower) {
   const lines = textOf(record).split(/\r?\n/);
   const out = [];
   for (let i = 0; i < lines.length; i++) {
@@ -571,7 +571,7 @@ function answerFinancial(ix, question) {
 // ---------------------------------------------------------------------------
 const VOTE_STRONG = /\b(voted|vote of|motion|moved by|seconded|roll call|ayes?|nays?)\b/i;
 const VOTE_WEAK = /\b(passed|approved by|carried)\b/i;
-function voteEvents(ix, filterPhrase) {
+export function voteEvents(ix, filterPhrase) {
   const collect = (re) => {
     const events = [];
     for (const r of ix.records) {
@@ -611,7 +611,7 @@ function answerDecision(ix, question) {
   };
 }
 
-function identifiersIn(text) {
+export function identifiersIn(text) {
   const ids = new Set();
   for (const m of text.matchAll(/\b(?:Ordinance|Resolution|Agreement|Contract)\s+(?:No\.?\s*)?[A-Z0-9][\w-]*\d[\w-]*/g)) ids.add(m[0].replace(/\s+/g, ' '));
   for (const m of text.matchAll(/\b[A-Z]{2,}-\d{2,4}-\d+\b/g)) ids.add(m[0]);
@@ -686,10 +686,10 @@ function answerBeforeAfter(ix, question) {
 // ---------------------------------------------------------------------------
 // Investigation progress
 // ---------------------------------------------------------------------------
-function answerProgress(ix, question) {
+// One definition of "what still needs attention", shared by Ask Chronium and
+// the Big Picture / Overview / Deep Dive views so their numbers cannot differ.
+export function progressCounts(ix) {
   const snap = ix.snap;
-  const items = [];
-  const missing = [];
   const ing = snap.ingestionItems || [];
   const unreviewedDocs = ing.filter((i) => i.status === 'READY_FOR_REVIEW');
   const isDup = (i) => i.status === 'SKIPPED' && !!i.metadata?.duplicateOccurrencePath;
@@ -705,6 +705,14 @@ function answerProgress(ix, question) {
   const emptyLanes = lanes.filter((l) => !(snap.evidenceItems || []).some((e) => e.outlineLaneId === l.id));
   const findings = snap.claimFindings || [];
   const open = findings.filter((f) => f.classification === 'UNRESOLVED_QUESTION' || f.classification === 'NO_EVIDENCE_LOCATED');
+  return { ing, unreviewedDocs, dupDocs, failedDocs, cands, openCands, ambiguous, hits, claims, bare, lanes, emptyLanes, findings, open };
+}
+
+function answerProgress(ix, question) {
+  const snap = ix.snap;
+  const items = [];
+  const missing = [];
+  const { ing, unreviewedDocs, dupDocs, failedDocs, cands, openCands, ambiguous, hits, claims, bare, emptyLanes, open } = progressCounts(ix);
   const titleOf = (i) => i.sourceFilename || i.title || ix.recordById.get(i.recordId)?.title || 'Untitled';
   const list = (rows, f) => rows.slice(0, 8).map(f);
 

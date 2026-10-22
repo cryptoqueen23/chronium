@@ -29,6 +29,7 @@ import { ingestFiles, ingestZip } from './ingest/pipeline.js';
 import { renderReviewQueuePanel } from './reviewQueue.js';
 import { openOverlay, openMenu, confirmDialog } from './ui.js';
 import { answerQuestion } from './askRouter.js';
+import { buildModel, viewHtml, resolveTarget, VIEWS } from './views.js';
 import { answerHeaderHtml, answerFooterHtml, itemHtml } from './askRender.js';
 import { readInvestigationForExport } from './portableDb.js';
 import { exportInvestigationFile, previewImport, importBundle, describeReport, PortableFileError } from './portable.js';
@@ -152,6 +153,9 @@ let lastEvidenceEntities = [];
 // (see FINDINGS_SUBTABS), and Sources' facet/table browsing moved into
 // Research under a "Details"-style disclosure.
 const WORKSPACE_TABS = [
+  { id: 'bigpicture', label: 'Big Picture', icon: 'icon-grid' },
+  { id: 'overview', label: 'Overview', icon: 'icon-timeline' },
+  { id: 'deepdive', label: 'Deep Dive', icon: 'icon-file' },
   { id: 'research', label: 'Research', icon: 'icon-search' },
   { id: 'review', label: 'Review Queue', icon: 'icon-list' },
   { id: 'subjects', label: 'Subjects', icon: 'icon-user' },
@@ -441,7 +445,7 @@ const VIEW_TITLES = { home: 'Chronium Mind', investigations: 'Investigations', l
 function parseHash() {
   const path = (location.hash || '#/').slice(1) || '/';
   const parts = path.split('/').filter(Boolean);
-  if (parts[0] === 'workspace') return { view: 'workspace', tab: parts[1] || 'research', subtab: parts[2] || null };
+  if (parts[0] === 'workspace') return { view: 'workspace', tab: parts[1] || 'research', subtab: parts[2] || null, arg: parts.slice(3).join('/') || null };
   if (['investigations', 'library', 'settings'].includes(parts[0])) return { view: parts[0] };
   return { view: 'home' };
 }
@@ -462,8 +466,10 @@ async function renderRoute() {
   document.title = `${VIEW_TITLES[route.view] || 'Chronium'} · Chronium Mind`;
   updateNavActiveStates(route);
   await loadViewContent(route);
-  window.scrollTo(0, 0);
+  window.scrollTo(0, pendingScrollY);
+  pendingScrollY = 0;
   target.focus({ preventScroll: true });
+  if (pendingFocus) { document.querySelector(pendingFocus)?.focus(); pendingFocus = null; }
 }
 
 async function loadViewContent(route) {
@@ -471,7 +477,7 @@ async function loadViewContent(route) {
   else if (route.view === 'investigations') await renderInvestigationsView();
   else if (route.view === 'library') await renderLibraryView();
   else if (route.view === 'settings') renderSettingsView();
-  else if (route.view === 'workspace') await renderWorkspaceView(route.tab, route.subtab);
+  else if (route.view === 'workspace') await renderWorkspaceView(route.tab, route.subtab, route.arg);
 }
 
 window.addEventListener('hashchange', renderRoute);
@@ -1190,7 +1196,48 @@ function buildEvidenceSubTabStrip(activeSubtab) {
   strip.querySelectorAll('button[data-evidence-subtab]').forEach((btn) => btn.addEventListener('click', () => { location.hash = `#/workspace/evidence/${btn.dataset.evidenceSubtab}`; }));
 }
 
-async function renderWorkspaceView(tab, subtab) {
+
+// ---------------------------------------------------------------------------
+// Investigation views: Big Picture / Overview / Deep Dive (public/views.js).
+// Three presentations of the same snapshot; nothing is stored separately.
+// ---------------------------------------------------------------------------
+let pendingScrollY = 0;
+let pendingFocus = null;
+const viewScroll = {};          // per-view scroll position, so switching views keeps your place
+let viewBefore = 'bigpicture';  // the view a Deep Dive link was followed from (for "Back")
+const VIEW_LABEL = Object.fromEntries(VIEWS.map((v) => [v.id, v.label]));
+
+function rememberViewScroll() {
+  const tab = parseHash().tab;
+  if (VIEWS.some((v) => v.id === tab)) {
+    viewScroll[tab] = window.scrollY;
+    if (tab !== 'deepdive') viewBefore = tab;
+  }
+}
+document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-goto], #workspaceTabStrip button')) rememberViewScroll();
+}, true);
+
+async function renderInvestigationView(tab, target, inv) {
+  const body = document.querySelector(`#viewBody-${tab}`);
+  const crumbs = document.querySelector(`#viewCrumbs-${tab}`);
+  body.innerHTML = '<p class="status" role="status">Loading…</p>';
+  let model;
+  try {
+    model = buildModel(await readInvestigationForExport(activeInvestigationId));
+  } catch (err) {
+    body.innerHTML = `<p class="status status-bad" role="alert">Could not load this investigation: ${esc(err.message)}</p>`;
+    return;
+  }
+  const t = tab === 'deepdive' && target ? resolveTarget(model, target) : null;
+  const here = `<li${t ? '' : ' aria-current="page"'}>${tab === 'deepdive' && t ? `<a href="#/workspace/deepdive">${VIEW_LABEL[tab]}</a>` : esc(VIEW_LABEL[tab])}</li>`;
+  crumbs.innerHTML = `<ol class="vw-crumb-list"><li><a href="#/investigations">My Research</a></li><li>${esc(inv?.name || 'Investigation')}</li>${here}${t ? `<li aria-current="page">${esc(t.title.slice(0, 60))}</li>` : ''}</ol>${tab === 'deepdive' && t ? `<a class="btn btn-small" data-goto="${viewBefore}" href="#/workspace/${viewBefore}">← Back to ${esc(VIEW_LABEL[viewBefore])}</a>` : ''}`;
+  body.innerHTML = viewHtml(tab, model, target);
+  if (tab === 'deepdive' && target && t) pendingFocus = '#howWeKnow';
+  else pendingScrollY = viewScroll[tab] || 0;
+}
+
+async function renderWorkspaceView(tab, subtab, arg) {
   const emptyState = document.querySelector('#workspaceEmptyState');
   const body = document.querySelector('#workspaceBody');
   if (!activeInvestigationId) { emptyState.classList.remove('hidden'); body.classList.add('hidden'); return; }
@@ -1207,7 +1254,9 @@ async function renderWorkspaceView(tab, subtab) {
   const panel = document.querySelector(`#workspacePanel-${tab}`) || document.querySelector('#workspacePanel-research');
   panel.classList.remove('hidden');
 
-  if (tab === 'research') {
+  if (VIEWS.some((v) => v.id === tab)) {
+    await renderInvestigationView(tab, subtab && arg ? `${subtab}/${arg}` : null, inv);
+  } else if (tab === 'research') {
     await refreshWorkspaceData();
     renderOverviewPanel();
     renderSourcesPanel();

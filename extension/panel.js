@@ -6,6 +6,7 @@ import { answerQuestion } from './lib/askRouter.js';
 import { answerHtml } from './lib/askRender.js';
 import { extractSearchTerms } from './lib/askCommands.js';
 import { readInvestigationForExport } from './lib/portableDb.js';
+import { buildModel, viewHtml, resolveTarget, VIEWS } from './lib/views.js';
 import { exportInvestigationFile, previewImport, importBundle, describeReport, PortableFileError } from './lib/portable.js';
 
 const DEFAULT_WORKER = 'https://chronium-mind.truewolfflix777.workers.dev';
@@ -62,11 +63,11 @@ async function renderCases() {
     <li><span>${esc(c.name)}${c.id === activeCaseId ? ' <b class="badge">Active</b>' : ''}</span>
     <span class="row-actions">
       ${c.id === activeCaseId ? '' : `<button type="button" data-use="${esc(c.id)}">Use</button>`}
-      <button type="button" data-open="${esc(c.id)}">Sources</button>
+      <button type="button" data-open="${esc(c.id)}">Open</button>
       <button type="button" data-export="${esc(c.id)}">Export</button>
       <button type="button" data-del="${esc(c.id)}" aria-label="Delete case ${esc(c.name)}">Delete</button>
     </span></li>`).join('')}</ul>` : '<p class="hint">No cases yet. A case holds the sources you save while researching one subject.</p>';
-  $('#caseDetail').innerHTML = '';
+  await renderViewer();
   const active = cases.find((c) => c.id === activeCaseId);
   $('#askCaseLine').textContent = active ? `Asking about: ${active.name}` : 'No case selected.';
 }
@@ -90,10 +91,50 @@ $('#caseList').addEventListener('click', async (e) => {
       $('#importBox').textContent = `Saved ${filename}. Open it on the website or another device with Import case file.`;
     } catch (err) { $('#importBox').textContent = `Could not export: ${err.message}`; }
   }
-  if (b.dataset.open) {
-    const rows = await listInvestigationRecords(b.dataset.open);
-    $('#caseDetail').innerHTML = rows.length ? `<h3>Saved sources</h3><ul class="list">${rows.map((r) => `<li><span>${esc(r.title || r.originalUrl)}</span>${linkHtml(r.archiveUrl, 'Open snapshot')}${linkHtml(r.originalUrl, 'Current page')}</li>`).join('')}</ul>` : '<p class="hint">Nothing saved in this case yet.</p>';
-  }
+  if (b.dataset.open) { viewCaseId = b.dataset.open; viewTab = 'bigpicture'; viewTarget = null; await renderViewer(); }
+});
+
+// ---- investigation views: Big Picture / Overview / Deep Dive ----
+// Same model and renderers as the website (lib/views.js); one snapshot of the
+// case feeds all three, so what you see at each level is the same data.
+let viewCaseId = null, viewTab = 'bigpicture', viewTarget = null, viewBefore = 'bigpicture', pendingFocus = false;
+const viewScrollY = {};
+const VIEW_LABEL = Object.fromEntries(VIEWS.map((v) => [v.id, v.label]));
+async function renderViewer() {
+  const box = $('#caseDetail');
+  if (!viewCaseId) { box.innerHTML = ''; return; }
+  const cases = await listInvestigations();
+  const inv = cases.find((x) => x.id === viewCaseId);
+  if (!inv) { viewCaseId = null; box.innerHTML = ''; return; }
+  let model;
+  try { model = buildModel(await readInvestigationForExport(viewCaseId)); } catch (err) { box.innerHTML = `<p class="notice" role="alert">Could not load this case: ${esc(err.message)}</p>`; return; }
+  const t = viewTab === 'deepdive' && viewTarget ? resolveTarget(model, viewTarget) : null;
+  const tabs = VIEWS.map((v) => `<button type="button" role="tab" id="vt-${v.id}" aria-selected="${v.id === viewTab}" aria-controls="vpanel" tabindex="${v.id === viewTab ? 0 : -1}" data-viewtab="${v.id}">${esc(v.label)}</button>`).join('');
+  const crumbs = `<ol class="vw-crumb-list"><li>My Research</li><li>${esc(inv.name)}</li><li${t ? '' : ' aria-current="page"'}>${esc(VIEW_LABEL[viewTab])}</li>${t ? `<li aria-current="page">${esc(t.title.slice(0, 50))}</li>` : ''}</ol>${viewTab === 'deepdive' && t ? `<button type="button" data-goto="${viewBefore}">← Back to ${esc(VIEW_LABEL[viewBefore])}</button>` : ''}`;
+  box.innerHTML = `<h3>${esc(inv.name)}</h3><div class="vw-tabs" role="tablist" aria-label="Investigation views">${tabs}</div><nav aria-label="You are here">${crumbs}</nav><div id="vpanel" role="tabpanel" aria-labelledby="vt-${viewTab}">${viewHtml(viewTab, model, viewTarget)}</div>`;
+  if (viewTab === 'deepdive' && viewTarget && t) { $('#howWeKnow')?.focus(); }
+  else window.scrollTo(0, viewScrollY[viewTab] || 0);
+}
+function goView(path) {
+  // path: 'bigpicture' | 'overview' | 'deepdive' | 'deepdive/<kind>/<id>'
+  if (VIEWS.some((v) => v.id === viewTab)) { viewScrollY[viewTab] = window.scrollY; if (viewTab !== 'deepdive') viewBefore = viewTab; }
+  const [tab, ...rest] = path.split('/');
+  viewTab = tab; viewTarget = rest.length ? rest.join('/') : null;
+  return renderViewer();
+}
+$('#caseDetail').addEventListener('click', (e) => {
+  const g = e.target.closest('[data-goto]');
+  if (g) { e.preventDefault(); goView(g.dataset.goto); return; }
+  const t = e.target.closest('[data-viewtab]');
+  if (t) goView(t.dataset.viewtab);
+});
+$('#caseDetail').addEventListener('keydown', (e) => {
+  const t = e.target.closest('[data-viewtab]');
+  if (!t || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+  const ids = VIEWS.map((v) => v.id);
+  const next = ids[(ids.indexOf(t.dataset.viewtab) + (e.key === 'ArrowRight' ? 1 : -1) + ids.length) % ids.length];
+  e.preventDefault();
+  goView(next).then(() => $('#vt-' + next)?.focus());
 });
 
 // ---- import a case file (preview first, never overwrites) ----
