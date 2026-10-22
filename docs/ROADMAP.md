@@ -102,3 +102,35 @@ shows origin / what was verified / what is uncertain, connector failures and
 incomplete searches are shown not hidden, original URL + title + date +
 retrieval time + hash + page + archive link preserved, respect copyright,
 site terms and rate limits, identity matches require human confirmation.
+
+### Mission: find the records before requesting them (captured 2026-10-22)
+
+Chronium reduces dependence on public-information requests by searching,
+retrieving, preserving and analyzing what is already public. Example query:
+"Copperas Cove expenditures 2020-2026" fans out to government sites, archived
+sites, budgets/ledgers, contracts/laws, state+federal records, documents+media.
+
+**Deep Discovery** (bounded crawler, rate-limited, robots/terms-respecting,
+full provenance): search a city site and its public document repositories
+(old agendas, attachments, minutes, financial reports); follow public PDF
+links and extract tables, transactions, names, dates, amounts; find copies
+on other government/library/archive hosts; fall back to Internet Archive
+captures; compare figures across budgets, audits, contracts.
+
+**Records Recovery** has three outcomes: **Found** (working link, saved copy
+where permitted) / **Historical copy found** (archived version, capture date
+recorded) / **Not located** (where searched, unavailable-source vs verified
+gap distinguished, narrowly targeted Texas Public Information Act request
+generated). Users can upload records received later so they are searchable
+with everything else. **Request check:** enter a public information request
+and compare it to discovered documents: available / partially available /
+still missing. Unpublished, private or access-restricted records are never
+bypassed.
+
+Revised priorities: 1-2 fixes (done) -> 3 side panel -> 4 Deep Discovery
+crawler -> 5 gov/financial/nonprofit/legislative/historical connectors ->
+6 Records Recovery + request generation. Also in scope for connectors:
+corporations, nonprofits/tax-exempt entities, public filings. Chronium never
+claims to have searched the whole internet: it reports sources searched,
+unavailable, and coverage gaps. Core search/evidence/compare/report work
+without any paid API or AI.

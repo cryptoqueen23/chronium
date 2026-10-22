@@ -605,3 +605,5 @@ row dropping to "Fixed" — not just watching unit tests stay green.
   "may be a different person" warning, and "Same person: X" instead of
   "Confirm as X". Detection engine unchanged.
 Rerun `scripts/run-acceptance-test.mjs` and add a Benchmark History row.
+
+| Fix pass (`20a6b2e`) | 2026-10-22 | 6/12 WORKS (was 0/12) | 6/6 | 6/6 correct | Mitigated in UI (NAME ONLY badge, "Same person:" wording); harness still flags it because detection state is unchanged | 378ms/record | Remaining 6 fails are intent questions (payments, "what changed", unreviewed items), not keyword matching. |

@@ -1,0 +1,1224 @@
+{
+  "runAt": "2026-10-22T17:23:23.555Z",
+  "testRunCommit": "20a6b2e",
+  "productionCommitUnderTest": "20a6b2e",
+  "corpus": {},
+  "bulkIngestion": {
+    "corpusFileCount": 222,
+    "firstPass": {
+      "elapsedMs": 6975,
+      "statusText": "Imported 222 files (125 KB). 0 duplicates, 3 need attention.",
+      "attempted": 225,
+      "ingestedOk": 222,
+      "failed": 0,
+      "duplicatesFound": 0,
+      "manualInterventionRequired": 0,
+      "batchStatus": "COMPLETED"
+    },
+    "dedupePass": {
+      "elapsedMs": 1036,
+      "statusText": "Imported 222 files (125 KB). 222 duplicates, 0 need attention.",
+      "duplicatesDetected": 222,
+      "expectedDuplicates": 222,
+      "dedupeCorrect": true
+    }
+  },
+  "subjectInvestigation": {},
+  "identitySafety": {
+    "phaseA": {
+      "candidatesSurfaced": 18,
+      "confirmed": 10,
+      "rejected": 7,
+      "leftUnreviewed": 1,
+      "wouldBeFalsePositiveIfTrusted": 7
+    },
+    "phaseB": {
+      "recordsRescanned": 6,
+      "nowCorrectlyAmbiguous": 6,
+      "detail": [
+        {
+          "title": "code-compliance-notice-2024-05-14.txt",
+          "found": true,
+          "candidatesBefore": 2,
+          "candidatesAfter": 4,
+          "newRows": [
+            {
+              "state": "REJECTED",
+              "candidateCount": 1
+            },
+            {
+              "state": "AMBIGUOUS",
+              "candidateCount": 2
+            }
+          ]
+        },
+        {
+          "title": "code-compliance-memo-2024-06-02.txt",
+          "found": true,
+          "candidatesBefore": 1,
+          "candidatesAfter": 2,
+          "newRows": [
+            {
+              "state": "AMBIGUOUS",
+              "candidateCount": 2
+            }
+          ]
+        },
+        {
+          "title": "lfedc-board-agenda-2023-11-14.txt",
+          "found": true,
+          "candidatesBefore": 1,
+          "candidatesAfter": 2,
+          "newRows": [
+            {
+              "state": "AMBIGUOUS",
+              "candidateCount": 2
+            }
+          ]
+        },
+        {
+          "title": "lfedc-board-minutes-2024-05-14-excerpt.txt",
+          "found": true,
+          "candidatesBefore": 1,
+          "candidatesAfter": 2,
+          "newRows": [
+            {
+              "state": "AMBIGUOUS",
+              "candidateCount": 2
+            }
+          ]
+        },
+        {
+          "title": "council-meeting-signin-2024-03-26.txt",
+          "found": true,
+          "candidatesBefore": 1,
+          "candidatesAfter": 2,
+          "newRows": [
+            {
+              "state": "AMBIGUOUS",
+              "candidateCount": 2
+            }
+          ]
+        },
+        {
+          "title": "citizen-complaint-email-2024-07-19.txt",
+          "found": true,
+          "candidatesBefore": 1,
+          "candidatesAfter": 2,
+          "newRows": [
+            {
+              "state": "AMBIGUOUS",
+              "candidateCount": 2
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "moneyTrail": {
+    "searches": [
+      {
+        "question": "Holt Construction",
+        "elapsedMs": 1829,
+        "timedOut": false,
+        "provenance": "Confirmed Fact Answered from 9 sources · 9 passages",
+        "computedFact": "",
+        "resultTitles": [
+          "UnknownCapture date unavailableholt-construction-llc-vendor-registration-2024.txtCapture date unavailable · My libraryCITY OF LARKSPUR FALLS Vendor / Contractor Registration Record Business name: Holt",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailableholt-construction-invoice-hc-2024-0091.txtCapture date unavailable · My libraryHOLT CONSTRUCTION LLC 77 Foundry Rd, Larkspur Falls, TX Invoice Invoice No: HC-2024-0091 D",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-grant-agreement-rrf-2024-07.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Facade Improvement Grant Agreement No. RRF-2024",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2024-03-12.txtCapture date unavailable · My library…officio: Mayor Diane Castellano (non-voting). 1. Call to Order 2. Approval of Prior Minutes — app",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-annual-report-2024-press-release.txtCapture date unavailable · My library…rporation released its 2024 annual report today, highlighting several downtown investment",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelarkspur-falls-gazette-2024-04-09-edc-grant-brief.txtCapture date unavailable · My library…l Business Brief — April 9, 2024 EDC Approves Riverwalk Facade Grant At its Ap",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecouncil-minutes-2024-03-26-regular.txtCapture date unavailable · My library…). Present: Councilmembers James Ko, Renee Blackwood, Hector Salinas, Anita Whitfield, Doug M",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecouncil-agenda-2024-03-26.txtCapture date unavailable · My library…ers, 200 Municipal Way 1. Call to Order / Invocation / Pledge 2. Consent Agenda 3. Public Comment ... ",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecity-check-register-2024-06.csvCapture date unavailable · My library…neral Fund,PO-22190 10422,2024-06-07,\"Delgado Landscaping\",2100.00,Parks Fund,PO-22201 10426,2024-06",
+          "Save as Evidence",
+          "Remove"
+        ],
+        "resultCount": 9,
+        "answerVisible": true
+      },
+      {
+        "question": "Riverwalk Redevelopment Fund grant",
+        "elapsedMs": 819,
+        "timedOut": false,
+        "provenance": "Confirmed Fact Answered from 11 sources · 11 passages",
+        "computedFact": "",
+        "resultTitles": [
+          "UnknownCapture date unavailablelfedc-grant-agreement-rrf-2024-07.txtCapture date unavailable · My library…1. Scope: Facade improvement work at 214 Main St, Larkspur Falls, TX, per the specifications a",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailableordinance-2024-31-full-text.txtCapture date unavailable · My libraryCITY OF LARKSPUR FALLS Ordinance No. 2024-31 AN ORDINANCE OF THE CITY OF LARKSPUR FALLS ESTABLISHING ",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2024-03-12.txtCapture date unavailable · My library…Executive Director Sheena Tanner. Ex officio: Mayor Diane Castellano (non-voting). 1. Call to Ord",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-annual-report-2024-press-release.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION FOR IMMEDIATE RELEASE — September 3, 2024 ",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecouncil-minutes-2024-03-26-regular.txtCapture date unavailable · My library…ane Castellano presiding (did not vote). Present: Councilmembers James Ko, Renee Blackwood, H",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecouncil-budget-workshop-2024-01-16.txtCapture date unavailable · My library…— Budget Workshop Minutes (excerpt) January 16, 2024 Finance Director presented projected FY2",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecouncil-agenda-2024-03-26.txtCapture date unavailable · My library…da March 26, 2024, 7:00 PM, Council Chambers, 200 Municipal Way 1. Call to Order / Invocation / Pledge",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecity-check-register-2024-06.csvCapture date unavailable · My library…-07,\"Delgado Landscaping\",2100.00,Parks Fund,PO-22201 10426,2024-06-10,\"Larkspur Falls Gazette\",640.",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelarkspur-falls-gazette-2024-04-09-edc-grant-brief.txtCapture date unavailable · My libraryTHE LARKSPUR FALLS GAZETTE Local Business Brief — April 9, 2024 EDC Approves Ri",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-newsletter-2024-summer.txtCapture date unavailable · My library…ORPORATION Board & Community Newsletter — Summer 2024 Board Member Spotlight: Special thanks to Ray",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-agenda-2023-11-14.txtCapture date unavailable · My library…OPMENT CORPORATION Board of Directors — Meeting Agenda November 14, 2023, 6:00 PM 1. Call to Order",
+          "Save as Evidence",
+          "Remove"
+        ],
+        "resultCount": 11,
+        "answerVisible": true
+      },
+      {
+        "question": "LFEDC facade grant vote",
+        "elapsedMs": 852,
+        "timedOut": false,
+        "provenance": "Confirmed Fact Answered from 45 sources · 45 passages",
+        "computedFact": "",
+        "resultTitles": [
+          "UnknownCapture date unavailablelfedc-board-minutes-2024-03-12.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Minutes March",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecouncil-minutes-2024-03-26-regular.txtCapture date unavailable · My library…pal Way Mayor Diane Castellano presiding (did not vote). Present: Councilmembers James Ko, Re",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-grant-agreement-rrf-2024-07.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Facade Improvement Grant Agreement No. RRF-2024",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-quarterly-report-to-council-2024-02-13.txtCapture date unavailable · My libraryCITY OF LARKSPUR FALLS City Council — Regular Meeting Minutes (excerpt) February 13,",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-newsletter-2024-summer.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board & Community Newsletter — Summer 2024 Board Mem",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2024-06-14-noise-0120.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2024-05-14-noise-0119.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2024-04-14-noise-0118.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2024-03-14-noise-0117.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2024-02-14-noise-0116.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2024-01-14-noise-0115.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2023-12-14-noise-0114.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2023-11-14-noise-0113.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2023-10-14-noise-0112.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2023-09-14-noise-0111.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2023-08-14-noise-0110.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2023-07-14-noise-0109.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2023-06-14-noise-0108.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2023-05-14-noise-0107.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2023-04-14-noise-0106.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2023-03-14-noise-0105.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2023-02-14-noise-0104.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2023-01-14-noise-0103.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2022-12-14-noise-0102.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2022-11-14-noise-0101.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2022-10-14-noise-0100.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2022-09-14-noise-0099.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2022-08-14-noise-0098.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2022-07-14-noise-0097.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2022-06-14-noise-0096.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2022-05-14-noise-0095.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2022-04-14-noise-0094.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2022-03-14-noise-0093.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2022-02-14-noise-0092.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-minutes-2022-01-14-noise-0091.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION Board of Directors — Regular Meeting Mi",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-board-agenda-2023-11-14.txtCapture date unavailable · My library…PORATION Board of Directors — Meeting Agenda November 14, 2023, 6:00 PM 1. Call to Order 2. Approv",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelfedc-annual-report-2024-press-release.txtCapture date unavailable · My libraryLARKSPUR FALLS ECONOMIC DEVELOPMENT CORPORATION FOR IMMEDIATE RELEASE — September 3, 2024 ",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailableholt-construction-llc-vendor-registration-2024.txtCapture date unavailable · My library…y Rd, Larkspur Falls, TX Registered trades: General contracting, exterior renovat",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailableholt-construction-invoice-hc-2024-0091.txtCapture date unavailable · My library…pleted at 214 Main St per Grant Agreement RRF-2024-07 — masonry repair, storefront window",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecouncil-agenda-2024-03-26.txtCapture date unavailable · My library…ular Meeting Agenda March 26, 2024, 7:00 PM, Council Chambers, 200 Municipal Way 1. Call to Order / In",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablelarkspur-falls-gazette-2024-04-09-edc-grant-brief.txtCapture date unavailable · My libraryTHE LARKSPUR FALLS GAZETTE Local Business Brief — April 9, 2024 EDC Approves Ri",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailableordinance-2024-31-full-text.txtCapture date unavailable · My library…cupancy Tax collections shall be dedicated annually to the Riverwalk Redevelopment Fund, subject to ",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecouncil-meeting-signin-2024-03-26.txtCapture date unavailable · My library…Address | Agenda item --------------|----------------------|------------- G. Ferris | 12 Willo",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecouncil-budget-workshop-2024-01-16.txtCapture date unavailable · My library…ncy Tax collections and the proposed allocation to the newly-created Riverwalk Redevelopment ",
+          "Save as Evidence",
+          "Remove",
+          "UnknownCapture date unavailablecity-check-register-2024-06.csvCapture date unavailable · My library…0.00,Parks Fund,PO-22201 10426,2024-06-10,\"Larkspur Falls Gazette\",640.00,General Fund,Legal Notice ",
+          "Save as Evidence",
+          "Remove"
+        ],
+        "resultCount": 45,
+        "answerVisible": true
+      }
+    ],
+    "distinctResultRowsAcrossSearches": 64
+  },
+  "crossDocument": {
+    "personStartedFrom": "Raymond Payne",
+    "manualStepsToRepresentOrgAndGovBody": 3,
+    "entitiesManuallyCreated": 2,
+    "relationshipsManuallyCreated": 1,
+    "note": "Confirmed entity mentions were free (came from Review Queue confirmation already done in the identity-safety phase). Organization/government-body linkage required manually creating both entities and the relationship by hand — nothing suggests or auto-creates this from a mention alone."
+  },
+  "claimTest": {
+    "claimText": "Raymond Payne served on the Larkspur Falls City Council.",
+    "claimCreated": true,
+    "supportingSearch": {
+      "resultCount": 4,
+      "provenance": "Confirmed Fact Answered from 4 sources · 4 passages"
+    },
+    "contradictingSearch": {
+      "resultCount": 2,
+      "provenance": "Confirmed Fact Answered from 2 sources · 2 passages"
+    },
+    "note": "Chronium never asserted a verdict on its own - status stayed investigator-set throughout, matching Phase 3's explicit rule."
+  },
+  "contradictionTest": {
+    "discoverySearch": {
+      "resultCount": 42,
+      "provenance": "Confirmed Fact Answered from 42 sources · 42 passages"
+    },
+    "claimCreated": true,
+    "bothStancesLinked": true,
+    "bothSidesRemainVisible": true
+  },
+  "coOccurrenceTest": {
+    "sheenaCandidatesFound": 0,
+    "sheenaConfirmed": 0,
+    "relationshipsBetweenRaymondAndSheena": 1,
+    "autoRelationshipCreated": false
+  },
+  "reviewQueueFriction": {
+    "recordsProcessed": 25,
+    "avgMsPerRecord": 377.84,
+    "avgClicksPerRecord": 1,
+    "recordsWithCandidates": 2,
+    "detail": [
+      {
+        "index": 0,
+        "elapsedMs": 389,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 1,
+        "elapsedMs": 373,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 2,
+        "elapsedMs": 375,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 3,
+        "elapsedMs": 375,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 4,
+        "elapsedMs": 374,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 5,
+        "elapsedMs": 375,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 6,
+        "elapsedMs": 377,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 7,
+        "elapsedMs": 378,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 8,
+        "elapsedMs": 374,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 9,
+        "elapsedMs": 378,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 10,
+        "elapsedMs": 374,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 11,
+        "elapsedMs": 375,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": true
+      },
+      {
+        "index": 12,
+        "elapsedMs": 374,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 13,
+        "elapsedMs": 378,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 14,
+        "elapsedMs": 369,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 15,
+        "elapsedMs": 376,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 16,
+        "elapsedMs": 377,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 17,
+        "elapsedMs": 424,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 18,
+        "elapsedMs": 379,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 19,
+        "elapsedMs": 375,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 20,
+        "elapsedMs": 376,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": false
+      },
+      {
+        "index": 21,
+        "elapsedMs": 377,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": true
+      },
+      {
+        "index": 22,
+        "elapsedMs": 376,
+        "clicks": 1,
+        "hadCandidates": true,
+        "hadWatchlistHits": true
+      },
+      {
+        "index": 23,
+        "elapsedMs": 374,
+        "clicks": 1,
+        "hadCandidates": false,
+        "hadWatchlistHits": true
+      },
+      {
+        "index": 24,
+        "elapsedMs": 374,
+        "clicks": 1,
+        "hadCandidates": true,
+        "hadWatchlistHits": false
+      }
+    ]
+  },
+  "threePersonHandoff": {
+    "historyEntryCount": 42,
+    "distinctActorsRepresented": 2,
+    "entriesMissingObjectContext": 0,
+    "sampleEntries": [
+      {
+        "id": "rhist-mvjt92eu-sdgeb2",
+        "investigationId": "inv-mvjt8524-9wrxo9",
+        "action": "item_reviewed",
+        "actor": "investigator-mvjt86hw-gfz783",
+        "objectType": "ingestionItem",
+        "objectId": "item-mvjt8ew5-u6q759",
+        "previousValue": null,
+        "newValue": null,
+        "timestamp": "2026-10-22T17:24:11.766Z"
+      },
+      {
+        "id": "rhist-mvjt9245-haxj9p",
+        "investigationId": "inv-mvjt8524-9wrxo9",
+        "action": "item_reviewed",
+        "actor": "investigator-mvjt86hw-gfz783",
+        "objectType": "ingestionItem",
+        "objectId": "item-mvjt8ewz-e2j9sv",
+        "previousValue": null,
+        "newValue": null,
+        "timestamp": "2026-10-22T17:24:11.381Z"
+      },
+      {
+        "id": "rhist-mvjt91ty-d2mn2d",
+        "investigationId": "inv-mvjt8524-9wrxo9",
+        "action": "item_reviewed",
+        "actor": "investigator-mvjt86hw-gfz783",
+        "objectType": "ingestionItem",
+        "objectId": "item-mvjt8ey2-yl25jh",
+        "previousValue": null,
+        "newValue": null,
+        "timestamp": "2026-10-22T17:24:11.014Z"
+      },
+      {
+        "id": "rhist-mvjt91jd-x1p60v",
+        "investigationId": "inv-mvjt8524-9wrxo9",
+        "action": "item_reviewed",
+        "actor": "investigator-mvjt86hw-gfz783",
+        "objectType": "ingestionItem",
+        "objectId": "item-mvjt8ez3-zdx247",
+        "previousValue": null,
+        "newValue": null,
+        "timestamp": "2026-10-22T17:24:10.633Z"
+      },
+      {
+        "id": "rhist-mvjt918o-uaivsy",
+        "investigationId": "inv-mvjt8524-9wrxo9",
+        "action": "item_reviewed",
+        "actor": "investigator-mvjt86hw-gfz783",
+        "objectType": "ingestionItem",
+        "objectId": "item-mvjt8f0d-oa0lqh",
+        "previousValue": null,
+        "newValue": null,
+        "timestamp": "2026-10-22T17:24:10.248Z"
+      },
+      {
+        "id": "rhist-mvjt90yj-o3zh7i",
+        "investigationId": "inv-mvjt8524-9wrxo9",
+        "action": "item_reviewed",
+        "actor": "investigator-mvjt86hw-gfz783",
+        "objectType": "ingestionItem",
+        "objectId": "item-mvjt8f1h-482c76",
+        "previousValue": null,
+        "newValue": null,
+        "timestamp": "2026-10-22T17:24:09.883Z"
+      },
+      {
+        "id": "rhist-mvjt90nv-3atlc6",
+        "investigationId": "inv-mvjt8524-9wrxo9",
+        "action": "item_reviewed",
+        "actor": "investigator-mvjt86hw-gfz783",
+        "objectType": "ingestionItem",
+        "objectId": "item-mvjt8f2m-1bm1ye",
+        "previousValue": null,
+        "newValue": null,
+        "timestamp": "2026-10-22T17:24:09.499Z"
+      },
+      {
+        "id": "rhist-mvjt90da-2x3snx",
+        "investigationId": "inv-mvjt8524-9wrxo9",
+        "action": "item_reviewed",
+        "actor": "investigator-mvjt86hw-gfz783",
+        "objectType": "ingestionItem",
+        "objectId": "item-mvjt8f3g-9h0gez",
+        "previousValue": null,
+        "newValue": null,
+        "timestamp": "2026-10-22T17:24:09.118Z"
+      }
+    ],
+    "assessment": "Every history entry carries action/actor/objectType/objectId, so C can trace WHAT was touched and by whom without being told verbally, but entries are raw IDs (e.g. a candidate id, an entity id) with no rendered label/title anywhere in the log itself - C would still need to cross-reference each id back into the Review Queue or Subjects tab to see what it actually refers to, which is extra manual work on every single line."
+  },
+  "gapAwareness": {
+    "answerableViaFilters": {
+      "statusCountsText": "222Unreviewed0Flagged0Reviewed0Failed222Duplicates skipped444Total",
+      "ambiguousViaFilter": 2,
+      "failedViaFilter": 0,
+      "unverifiedClaimsViaDb": 2
+    },
+    "answerableViaAskSources": [
+      {
+        "question": "What remains unreviewed?",
+        "resultCount": 9,
+        "provenance": "Confirmed Fact Answered from 9 sources · 9 passages · using context from your previous question"
+      },
+      {
+        "question": "What matches remain ambiguous?",
+        "resultCount": 0,
+        "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Arquivo.pt, Copperas Cove Investigation Corpus. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+      },
+      {
+        "question": "What ingestion failures remain?",
+        "resultCount": 0,
+        "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Arquivo.pt, Copperas Cove Investigation Corpus. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+      },
+      {
+        "question": "What claims remain unverified?",
+        "resultCount": 0,
+        "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Arquivo.pt, Copperas Cove Investigation Corpus. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+      },
+      {
+        "question": "What evidence hasn't been used?",
+        "resultCount": 0,
+        "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Arquivo.pt, Copperas Cove Investigation Corpus. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+      },
+      {
+        "question": "What investigative questions remain unanswered?",
+        "resultCount": 0,
+        "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Arquivo.pt, Copperas Cove Investigation Corpus. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too."
+      }
+    ]
+  },
+  "askSources": [
+    {
+      "question": "Show me every record mentioning Raymond Payne.",
+      "classification": "WORKS",
+      "resultCount": 14,
+      "provenance": "Confirmed Fact Answered from 14 sources · 14 passages",
+      "computedFact": "",
+      "elapsedMs": 753,
+      "timedOut": false
+    },
+    {
+      "question": "Where does Ray Payne appear?",
+      "classification": "WORKS",
+      "resultCount": 5,
+      "provenance": "Confirmed Fact Answered from 5 sources · 5 passages",
+      "computedFact": "",
+      "elapsedMs": 799,
+      "timedOut": false
+    },
+    {
+      "question": "What organizations is Raymond Payne connected to?",
+      "classification": "WORKS",
+      "resultCount": 3,
+      "provenance": "Confirmed Fact Answered from 3 sources · 3 passages",
+      "computedFact": "",
+      "elapsedMs": 806,
+      "timedOut": false
+    },
+    {
+      "question": "Show me evidence for each connection.",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Arquivo.pt, Copperas Cove Investigation Corpus. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 811,
+      "timedOut": false
+    },
+    {
+      "question": "Did Raymond Payne serve on City Council?",
+      "classification": "WORKS",
+      "resultCount": 4,
+      "provenance": "Confirmed Fact Answered from 4 sources · 4 passages",
+      "computedFact": "",
+      "elapsedMs": 533,
+      "timedOut": false
+    },
+    {
+      "question": "What evidence contradicts that claim?",
+      "classification": "WORKS",
+      "resultCount": 2,
+      "provenance": "Confirmed Fact Answered from 2 sources · 2 passages · using context from your previous question",
+      "computedFact": "",
+      "elapsedMs": 808,
+      "timedOut": false
+    },
+    {
+      "question": "Show me all payments involving the Historical Society.",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Arquivo.pt, Copperas Cove Investigation Corpus. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 834,
+      "timedOut": false
+    },
+    {
+      "question": "Who repeatedly appears in EDC records?",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Arquivo.pt, Copperas Cove Investigation Corpus. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 807,
+      "timedOut": false
+    },
+    {
+      "question": "Show me everything involving Ordinance 2026-29.",
+      "classification": "WORKS",
+      "resultCount": 23,
+      "provenance": "Confirmed Fact Answered from 23 sources · 23 passages",
+      "computedFact": "",
+      "elapsedMs": 810,
+      "timedOut": false
+    },
+    {
+      "question": "What changed before and after this vote?",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Arquivo.pt, Copperas Cove Investigation Corpus. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 828,
+      "timedOut": false
+    },
+    {
+      "question": "Which claims have contradictory evidence?",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Arquivo.pt, Copperas Cove Investigation Corpus. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 906,
+      "timedOut": false
+    },
+    {
+      "question": "What haven't we reviewed yet?",
+      "classification": "DOES NOT WORK",
+      "resultCount": 0,
+      "provenance": "Unresolved No matches in your sources for this question. Searched: your sources. No matches at: Arquivo.pt, Copperas Cove Investigation Corpus. Not searched: Wayback and Common Crawl only search by a specific page URL, not a topic — ask about a specific URL to check those too.",
+      "computedFact": "",
+      "elapsedMs": 793,
+      "timedOut": false
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "bugs": [
+    {
+      "severity": "HIGH",
+      "description": "Bare-surname candidates resolve to a single confident \"Confirm as X\" button (not AMBIGUOUS) whenever only one same-surname entity is registered at scan time — even when the passage content clearly belongs to a different, unregistered person.",
+      "repro": "Register only \"Raymond Payne\", bulk-ingest a document containing bare \"Payne\" in an unrelated (Code Compliance) context, open it in the Review Queue.",
+      "expected": "A bare surname match should read as provisional/low-confidence when the investigation is known-incomplete, or the tool should make it obvious that this offer depends on no other same-surname person being registered yet.",
+      "actual": "The candidate renders identically to a genuine strong match - one enabled \"Confirm as Raymond Payne\" button, state UNREVIEWED - with no visual signal that this is a weak, context-free surname match riding on an incomplete roster.",
+      "impact": "A rushed reviewer who trusts the single-option UI (rather than reading the snippet) would silently misattribute 7 documents to the wrong person. This is exactly the Marc/Raymond Payne failure mode the project is named after — it is contained by investigator discipline here, not by the system."
+    },
+    {
+      "severity": "MEDIUM",
+      "description": "No UI-exposed way to re-scan already-ingested documents after registering a new entity, and scanRecordForReview is not idempotent (adds duplicate candidate rows rather than replacing/superseding).",
+      "repro": "Register entity A, ingest documents, register entity B, look for any \"rescan\" action in the Review Queue.",
+      "expected": "Either an automatic or an explicit manual rescan path, and calling it twice on the same record should not duplicate rows.",
+      "actual": "No rescan control exists anywhere in the UI; calling the underlying scanRecordForReview function directly (as this test does) adds a second, additive set of candidate rows for the same passage rather than replacing the stale ones.",
+      "impact": "An investigation that discovers new people over time (the normal case) accumulates permanently-stale, overconfident candidate rows on already-reviewed documents unless someone manually re-ingests, which is not a realistic workflow for a live case."
+    }
+  ],
+  "log": [
+    {
+      "t": 1792689806288,
+      "section": "setup",
+      "msg": "Launching against",
+      "data": {
+        "BASE": "http://127.0.0.1:8787"
+      }
+    },
+    {
+      "t": 1792689809046,
+      "section": "setup",
+      "msg": "Investigation created",
+      "data": {
+        "invId": "inv-mvjt8524-9wrxo9",
+        "invName": "Acceptance Test — Larkspur Falls (2026-10-22T17:23:28)"
+      }
+    },
+    {
+      "t": 1792689811452,
+      "section": "setup",
+      "msg": "Three investigators created, A active",
+      "data": {
+        "investigatorA": "investigator-mvjt860q-jfnfpu",
+        "investigatorB": "investigator-mvjt86hw-gfz783",
+        "investigatorC": "investigator-mvjt86zd-2h0n68"
+      }
+    },
+    {
+      "t": 1792689813286,
+      "section": "setup",
+      "msg": "Watchlist terms added",
+      "data": 4
+    },
+    {
+      "t": 1792689814402,
+      "section": "setup",
+      "msg": "Raymond Payne registered (only person known at start)",
+      "data": {
+        "raymondId": "ent-mvjt899b-ldr0km"
+      }
+    },
+    {
+      "t": 1792689814403,
+      "section": "ingestion",
+      "msg": "Corpus directory contains 222 files"
+    },
+    {
+      "t": 1792689822258,
+      "section": "ingestion",
+      "msg": "First ingestion (full 222-doc corpus): import status",
+      "data": "Imported 222 files (125 KB). 0 duplicates, 3 need attention."
+    },
+    {
+      "t": 1792689822683,
+      "section": "ingestion",
+      "msg": "First batch record",
+      "data": {
+        "status": "COMPLETED",
+        "fileCount": 222,
+        "processedCount": 222,
+        "failedCount": 0,
+        "duplicates": 0,
+        "skipped": 3,
+        "errors": 0,
+        "elapsedMs": 6975
+      }
+    },
+    {
+      "t": 1792689824591,
+      "section": "ingestion",
+      "msg": "Second ingestion (dedupe test, same 222 files): import status",
+      "data": "Imported 222 files (125 KB). 222 duplicates, 0 need attention."
+    },
+    {
+      "t": 1792689825004,
+      "section": "ingestion",
+      "msg": "Second (dedupe) batch record",
+      "data": {
+        "status": "COMPLETED",
+        "fileCount": 222,
+        "duplicates": 222,
+        "elapsedMs": 1036
+      }
+    },
+    {
+      "t": 1792689825012,
+      "section": "subjectInvestigation",
+      "msg": "Phase A: 18 \"Payne\" candidates surfaced with only Raymond Payne registered"
+    },
+    {
+      "t": 1792689825138,
+      "section": "subjectInvestigation",
+      "msg": "Phase A investigator decisions",
+      "data": {
+        "confirmed": 10,
+        "rejected": 7,
+        "leftUnreviewed": 1
+      }
+    },
+    {
+      "t": 1792689826187,
+      "section": "identitySafety",
+      "msg": "Marc Payne registered by Investigator B (mid-case discovery)",
+      "data": {
+        "marcId": "ent-mvjt8id2-n7glkm"
+      }
+    },
+    {
+      "t": 1792689826284,
+      "section": "identitySafety",
+      "msg": "Phase B rescan (direct scanRecordForReview call, complete roster)",
+      "data": {
+        "nowAmbiguous": 6,
+        "of": 6,
+        "detail": [
+          {
+            "title": "code-compliance-notice-2024-05-14.txt",
+            "found": true,
+            "candidatesBefore": 2,
+            "candidatesAfter": 4,
+            "newRows": [
+              {
+                "state": "REJECTED",
+                "candidateCount": 1
+              },
+              {
+                "state": "AMBIGUOUS",
+                "candidateCount": 2
+              }
+            ]
+          },
+          {
+            "title": "code-compliance-memo-2024-06-02.txt",
+            "found": true,
+            "candidatesBefore": 1,
+            "candidatesAfter": 2,
+            "newRows": [
+              {
+                "state": "AMBIGUOUS",
+                "candidateCount": 2
+              }
+            ]
+          },
+          {
+            "title": "lfedc-board-agenda-2023-11-14.txt",
+            "found": true,
+            "candidatesBefore": 1,
+            "candidatesAfter": 2,
+            "newRows": [
+              {
+                "state": "AMBIGUOUS",
+                "candidateCount": 2
+              }
+            ]
+          },
+          {
+            "title": "lfedc-board-minutes-2024-05-14-excerpt.txt",
+            "found": true,
+            "candidatesBefore": 1,
+            "candidatesAfter": 2,
+            "newRows": [
+              {
+                "state": "AMBIGUOUS",
+                "candidateCount": 2
+              }
+            ]
+          },
+          {
+            "title": "council-meeting-signin-2024-03-26.txt",
+            "found": true,
+            "candidatesBefore": 1,
+            "candidatesAfter": 2,
+            "newRows": [
+              {
+                "state": "AMBIGUOUS",
+                "candidateCount": 2
+              }
+            ]
+          },
+          {
+            "title": "citizen-complaint-email-2024-07-19.txt",
+            "found": true,
+            "candidatesBefore": 1,
+            "candidatesAfter": 2,
+            "newRows": [
+              {
+                "state": "AMBIGUOUS",
+                "candidateCount": 2
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "t": 1792689831958,
+      "section": "moneyTrail",
+      "msg": "3 searches run to trace the grant",
+      "data": [
+        {
+          "q": "Holt Construction",
+          "resultCount": 9,
+          "elapsedMs": 1829
+        },
+        {
+          "q": "Riverwalk Redevelopment Fund grant",
+          "resultCount": 11,
+          "elapsedMs": 819
+        },
+        {
+          "q": "LFEDC facade grant vote",
+          "resultCount": 45,
+          "elapsedMs": 852
+        }
+      ]
+    },
+    {
+      "t": 1792689831974,
+      "section": "crossDocument",
+      "msg": "Manual reconstruction step count",
+      "data": {
+        "personStartedFrom": "Raymond Payne",
+        "manualStepsToRepresentOrgAndGovBody": 3,
+        "entitiesManuallyCreated": 2,
+        "relationshipsManuallyCreated": 1,
+        "note": "Confirmed entity mentions were free (came from Review Queue confirmation already done in the identity-safety phase). Organization/government-body linkage required manually creating both entities and the relationship by hand — nothing suggests or auto-creates this from a mention alone."
+      }
+    },
+    {
+      "t": 1792689835471,
+      "section": "claimTest",
+      "msg": "Search for supporting/contradicting evidence",
+      "data": {
+        "claimSearch": {
+          "resultCount": 4,
+          "provenance": "Confirmed Fact Answered from 4 sources · 4 passages"
+        },
+        "contradictSearch": {
+          "resultCount": 2,
+          "provenance": "Confirmed Fact Answered from 2 sources · 2 passages"
+        }
+      }
+    },
+    {
+      "t": 1792689836939,
+      "section": "claimTest",
+      "msg": "Claim recorded",
+      "data": {
+        "claimText": "Raymond Payne served on the Larkspur Falls City Council.",
+        "claimCreated": true,
+        "supportingSearch": {
+          "resultCount": 4,
+          "provenance": "Confirmed Fact Answered from 4 sources · 4 passages"
+        },
+        "contradictingSearch": {
+          "resultCount": 2,
+          "provenance": "Confirmed Fact Answered from 2 sources · 2 passages"
+        },
+        "note": "Chronium never asserted a verdict on its own - status stayed investigator-set throughout, matching Phase 3's explicit rule."
+      }
+    },
+    {
+      "t": 1792689840168,
+      "section": "contradictionTest",
+      "msg": "Vote-outcome contradiction",
+      "data": {
+        "discoverySearch": {
+          "resultCount": 42,
+          "provenance": "Confirmed Fact Answered from 42 sources · 42 passages"
+        },
+        "claimCreated": true,
+        "bothStancesLinked": true,
+        "bothSidesRemainVisible": true
+      }
+    },
+    {
+      "t": 1792689841196,
+      "section": "coOccurrenceTest",
+      "msg": "Co-occurrence check",
+      "data": {
+        "sheenaCandidatesFound": 0,
+        "sheenaConfirmed": 0,
+        "relationshipsBetweenRaymondAndSheena": 1,
+        "autoRelationshipCreated": false
+      }
+    },
+    {
+      "t": 1792689852105,
+      "section": "reviewQueueFriction",
+      "msg": "Processed 25 records",
+      "data": {
+        "avgMsPerRecord": 377.84,
+        "avgClicksPerRecord": 1
+      }
+    },
+    {
+      "t": 1792689852120,
+      "section": "threePersonHandoff",
+      "msg": "Investigator C cold-read of audit trail",
+      "data": {
+        "historyEntryCount": 42,
+        "distinctActorsRepresented": 2
+      }
+    },
+    {
+      "t": 1792689864133,
+      "section": "gapAwareness",
+      "msg": "Gap-awareness check",
+      "data": {
+        "statusCounts": "222Unreviewed0Flagged0Reviewed0Failed222Duplicates skipped444Total",
+        "ambiguousCount": 2,
+        "failedCount": 0,
+        "unverifiedClaims": 2
+      }
+    },
+    {
+      "t": 1792689865651,
+      "section": "askSources",
+      "msg": "\"Show me every record mentioning Raymond Payne.\"",
+      "data": "WORKS"
+    },
+    {
+      "t": 1792689867069,
+      "section": "askSources",
+      "msg": "\"Where does Ray Payne appear?\"",
+      "data": "WORKS"
+    },
+    {
+      "t": 1792689868616,
+      "section": "askSources",
+      "msg": "\"What organizations is Raymond Payne connected to?\"",
+      "data": "WORKS"
+    },
+    {
+      "t": 1792689870137,
+      "section": "askSources",
+      "msg": "\"Show me evidence for each connection.\"",
+      "data": "DOES NOT WORK"
+    },
+    {
+      "t": 1792689871431,
+      "section": "askSources",
+      "msg": "\"Did Raymond Payne serve on City Council?\"",
+      "data": "WORKS"
+    },
+    {
+      "t": 1792689872909,
+      "section": "askSources",
+      "msg": "\"What evidence contradicts that claim?\"",
+      "data": "WORKS"
+    },
+    {
+      "t": 1792689874568,
+      "section": "askSources",
+      "msg": "\"Show me all payments involving the Historical Society.\"",
+      "data": "DOES NOT WORK"
+    },
+    {
+      "t": 1792689876121,
+      "section": "askSources",
+      "msg": "\"Who repeatedly appears in EDC records?\"",
+      "data": "DOES NOT WORK"
+    },
+    {
+      "t": 1792689877695,
+      "section": "askSources",
+      "msg": "\"Show me everything involving Ordinance 2026-29.\"",
+      "data": "WORKS"
+    },
+    {
+      "t": 1792689879181,
+      "section": "askSources",
+      "msg": "\"What changed before and after this vote?\"",
+      "data": "DOES NOT WORK"
+    },
+    {
+      "t": 1792689880805,
+      "section": "askSources",
+      "msg": "\"Which claims have contradictory evidence?\"",
+      "data": "DOES NOT WORK"
+    },
+    {
+      "t": 1792689882250,
+      "section": "askSources",
+      "msg": "\"What haven't we reviewed yet?\"",
+      "data": "DOES NOT WORK"
+    }
+  ]
+}
