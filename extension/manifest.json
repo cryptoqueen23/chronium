@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Chronium Mind",
+  "version": "0.1.0",
+  "description": "Search. Discover. Verify. Free research across public sources, documents and historical archives.",
+  "minimum_chrome_version": "114",
+  "permissions": ["sidePanel", "storage"],
+  "host_permissions": [
+    "https://chronium-mind.truewolfflix777.workers.dev/*",
+    "http://127.0.0.1:8787/*"
+  ],
+  "action": { "default_title": "Open Chronium Mind", "default_icon": "icons/icon.png" },
+  "side_panel": { "default_path": "panel.html" },
+  "background": { "service_worker": "background.js" },
+  "icons": { "128": "icons/icon.png" }
+}

@@ -255,6 +255,17 @@ rather than the principle.
 > **ACCESS RULE:** Serious research should remain possible without
 > paying for AI or massive cloud storage.
 
+## Investigative Standard (added 2026-10-22)
+
+Chronium Mind must not merely locate documents. It must **reconstruct
+decisions, trace public money, compare independent records, identify
+contradictions, preserve evidence, and show exactly what remains unknown.**
+Its findings must be **reproducible from the original sources**: anyone
+given the cited sources must be able to re-derive the same finding. This is
+the test for every feature: does it move Chronium from search tool toward
+investigative system, without ever overstating what was searched or proven.
+
+
 ## North Star
 
 Chronium's goal is to become **the research engine for everyone** — students,

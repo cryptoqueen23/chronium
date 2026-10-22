@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Chronium Mind</title>
+  <link rel="stylesheet" href="panel.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="top">
+    <img src="icons/icon.png" alt="" width="32" height="32" />
+    <div><h1>Chronium Mind</h1><p class="tag">Search. Discover. Verify.</p></div>
+  </header>
+
+  <nav aria-label="Main" class="tabs" role="tablist">
+    <button role="tab" id="tab-search" aria-controls="view-search" aria-selected="true" data-view="search">Search</button>
+    <button role="tab" id="tab-compare" aria-controls="view-compare" aria-selected="false" data-view="compare" tabindex="-1">Compare</button>
+    <button role="tab" id="tab-research" aria-controls="view-research" aria-selected="false" data-view="research" tabindex="-1">My Research</button>
+    <button role="tab" id="tab-reports" aria-controls="view-reports" aria-selected="false" data-view="reports" tabindex="-1">Reports</button>
+  </nav>
+
+  <main id="main" tabindex="-1">
+    <section id="view-search" role="tabpanel" aria-labelledby="tab-search">
+      <form id="searchForm" role="search">
+        <label for="q" class="sr-only">Search a person, topic or website</label>
+        <input id="q" type="search" placeholder="Search a person, topic, website..." autocomplete="off" maxlength="300" required />
+        <button type="submit" class="primary">Search</button>
+      </form>
+      <p class="hint">Public sources &bull; Documents &bull; Archives</p>
+      <div id="caseBar" class="casebar"></div>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <div id="searchStatus"></div>
+      <div id="results"></div>
+    </section>
+
+    <section id="view-compare" role="tabpanel" aria-labelledby="tab-compare" hidden>
+      <h2>What Changed?</h2>
+      <p>Compare an older archived version of a page with today's version.</p>
+      <p class="notice">Side-by-side comparison is not built yet. For now, every result with an archived copy has "Open snapshot", so you can view the older version yourself.</p>
+    </section>
+
+    <section id="view-research" role="tabpanel" aria-labelledby="tab-research" hidden>
+      <h2>My Cases</h2>
+      <form id="newCaseForm" class="inline">
+        <label for="newCaseName" class="sr-only">New case name</label>
+        <input id="newCaseName" type="text" placeholder="New case name" maxlength="120" required />
+        <button type="submit">Create</button>
+      </form>
+      <div id="caseList"></div>
+      <div id="caseDetail"></div>
+    </section>
+
+    <section id="view-reports" role="tabpanel" aria-labelledby="tab-reports" hidden>
+      <h2>Reports</h2>
+      <p>A source list for the active case, with the original link, archive link, date saved, and where it came from.</p>
+      <div id="reportBox"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <details>
+      <summary>Settings</summary>
+      <label for="workerUrl">Chronium server address</label>
+      <input id="workerUrl" type="url" />
+      <button type="button" id="saveWorkerUrl">Save</button>
+    </details>
+  </footer>
+  <script type="module" src="panel.js"></script>
+</body>
+</html>
