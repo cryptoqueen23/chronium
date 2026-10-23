@@ -111,7 +111,7 @@ Notes for Mari:
 >
 > **What I would like to do.** When a person starts a search themselves, the tool would read the public Agenda Center and Document Center pages that your robots.txt already allows, and save the public documents it finds to that person's own computer.
 >
-> **How it behaves.** One request at a time. At least 10 seconds between requests, which is the Crawl-delay in your robots.txt, and never faster. It identifies itself as "ChroniumMind" in every request, with a link to a page that explains the tool and how to stop it (https://chronium-mind.truewolfflix777.workers.dev/crawler.html). It obeys robots.txt, does not log in, submit forms or use any page that needs an account, and stops if your site asks it to slow down. A single search reads at most about 150 pages and 100 documents, and one person's browser makes at most 500 requests a day to your site. Documents are kept on the person's device and are not republished; each is saved with its web address, the time it was read and a fingerprint, so anyone can check it against your site.
+> **How it behaves.** One request at a time. At least 10 seconds between requests, which is the Crawl-delay in your robots.txt, and never faster. It identifies itself as "ChroniumMind" in every request, with a link to a page that explains the tool and how to stop it (https://chronium-mind.truewolfflix777.workers.dev/crawler). It obeys robots.txt, does not log in, submit forms or use any page that needs an account, and stops if your site asks it to slow down. A single search reads at most about 150 pages and 100 documents, and one person's browser makes at most 500 requests a day to your site. Documents are kept on the person's device and are not republished; each is saved with its web address, the time it was read and a fingerprint, so anyone can check it against your site.
 >
 > **My question.** Please tell me, in writing, whether this is acceptable. If you would prefer a different way, such as a bulk export, a feed or a data download, I will use that instead. If it is not acceptable, I will not read your pages automatically; people will still be able to save documents by hand.
 >
@@ -122,7 +122,7 @@ Notes for Mari:
 > Thank you for your time and for publishing these records.
 >
 > Marimer Cruz, Chronium Mind
-> Email: marimercruz8@gmail.com   Page: https://chronium-mind.truewolfflix777.workers.dev/crawler.html (live only after the approved deployment)
+> Email: marimercruz8@gmail.com   Page: https://chronium-mind.truewolfflix777.workers.dev/crawler (live only after the approved deployment)
 
 ### What must happen before this is sent (checklist)
 

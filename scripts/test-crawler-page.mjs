@@ -11,7 +11,7 @@ const html = fs.readFileSync(path.resolve(here, '..', 'public', 'crawler.html'),
 const text = html.replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 
 test('the User-Agent points at the page, and names the same token the page describes', () => {
-  assert.match(USER_AGENT, /\(\+https:\/\/chronium-mind\.truewolfflix777\.workers\.dev\/crawler\.html;/);
+  assert.match(USER_AGENT, /\(\+https:\/\/chronium-mind\.truewolfflix777\.workers\.dev\/crawler;/);
   assert.ok(text.includes(USER_AGENT_TOKEN));
 });
 test('every number on the page matches the code', () => {
