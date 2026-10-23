@@ -11,6 +11,9 @@
   --surface: #111417;
   --surface-raised: #171a1e;
   --border: #292e34;
+  /* Boundaries that identify a control (inputs, selects, buttons, search box, drop zone):
+     at least 3:1 against every surface (WCAG 1.4.11). --border stays for decorative dividers. */
+  --control-border: #7a828b;
 
   --text: #f2f1ed;
   --text-secondary: #a8adb3;
@@ -76,10 +79,10 @@ svg[hidden] { display: none !important; }
 .btn {
   display: inline-flex; align-items: center; gap: 8px; justify-content: center;
   min-height: 44px; padding: 0 16px; cursor: pointer;
-  background: var(--surface-raised); color: var(--text); border: 1px solid var(--border);
+  background: var(--surface-raised); color: var(--text); border: 1px solid var(--control-border);
   border-radius: var(--radius); font-weight: 600; font-size: 14px; white-space: nowrap;
 }
-.btn:hover { border-color: #3a4148; }
+.btn:hover { border-color: var(--text-secondary); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
@@ -170,7 +173,7 @@ svg[hidden] { display: none !important; }
 
 .search {
   display: flex; align-items: center; gap: 8px;
-  background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--surface-raised); border: 1px solid var(--control-border); border-radius: var(--radius-lg);
   padding: 6px 6px 6px 14px;
 }
 .search-icon { flex: none; color: var(--text-secondary); }
@@ -183,7 +186,7 @@ svg[hidden] { display: none !important; }
 
 .examples { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; margin: 14px 0 4px; }
 .examples-label { color: var(--text-secondary); font-size: 12.5px; }
-.examples button { min-height: 44px; border: 1px solid var(--border); background: transparent; color: var(--text-secondary); border-radius: 999px; padding: 0 12px; font-size: 12.5px; cursor: pointer; }
+.examples button { min-height: 44px; border: 1px solid var(--control-border); background: transparent; color: var(--text-secondary); border-radius: 999px; padding: 0 12px; font-size: 12.5px; cursor: pointer; }
 .examples button:hover { border-color: var(--accent); color: var(--text); }
 
 .hint { font-size: 12.5px; color: var(--text-secondary); line-height: 1.55; margin: 14px 0 0; }
@@ -199,7 +202,7 @@ svg[hidden] { display: none !important; }
 .results h2 { margin: 0; font-size: 20px; }
 .eyebrow { margin: 0 0 6px; color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .filters { display: flex; gap: 8px; }
-.filters select { min-height: 44px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 7px; padding: 0 10px; }
+.filters select { min-height: 44px; background: var(--surface); color: var(--text); border: 1px solid var(--control-border); border-radius: 7px; padding: 0 10px; }
 
 .coverage { margin: 16px 0; }
 .coverage-summary { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
@@ -228,14 +231,14 @@ svg[hidden] { display: none !important; }
 .result-details summary { cursor: pointer; color: var(--link); font-size: 12px; min-height: 22px; }
 .result-details > div { margin: 4px 0 0 2px; word-break: break-all; }
 .result-snippet { margin: 8px 0 0; color: var(--text-secondary); font-size: 13.5px; line-height: 1.6; }
-.preview-btn { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; padding: 0 12px; border: 1px solid var(--border); background: var(--surface-raised); color: var(--text); border-radius: 6px; font-size: 12.5px; cursor: pointer; }
+.preview-btn { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; padding: 0 12px; border: 1px solid var(--control-border); background: var(--surface-raised); color: var(--text); border-radius: 6px; font-size: 12.5px; cursor: pointer; }
 .preview-btn:hover { border-color: var(--accent); }
 .result-passage { border-left: 2px solid var(--accent); padding: 4px 0 4px 10px; }
 .result-passage mark { background: var(--accent); color: var(--on-accent); border-radius: 3px; padding: 0 2px; }
 .save-evidence-btn { display: inline-flex; align-items: center; min-height: 44px; margin: 8px 0 0 8px; padding: 0 12px; border: 1px solid var(--accent); background: transparent; color: var(--accent); border-radius: 6px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
 .save-evidence-btn:hover { background: var(--accent); color: var(--on-accent); }
 .save-evidence-btn:disabled { opacity: .7; cursor: default; border-color: var(--border); color: var(--text-secondary); background: transparent; }
-.mini-edit-btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border: 1px solid var(--border); background: var(--surface-raised); color: var(--text); border-radius: 6px; font-size: 12px; cursor: pointer; }
+.mini-edit-btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border: 1px solid var(--control-border); background: var(--surface-raised); color: var(--text); border-radius: 6px; font-size: 12px; cursor: pointer; }
 .mini-edit-btn:hover { border-color: var(--accent); }
 .link-check:disabled { opacity: .7; cursor: wait; }
 .link-unavailable-note { max-width: 160px; text-align: right; color: var(--danger); }
@@ -246,8 +249,8 @@ svg[hidden] { display: none !important; }
 .tag.kind-corpus { border-color: #5b4a8a; color: #b6a7dd; }
 .tag.kind-library { border-color: #2f5c48; color: var(--success); }
 .result-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
-.result-actions a, .result-actions button { white-space: nowrap; text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 0 10px; font-size: 12px; cursor: pointer; background: transparent; }
-.result-actions a.primary { background: var(--surface-raised); border-color: var(--border); font-weight: 600; }
+.result-actions a, .result-actions button { white-space: nowrap; text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; border: 1px solid var(--control-border); color: var(--text); border-radius: 6px; padding: 0 10px; font-size: 12px; cursor: pointer; background: transparent; }
+.result-actions a.primary { background: var(--surface-raised); border-color: var(--control-border); font-weight: 600; }
 .result-actions button:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ---------- Investigation cards (cards are OK here) ---------- */
@@ -341,7 +344,7 @@ kbd { background: var(--surface-raised); border: 1px solid var(--border); border
 .ask-history-entry p { margin: 6px 0 2px; font-size: 13px; }
 
 .biblio-cite { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
-.biblio-cite select { min-height: 44px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-raised); color: var(--text); padding: 0 10px; font-size: 12.5px; }
+.biblio-cite select { min-height: 44px; border-radius: 6px; border: 1px solid var(--control-border); background: var(--surface-raised); color: var(--text); padding: 0 10px; font-size: 12.5px; }
 .biblio-cite-output { font-style: italic; }
 .biblio-cite-output:empty { display: none; }
 
@@ -370,7 +373,7 @@ kbd { background: var(--surface-raised); border: 1px solid var(--border); border
    evidence until reviewed/saved. */
 .ask-sources-section-heading { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); }
 
-.import-zone-inner { border: 1px dashed var(--border); border-radius: var(--radius-lg); padding: 32px 22px; text-align: center; background: var(--bg); transition: border-color .15s, background .15s; }
+.import-zone-inner { border: 1px dashed var(--control-border); border-radius: var(--radius-lg); padding: 32px 22px; text-align: center; background: var(--bg); transition: border-color .15s, background .15s; }
 .import-zone-inner.dragover { border-color: var(--accent); background: var(--surface); }
 .import-formats { color: var(--text-secondary); font-size: 12.5px; letter-spacing: .02em; margin: 0 0 4px; }
 .import-zone-actions { display: flex; gap: 10px; justify-content: center; margin: 18px 0 14px; flex-wrap: wrap; }
@@ -406,7 +409,7 @@ footer { border-top: 1px solid var(--border); max-width: var(--max); margin: 40p
 }
 .dialog-panel {
   width: 100%; max-width: 440px; max-height: calc(100vh - 40px); overflow-y: auto;
-  background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--surface-raised); border: 1px solid var(--control-border); border-radius: var(--radius-lg);
   padding: 20px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
 }
 .dialog-panel-wide { max-width: 560px; }
@@ -428,7 +431,7 @@ footer { border-top: 1px solid var(--border); max-width: var(--max); margin: 40p
 .dialog-form-compact { gap: 10px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label { font-size: 12.5px; color: var(--text-secondary); font-weight: 600; }
-.field input, .field select, .field textarea { min-height: 44px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px; width: 100%; font-family: inherit; }
+.field input, .field select, .field textarea { min-height: 44px; background: var(--surface); color: var(--text); border: 1px solid var(--control-border); border-radius: 7px; padding: 9px 11px; width: 100%; font-family: inherit; }
 .field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible { border-color: var(--accent); }
 .field textarea { resize: vertical; }
 .field-row { display: flex; gap: 10px; }
@@ -503,7 +506,7 @@ footer { border-top: 1px solid var(--border); max-width: var(--max); margin: 40p
 
 /* ---------- Outline sections: inline method/status selects ---------- */
 .lane-row { flex-wrap: wrap; }
-.lane-inline-select { min-height: 44px; flex: 0 0 auto; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; font-size: 12px; }
+.lane-inline-select { min-height: 44px; flex: 0 0 auto; background: var(--surface); color: var(--text); border: 1px solid var(--control-border); border-radius: 6px; padding: 0 8px; font-size: 12px; }
 .lane-inline-select:focus-visible { border-color: var(--accent); }
 .status-badge { display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 2px 7px; border-radius: 4px; }
 .status-badge.status-not-started { background: var(--surface-raised); color: var(--text-secondary); }
@@ -511,7 +514,7 @@ footer { border-top: 1px solid var(--border); max-width: var(--max); margin: 40p
 .status-badge.status-answered { background: rgba(101,184,138,.15); color: var(--success); }
 
 /* ---------- Evidence-item picker with a per-row numeric value (Quantitative Findings) ---------- */
-.claim-evidence-option-value { min-height: 44px; width: 96px; flex: 0 0 96px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; font-size: 12.5px; }
+.claim-evidence-option-value { min-height: 44px; width: 96px; flex: 0 0 96px; background: var(--surface); color: var(--text); border: 1px solid var(--control-border); border-radius: 6px; padding: 0 8px; font-size: 12.5px; }
 .claim-evidence-option-value:focus-visible { border-color: var(--accent); }
 
 /* ---------- Subjects tab: entities, aliases, relationships (docs/INVESTIGATION_WORKSPACE_PLAN.md Phase 1) ---------- */
@@ -637,12 +640,12 @@ footer { border-top: 1px solid var(--border); max-width: var(--max); margin: 40p
 @media (prefers-color-scheme: light) {
   :root {
     color-scheme: light;
-    --bg: #f6f4ee; --surface: #ffffff; --surface-raised: #efece3; --border: #b8b3a4;
+    --bg: #f6f4ee; --surface: #ffffff; --surface-raised: #efece3; --border: #b8b3a4; --control-border: #6b675c;
     --text: #1b1a16; --text-secondary: #4f4c43; --text-muted: #6a665b;
     --accent: #8a5a00; --accent-hover: #6e4800; --on-accent: #ffffff;
     --link: #0b57b0; --success: #1b6e3f; --danger: #a82a20; --danger-bg: #fdecea;
   }
-  .btn:hover, .investigation-card:hover { border-color: #7d796c; }
+  .investigation-card:hover { border-color: #7d796c; }
   .btn-danger:hover { background: #fbd9d4; }
   .status.status-bad, .toast.toast-bad { border-color: #e0a39d; }
   .status.status-warn { border-color: #d9b36a; }
@@ -661,3 +664,27 @@ footer { border-top: 1px solid var(--border); max-width: var(--max); margin: 40p
 .vw-q-missing .ask-tag { border-color: var(--danger); }
 .vw-q-notreviewed .ask-tag { border-color: var(--accent); }
 .vw-q-unresolved .ask-tag { border-color: var(--link); }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
+.field-error { color: var(--danger); font-size: 13px; margin: 6px 0 0; }
+.field-error::before { content: "Error: "; font-weight: 700; }
+input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--danger); border-width: 2px; }
+
+/* Respect reduced-motion: no animated transitions or smooth scrolling. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+/* Increased contrast request (prefers-contrast: more): stronger dividers and secondary text. */
+@media (prefers-contrast: more) {
+  :root { --border: #9aa1a9; --control-border: #c3c8cd; --text-secondary: #d7dadd; }
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: light) {
+  :root { --border: #55514a; --control-border: #3b3830; --text-secondary: #2c2a25; }
+}
+
+
+/* Windows High Contrast / forced colours: only the selected tab keeps a visible underline (system Highlight colour), the others none. */
+@media (forced-colors: active) {
+  [role="tab"] { border-bottom-color: Canvas !important; }
+  [role="tab"][aria-selected="true"] { border-bottom-color: Highlight !important; text-decoration: underline; text-underline-offset: 6px; }
+}

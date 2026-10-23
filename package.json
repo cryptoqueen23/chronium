@@ -13,7 +13,10 @@
     "test:ingestion": "node --test scripts/test-ingestion-review.mjs",
     "test:portable": "node --test scripts/test-portable.mjs",
     "test:ask": "node --test scripts/test-ask-router.mjs scripts/test-views.mjs",
-    "test": "node --test scripts/test-entities.mjs scripts/test-claims.mjs scripts/test-ingestion-review.mjs scripts/test-portable.mjs scripts/test-ask-router.mjs scripts/test-views.mjs"
+    "test": "node --test scripts/test-entities.mjs scripts/test-claims.mjs scripts/test-ingestion-review.mjs scripts/test-portable.mjs scripts/test-ask-router.mjs scripts/test-views.mjs",
+    "test:contrast": "node scripts/test-contrast.mjs",
+    "test:a11y:modes": "node scripts/test-a11y-modes.mjs",
+    "test:a11y:deep": "node scripts/test-a11y-deep.mjs"
   },
   "devDependencies": {
     "axe-core": "^4.14.0",

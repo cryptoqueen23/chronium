@@ -69,6 +69,18 @@ try {
     await go('#/workspace/overview');
     await shot(web, `site-overview-${theme}-375.png`);
   }
+  // Form controls with the stronger (3:1) boundaries, in both themes.
+  for (const theme of ['dark', 'light']) {
+    await web.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]);
+    await web.setViewport({ width: 1280, height: 900 });
+    await open('Grant review');
+    await go('#/workspace/research');
+    await shot(web, `site-research-ask-box-${theme}-1280.png`);
+    await web.evaluate(() => document.querySelector('[data-action="import-research"]').click());
+    await web.waitForSelector('#addUrlInput', { visible: true }); await sleep(400);
+    await shot(web, `site-add-research-dialog-${theme}-1280.png`);
+    await web.keyboard.press('Escape'); await sleep(300);
+  }
   await web.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
   await web.setViewport({ width: 1280, height: 900 });
   await open('Sources only (no findings yet)');
@@ -100,6 +112,17 @@ try {
     await panel.click('#vt-overview'); await sleep(300);
     await panel.evaluate(() => document.querySelector('#caseDetail').scrollIntoView());
     await shot(panel, `panel-overview-${theme}-375.png`);
+  }
+  await panel.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
+  for (const theme of ['dark', 'light']) {
+    await panel.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]);
+    await panel.click('#tab-search'); await sleep(300);
+    await shot(panel, `panel-search-${theme}-375.png`);
+    await panel.click('#tab-research'); await sleep(300);
+    await panel.evaluate(() => { document.querySelector('.foot details').open = true; });
+    await panel.evaluate(() => document.querySelector('.foot').scrollIntoView());
+    await shot(panel, `panel-settings-form-${theme}-375.png`);
+    await panel.evaluate(() => { document.querySelector('.foot details').open = false; });
   }
   await panel.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
   await pOpen('Sources only');

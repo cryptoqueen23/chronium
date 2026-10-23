@@ -77,7 +77,8 @@
     <details>
       <summary>Settings</summary>
       <label for="workerUrl">Chronium server address</label>
-      <input id="workerUrl" type="url" />
+      <input id="workerUrl" type="url" aria-describedby="workerUrlError" />
+      <p id="workerUrlError" class="field-error" role="alert" hidden></p>
       <button type="button" id="saveWorkerUrl">Save</button>
     </details>
   </footer>

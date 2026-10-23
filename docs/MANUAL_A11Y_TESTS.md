@@ -6,6 +6,19 @@ Record date, tester, tool and version, browser, and result for each line in
 the table at the bottom. Do not claim WCAG 2.2 AA conformance until they are done
 and every applicable criterion has been evaluated.
 
+## Status at a glance
+
+| Test | Status |
+|---|---|
+| **NVDA (Windows)** | **NOT TESTED**: not installed; cannot be operated from the build environment |
+| **VoiceOver (macOS / iOS)** | **NOT TESTED**: no Apple device available |
+| **Real touch device** | **NOT TESTED**: only Chrome's touch emulation was run |
+| Windows High Contrast on a real machine | NOT TESTED (forced-colors was emulated in Chrome) |
+| Browser zoom to 400% | Automated with real browser zoom; a person should still look |
+| Keyboard-only | Automated Tab walks done; a person should do section E |
+
+**WCAG 2.2 AA conformance is NOT claimed.** Automated and emulated checks pass; the human evaluation above has not been done.
+
 Test pages: the website (`#/investigations`, then open an investigation: it
 opens on **Big Picture**), and the extension side panel (My Research, **Open**
 a case). Use a case with findings, a contradicted claim, a vote, and at least

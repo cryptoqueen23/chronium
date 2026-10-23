@@ -684,7 +684,8 @@
           <p class="field-group-label">Add a URL</p>
           <div class="field">
             <label for="addUrlInput">Page URL</label>
-            <input id="addUrlInput" type="url" required placeholder="https://example.gov/record" />
+            <input id="addUrlInput" type="url" required placeholder="https://example.gov/record" aria-describedby="addUrlError" />
+            <p id="addUrlError" class="field-error hidden" role="alert"></p>
           </div>
           <div class="field-row">
             <div class="field"><label for="addUrlTitle">Title (optional)</label><input id="addUrlTitle" maxlength="200" /></div>

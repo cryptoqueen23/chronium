@@ -205,6 +205,8 @@ export function formatDate(iso) {
 }
 export function showToast(msg, bad = false) {
   clearTimeout(toastTimer);
+  toast.setAttribute('role', bad ? 'alert' : 'status'); // errors are announced at once
+  toast.setAttribute('aria-live', bad ? 'assertive' : 'polite');
   toast.textContent = msg;
   toast.classList.remove('hidden');
   toast.classList.toggle('toast-bad', bad);
@@ -993,7 +995,19 @@ addUrlForm.addEventListener('submit', async (e) => {
   const urlTitle = document.querySelector('#addUrlTitle').value.trim();
   const note = document.querySelector('#addUrlNote').value.trim();
   if (!url) return;
-  await addUserUrl(activeInvestigationId, { url, title: urlTitle, note });
+  const urlInput = document.querySelector('#addUrlInput');
+  const urlError = document.querySelector('#addUrlError');
+  try {
+    await addUserUrl(activeInvestigationId, { url, title: urlTitle, note });
+  } catch (err) {
+    // Error identified in text, tied to the field (aria-invalid + aria-describedby), announced (role=alert), focus returned to the field.
+    urlError.textContent = `That web address could not be added: ${err.message || 'it is not a valid address'}. Check it starts with https:// and try again.`;
+    urlError.classList.remove('hidden');
+    urlInput.setAttribute('aria-invalid', 'true');
+    urlInput.focus();
+    return;
+  }
+  urlError.classList.add('hidden'); urlError.textContent = ''; urlInput.removeAttribute('aria-invalid');
   savedKeys = await getSavedCanonicalKeys(activeInvestigationId);
   addUrlForm.reset();
   setAddResearchStatus(`Added ${url} to your investigation.`);

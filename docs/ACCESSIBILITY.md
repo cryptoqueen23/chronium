@@ -41,3 +41,19 @@ Run with `node scripts/test-a11y-deep.mjs` (123+ checks), `test-a11y.mjs`, `test
 
 **Conformance:** not claimed. Automated and emulated checks pass; the human evaluation has not been done.
 
+## Test log: 2026-10-22 (accessibility corrections after review)
+
+New and changed:
+- **Non-text contrast (1.4.11)**: dark-theme control boundaries were about 1.3 to 1.5:1; a `--control-border` token (website) / `--control` (extension) now gives 4.5 to 5.1:1 on every surface in dark and 4.7 to 5.5:1 in light. Method, decision rule for what is essential vs decorative, and all measured ratios: `docs/CONTRAST_REPORT.md` (`node scripts/test-contrast.mjs`, 132 measurements, 0 below 3:1; before the change 84 of 112 were below).
+- **`scripts/test-a11y-modes.mjs`** (146 checks): forced-colors (Windows High Contrast emulation) and prefers-contrast; increased text spacing (1.4.12) alone and combined with real 400% zoom; reduced motion; focus visibility measured from pixels (ring visible and at least 3:1 against what it replaces, both themes); form error identification; reflow at 320 to 1920 px in both themes.
+- Fixed because of those tests: forced-colors made every tab underlined (now only the selected one, via system `Highlight`); no reduced-motion rule existed (added); no `prefers-contrast: more` support (added); the extension used `alert()` for an invalid server address (now inline error text, announced, tied to the field with `aria-invalid`/`aria-describedby`, focus returned); error toasts are now `role=alert`; the website's Add URL field got an alert region and a try/catch.
+- Existing keyboard and emulated-touch tests, the 400% zoom checks, axe sweeps and tab-walk (`test-a11y.mjs`, `test-a11y-deep.mjs`) are unchanged and pass.
+
+**Still NOT tested, and not claimed** (unchanged): NVDA, VoiceOver, a real touch device, Windows High Contrast on a real machine. See `docs/MANUAL_A11Y_TESTS.md`. WCAG 2.2 AA conformance is not claimed.
+
+**Remaining limitations**
+- Decorative borders (cards, panels, tag and badge outlines, dividers) are about 1.2 to 1.5:1 in dark and deliberately left as they are: the text carries the meaning. A reviewer who disagrees for a specific element can add it to the list in `scripts/test-contrast.mjs`.
+- Controls that only appear after an interaction (the claim form's evidence picker, file preview button) were not rendered on a real page in the contrast audit; they use the same token.
+- Website form errors from the investigation forms (subjects, claims, findings, relationships) are reported through an announced alert toast, not next to the field with `aria-describedby`. Native `required` validation (a labelled field that is named and focused) is used for blank fields. Per-field association for those forms is not done.
+- Forced-colors and contrast preferences were emulated in Chrome only.
+

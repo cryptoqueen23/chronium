@@ -278,7 +278,14 @@ async function renderReport() {
 // ---- settings ----
 $('#saveWorkerUrl').addEventListener('click', async () => {
   const u = safeUrl($('#workerUrl').value);
-  if (!u) { alert('Enter a full web address starting with https://'); return; }
+  const err = $('#workerUrlError');
+  if (!u) {
+    // Identified in text, announced, tied to the field, focus returned to it (no alert() popup).
+    err.textContent = 'Enter a full web address that starts with https:// (for example https://chronium-mind.truewolfflix777.workers.dev).';
+    err.hidden = false; $('#workerUrl').setAttribute('aria-invalid', 'true'); $('#workerUrl').focus();
+    return;
+  }
+  err.hidden = true; err.textContent = ''; $('#workerUrl').removeAttribute('aria-invalid');
   workerUrl = u.replace(/\/$/, ''); await setStore('workerUrl', workerUrl);
 });
 
