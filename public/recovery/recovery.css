@@ -1,0 +1,36 @@
+/* Records Recovery screens. Colour roles (--dc-*) come from the host stylesheet's own palette, in both themes. */
+.rr-root, .rr-report, .rr-summary { color: var(--dc-fg); max-width: 100%; overflow-wrap: anywhere; }
+.rr-root h2 { margin: 0 0 8px; font-size: clamp(1.1rem, 1rem + 1vw, 1.4rem); }
+.rr-root h3, .rr-report h3, .rr-report h4, .rr-report h5 { margin: 16px 0 6px; font-size: clamp(1rem, .95rem + .4vw, 1.15rem); }
+.rr-root :focus-visible, .rr-report :focus-visible { outline: 3px solid var(--dc-accent); outline-offset: 2px; }
+.rr-notice { border: 1px solid var(--dc-line); border-left-width: 6px; border-radius: 8px; padding: 10px 12px; background: var(--dc-panel); }
+.rr-hint { color: var(--dc-muted); font-size: .95rem; }
+.rr-live { min-height: 1.5em; font-weight: 600; }
+.rr-root label { font-weight: 600; }
+.rr-root input[type=text], .rr-root input[type=number], .rr-root input[type=date], .rr-root select, .rr-root textarea { min-height: 44px; padding: 8px 12px; font: inherit; color: var(--dc-fg); background: var(--dc-panel); border: 1px solid var(--dc-line); border-radius: 8px; max-width: 100%; }
+.rr-root input[type=text] { width: min(100%, 36rem); }
+.rr-root textarea { width: 100%; min-height: 8rem; }
+.rr-root input[aria-invalid=true] { border-color: var(--dc-bad); border-width: 2px; }
+.rr-root button, .rr-report button { min-height: 44px; min-width: 44px; padding: 0 14px; font: inherit; color: var(--dc-fg); background: var(--dc-panel); border: 1px solid var(--dc-line); border-radius: 8px; cursor: pointer; }
+.rr-root button.primary { background: var(--dc-accent); color: var(--dc-on-accent); border-color: var(--dc-accent); font-weight: 600; }
+.rr-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.rr-item { border: 1px solid var(--dc-line); border-radius: 8px; margin: 12px 0; padding: 8px 12px; min-width: 0; }
+.rr-item legend { font-weight: 700; padding: 0 6px; }
+.rr-item p { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 8px 0; }
+.rr-quote q { font-style: italic; }
+.rr-error { color: var(--dc-bad); font-weight: 600; }
+.rr-error::before { content: "Error: "; }
+.rr-decision-form { margin-top: 8px; padding: 8px; border: 1px dashed var(--dc-line); border-radius: 8px; }
+.rr-counts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; margin: 8px 0; }
+.rr-counts dt { font-weight: 700; } .rr-counts dd { margin: 0; }
+.rr-scroll { overflow-x: auto; max-width: 100%; margin: 10px 0; }
+.rr-table { border-collapse: collapse; width: 100%; font-size: .95rem; min-width: 38rem; }
+.rr-table caption { text-align: left; font-weight: 700; padding: 6px 0; }
+.rr-table th, .rr-table td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--dc-line); overflow-wrap: anywhere; }
+.rr-table ul { margin: 0; padding-left: 1.1rem; }
+.rr-status { font-weight: 600; }
+.rr-decided { font-weight: 600; margin: 0 0 6px; }
+.rr-report summary, .rr-root summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; }
+.rr-report a, .rr-root a { color: var(--dc-link, var(--dc-accent)); }
+@media (max-width: 480px) { .rr-counts { grid-template-columns: 1fr; } .rr-counts dd { margin-bottom: 6px; } .rr-table { min-width: 30rem; } }
+@media (forced-colors: active) { .rr-root button, .rr-root input, .rr-root select, .rr-root textarea, .rr-item, .rr-notice { border: 1px solid ButtonText; } }

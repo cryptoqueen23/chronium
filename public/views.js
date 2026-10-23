@@ -18,6 +18,8 @@ import { sourceHtml } from './askRender.js';
 const esc = (s = '') => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const MONEY_REL = /PAID|PAYMENT|GRANT|FUND|CONTRACT|AWARD|VENDOR|SPONSOR|APPROPRIAT|BOND/i;
 
+import { recoverySummaryHtml, recoveryHtml } from './recovery/report.js';
+
 export const VIEWS = [
   { id: 'bigpicture', label: 'Big Picture', hint: 'Understand it quickly' },
   { id: 'overview', label: 'Overview', hint: 'See how it connects' },
@@ -255,7 +257,7 @@ export function bigPictureHtml(m) {
   const people = section('people', 'Names',
     `<p>${m.people.registered} person${m.people.registered === 1 ? '' : 's'} recorded. ${m.people.undecidedMatches ? `${m.people.undecidedMatches} possible name match${m.people.undecidedMatches === 1 ? '' : 'es'} ${m.people.undecidedMatches === 1 ? 'is' : 'are'} unconfirmed${m.people.ambiguousMatches ? `, ${m.people.ambiguousMatches} of which could be more than one person` : ''}.` : ''}</p>
      <p class="vw-meta">A name appearing in a document does not identify a person. Only matches someone confirmed are treated as identified.</p>`);
-  return about + findings + figures + disc + open + cov + people;
+  return about + findings + figures + disc + open + cov + people + (m.recovery ? recoverySummaryHtml(m.recovery, m.recoveryLink === null ? { href: null } : {}) : '');
 }
 
 export function overviewHtml(m) {
@@ -323,7 +325,9 @@ export function deepDiveHtml(m, target) {
   const rh = details('review', 'Review history and unresolved questions', m.reviewHistory.length + m.questions.unresolved.length + m.questions.missing.length + m.questions.notReviewed.length,
     `${m.reviewHistory.length ? list(m.reviewHistory.map((h) => `<li class="vw-item"><p>${esc(String(h.timestamp || '').slice(0, 19).replace('T', ' '))} · ${esc(h.action || h.type || 'change')}${h.actorName ? ' · ' + esc(h.actorName) : ''}</p>${h.note ? `<p class="vw-meta">${esc(clip(h.note, 160))}</p>` : ''}</li>`)) : empty('No review activity recorded.')}
      ${['missing', 'notReviewed', 'unresolved'].map((k) => m.questions[k].length ? `<h4>${k === 'missing' ? 'Missing' : k === 'notReviewed' ? 'Not reviewed yet' : 'Unresolved'}</h4>${list(m.questions[k].map((r) => `<li class="vw-item"><p>${esc(r.text)}</p></li>`))}` : '').join('')}`);
-  return `${miss}${t ? targetHtml(t) : ''}<p class="vw-intro">${t ? 'All the original material for this case:' : 'The original material behind everything in the other two views.'}</p>${src}${ev}${cl}${contra}${fin}${rh}`;
+  const gapCount = m.recovery ? m.recovery.items.filter((i) => i.status !== 'info').length : 0;
+  const rr = m.recovery ? details('recovery', 'Records Recovery: what this case does not hold', gapCount, recoveryHtml(m.recovery, { headingLevel: 4, id: 'rr-dd' })) : '';
+  return `${miss}${t ? targetHtml(t) : ''}<p class="vw-intro">${t ? 'All the original material for this case:' : 'The original material behind everything in the other two views.'}</p>${src}${ev}${cl}${contra}${fin}${rh}${rr}`;
 }
 
 export function viewHtml(view, model, target) {

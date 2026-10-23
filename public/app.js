@@ -30,6 +30,10 @@ import { ingestFiles, ingestZip } from './ingest/pipeline.js';
 import { extractContent } from './ingest/adapters.js';
 import { mountDiscoveryPanel, webStorage } from './discovery/panel.js';
 import { createProxyFetcher, createArchiveLookup } from './discovery/fetchers.js';
+import { mountRecoveryPanel } from './recovery/panel.js';
+import * as recoveryStore from './recovery/store.js';
+import { buildRecoveryModel } from './recovery/model.js';
+import { recoveryHtml } from './recovery/report.js';
 import { renderReviewQueuePanel } from './reviewQueue.js';
 import { openOverlay, openMenu, confirmDialog } from './ui.js';
 import { answerQuestion } from './askRouter.js';
@@ -162,6 +166,7 @@ const WORKSPACE_TABS = [
   { id: 'deepdive', label: 'Deep Dive', icon: 'icon-file' },
   { id: 'research', label: 'Research', icon: 'icon-search' },
   { id: 'discover', label: 'Find Records', icon: 'icon-file' },
+  { id: 'recovery', label: 'Records Recovery', icon: 'icon-flag' },
   { id: 'review', label: 'Review Queue', icon: 'icon-list' },
   { id: 'subjects', label: 'Subjects', icon: 'icon-user' },
   { id: 'evidence', label: 'Evidence', icon: 'icon-flag' },
@@ -1243,7 +1248,10 @@ async function renderInvestigationView(tab, target, inv) {
   body.innerHTML = '<p class="status" role="status">Loading…</p>';
   let model;
   try {
-    model = buildModel(await readInvestigationForExport(activeInvestigationId));
+    const snapshot = await readInvestigationForExport(activeInvestigationId);
+    model = buildModel(snapshot);
+    // Records Recovery is derived from the same snapshot; if it cannot be computed the views still work.
+    try { model.recovery = buildRecoveryModel(snapshot); } catch { model.recovery = null; }
   } catch (err) {
     body.innerHTML = `<p class="status status-bad" role="alert">Could not load this investigation: ${esc(err.message)}</p>`;
     return;
@@ -1254,6 +1262,20 @@ async function renderInvestigationView(tab, target, inv) {
   body.innerHTML = viewHtml(tab, model, target);
   if (tab === 'deepdive' && target && t) pendingFocus = '#howWeKnow';
   else pendingScrollY = viewScroll[tab] || 0;
+}
+
+// Records Recovery: mounted once so a request being corrected survives a trip to another tab.
+let recoveryPanel = null;
+function renderRecoveryPanel() {
+  if (!recoveryPanel) {
+    recoveryPanel = mountRecoveryPanel(document.querySelector('#recoveryMount'), {
+      getInvestigationId: () => activeInvestigationId,
+      store: recoveryStore,
+      getPerson: () => { try { return localStorage.getItem('chronium.person') || ''; } catch { return ''; } },
+      setPerson: (n) => { try { localStorage.setItem('chronium.person', n); } catch { /* storage blocked */ } },
+      onChange: () => { lastDashboardData = null; }
+    });
+  } else recoveryPanel.refresh();
 }
 
 // Deep Discovery (Find Records): mounted once so a search keeps running while you look at other tabs.
@@ -1307,6 +1329,8 @@ async function renderWorkspaceView(tab, subtab, arg) {
     await renderAskSourcesHistory();
   } else if (tab === 'discover') {
     renderDiscoverPanel(inv);
+  } else if (tab === 'recovery') {
+    renderRecoveryPanel();
   } else if (tab === 'review') {
     await renderReviewQueuePanel(activeInvestigationId);
   } else if (tab === 'subjects') {
@@ -3237,6 +3261,10 @@ async function renderReportPanel() {
     sections.push(`<section class="report-section"><h2>Findings</h2>${findingsHtml}</section>`);
   }
 
+  try {
+    const recSnap = await readInvestigationForExport(activeInvestigationId);
+    if (recSnap && (recSnap.records || []).length) sections.push(`<section class="report-section">${recoveryHtml(buildRecoveryModel(recSnap), { headingLevel: 2, id: 'rr-report' })}</section>`);
+  } catch { /* the rest of the report still stands */ }
   container.innerHTML = sections.join('');
 }
 

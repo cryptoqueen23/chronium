@@ -68,3 +68,66 @@ Until access rules are clarified, the only way a Copperas Cove / CivicPlus docum
 2. Chronium itself makes **no request** to the host. The Find Records screen, the engine and the Worker continue to refuse the host, and say so in words.
 
 Nothing in this arrangement changes the block, and no code change is needed for it. If a future "capture this page I am viewing" button is wanted in the extension, it must read only the page the person is currently viewing, on a click for that page, with no fetch of its own and no following of links, and needs Mari's approval and its own acceptance tests before it is built. It is not part of this draft.
+
+---
+
+## Update 2026-10-23 (later): recipients verified, public User-Agent page drafted, final letter for approval
+
+**Still NOT sent. Copperas Cove automated discovery is still blocked.** Nothing below changes any behavior.
+
+### Recipients, as printed on the city's and CivicPlus's own pages today
+
+Read through a page-reading tool on 2026-10-23; staff names change, so a person should re-check them on the day of sending.
+
+| Recipient | What the official page shows | Source |
+|---|---|---|
+| City Secretary, City of Copperas Cove | Lisa Wilson, City Secretary. Phone 254-547-4221. Fax 254-542-8927. 914 S Main Street, Suite D (City Hall: 914 South Main Street), Copperas Cove, TX 76522. **No email address is printed.** The directory entry offers only a "Contact Lisa Wilson" web form. | `https://www.copperascovetx.gov/Directory.aspx`; the Open Records Requests page is listed under the City Secretary at `https://www.copperascovetx.gov/187` |
+| Director of Information Technology, City of Copperas Cove | Scot Mullican, Director of Information Technology. Phone not printed for him (the department listing shows 254-547-4221). **No email printed**; a "Contact Scot Mullican" web form only. | `https://www.copperascovetx.gov/Directory.aspx` |
+| CivicPlus | Contact page `https://www.civicplus.com/contact-us/`; phone 888-228-2233; 302 South 4th Street, Suite 500, Manhattan, Kansas 66502. The Terms of Use give **one** email address, `DMCAnotice@civicplus.com`, and say it is for copyright or intellectual-property infringement notices only, so it is **not** the right place for this letter. No legal or compliance contact is published in the Terms. | `https://www.civicplus.com/terms-of-use` (Section 24 and the footer) |
+
+Notes for Mari:
+- The city's online open-records portal (`copperascovetx.mycusthelp.com`) requires an account and is for Public Information Act requests. **This letter is a different kind of message** (a permission question about how a tool reads the city's public pages), so it should go to the City Secretary and IT Director through their published contact forms, or by mail to City Hall, not through the PIA portal.
+- Because no email is printed, the practical routes are: the two "Contact" web forms on the directory page, a phone call to 254-547-4221 to ask where such a letter should go, or a letter by post. Mari decides.
+- CivicPlus: use its "Contact us" page, naming the Terms of Use sections in the subject. If that is not answered, ask the city to raise it with its CivicPlus account representative.
+- **No project email address has been invented.** Mari must choose one for the letter and for the public page (an address she is willing to publish). The only address available in this session is the one on her account; it is not used in any draft because publishing it is her decision.
+
+### Public User-Agent information page (drafted, not published)
+
+`docs/drafts/chronium-crawler.html`: a plain, accessible page that says who ChroniumMind is, the rules it follows (identification, robots.txt, Crawl-delay never shortened, 3-second floor, one request at a time, back-off, small searches, public pages only, no logins or forms, refuses private addresses, where requests come from in extension versus website mode), and how to stop or slow it (a robots.txt group for `ChroniumMind`, Crawl-delay, or a contact address). It contains two placeholders that must be filled by Mari: the **contact address** and the **date**.
+
+**Verified against the code on 2026-10-23** (so the page does not promise more than the tool does): User-Agent token `ChroniumMind` and the 0.1 version string (`config.js`); robots.txt group selection by that token (`robots.js`); `Crawl-delay` honored with a 3,000 ms floor and refusal above 60 s (`config.js`, `engine.js`); one request at a time per host (`scheduler.js`); `Retry-After`, back-off on 429/503 and stop after three (`engine.js`); caps of 150 pages, 100 documents, 400 requests per search and 500 requests per host per day per browser (`config.js`); GET only, `credentials: omit`, no scripts run (`fetchers.js`); private and loopback addresses refused including redirects (`urlGuard.js`, `extension/network.js`); website mode limited to 25 requests per search (`config.js`, `src/discoveryProxy.js`).
+
+**Before the letter is sent** the page must be live at a stable address, and the User-Agent string (`USER_AGENT` in `public/discovery/config.js`, which today links only to the site's home page) must point to it. That is a code change and a deployment, so it needs Mari's explicit approval and is listed as a release item in `docs/CLAUDE_HANDOFF.md`. Until then the letter should not claim that the page exists.
+
+### Final letter, for approval
+
+(Replaces the letter above; bracketed items need Mari's input. Shorter, and it asks one clear question.)
+
+> **Subject:** Question about reading Copperas Cove's public agenda and document pages with a research tool
+>
+> Dear [Ms. Wilson / City Secretary] and [Mr. Mullican / IT Director],
+>
+> My name is Marimer Cruz. I build Chronium Mind, a free research tool that helps residents, journalists and students find public meeting records. Before I let the tool read any page of www.copperascovetx.gov, I want to ask whether that is acceptable, and to follow your answer exactly.
+>
+> **What I would like to do.** When a person starts a search themselves, the tool would read the public Agenda Center and Document Center pages that your robots.txt already allows, and save the public documents it finds to that person's own computer.
+>
+> **How it behaves.** One request at a time. At least 10 seconds between requests, which is the Crawl-delay in your robots.txt, and never faster. It identifies itself as "ChroniumMind" in every request, with a link to a page that explains the tool and how to stop it [link: to be added once published]. It obeys robots.txt, does not log in, submit forms or use any page that needs an account, and stops if your site asks it to slow down. A single search reads at most about 150 pages and 100 documents, and one person's browser makes at most 500 requests a day to your site. Documents are kept on the person's device and are not republished; each is saved with its web address, the time it was read and a fingerprint, so anyone can check it against your site.
+>
+> **My question.** Please tell me, in writing, whether this is acceptable. If you would prefer a different way, such as a bulk export, a feed or a data download, I will use that instead. If it is not acceptable, I will not read your pages automatically; people will still be able to save documents by hand.
+>
+> I am also writing to CivicPlus to ask whether its Terms of Use (Sections 7 and 13) apply to a city's own CivicPlus-hosted public pages and to the people who read them, or whether your agreement with CivicPlus governs.
+>
+> Until I hear from you, the tool does not contact www.copperascovetx.gov or civicplus.com automatically, and I will record your reply, with its date, and follow it.
+>
+> Thank you for your time and for publishing these records.
+>
+> Marimer Cruz, Chronium Mind
+> [Email: to be chosen by Mari]   [Page: to be added once published]
+
+### What must happen before this is sent (checklist)
+
+- [ ] Mari approves this letter, or edits it.
+- [ ] Mari chooses the contact address and approves publishing it.
+- [ ] Mari approves moving the User-Agent page into `public/` and changing `USER_AGENT` to link to it, and approves the deployment that makes it live (nothing is deployed today).
+- [ ] A person re-checks the names and routes above on the day.
+- [ ] Mari chooses the route (contact forms, phone call first, or post).

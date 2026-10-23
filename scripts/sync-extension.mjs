@@ -18,3 +18,11 @@ for (const f of fs.readdirSync(dsrc).filter((n) => /\.(js|css)$/.test(n))) {
   fs.copyFileSync(path.join(dsrc, f), path.join(ddst, f));
   console.log('synced discovery/' + f);
 }
+
+// Records Recovery: pure modules, the shared screen and its stylesheet.
+const rsrc = path.join(root, 'public', 'recovery'); const rdst = path.join(root, 'extension', 'lib', 'recovery');
+fs.mkdirSync(rdst, { recursive: true });
+for (const f of fs.readdirSync(rsrc).filter((n) => /\.(js|css)$/.test(n))) {
+  fs.copyFileSync(path.join(rsrc, f), path.join(rdst, f));
+  console.log('synced recovery/' + f);
+}

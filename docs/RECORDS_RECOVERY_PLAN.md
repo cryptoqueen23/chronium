@@ -1,6 +1,6 @@
 # Records Recovery: architecture, matching rules, gap-report design, acceptance tests
 
-Status: **PLAN ONLY. Nothing here is implemented.** Written 2026-10-23 for Mari's review. Implementation (this is "Phase 3" of `docs/DEEP_DISCOVERY_PLAN.md`) starts only after she approves this plan. It follows `docs/CANON.md` (Investigative Standard, Bootstrap Rule, Accessibility standard) and builds on what Phase 0 and Phase 1 already record (`docs/DEEP_DISCOVERY_PHASE1.md`).
+Status: **Implemented locally on 2026-10-23 (not pushed, not deployed); see `docs/RECORDS_RECOVERY_PHASE3.md` for what was built, the tests and the limits.** This file is the design; **section 14 (decisions resolved and amendments) overrides sections 3 to 10 where they differ**, notably the matching tiers (Reference matches no longer close gaps; a Series match needs details read from the document's own text), the configurable pattern threshold, and the added request parsing and editable follow-up request. Written for Mari's review; approved by her 2026-10-23 subject to the section 12 confirmation recorded in section 14. It follows `docs/CANON.md` (Investigative Standard, Bootstrap Rule, Accessibility standard) and builds on what Phase 0 and Phase 1 already record (`docs/DEEP_DISCOVERY_PHASE1.md`).
 
 ## 1. Purpose
 
@@ -206,3 +206,40 @@ What cannot be automated with the current tools: the prompt is native browser UI
 10. Record: Chrome version, date, tester, each expected/actual result.
 
 Status: **NOT RUN.** The deployment checklist in `docs/CLAUDE_HANDOFF.md` lists this as a blocker.
+
+## 14. Section 12 decisions resolved, and amendments (2026-10-23, before implementation)
+
+Mari approved Phase 3 on 2026-10-23 "subject to confirming the four design decisions in Section 12" and gave provisional directions. I compared them with this plan line by line. Where they agree, nothing changes. Where they do not, **her instruction wins and the plan is amended here** (sections 3 to 10 above are the original design; this section overrides them where stated).
+
+| Section 12 decision | Mari's direction | Conflict? | Resolution |
+|---|---|---|---|
+| 1. Wording | Prefer "not held in this case", "not located in sources searched", "requires review"; never imply an agency failed to produce a record without independent evidence | No conflict; one **addition** | Adopted. Additionally, every generated report and every item carries the distinction: **a gap in Chronium's evidence inventory is not necessarily a gap in the government's records or in its response to a public information request.** Added to the required statements, and the ban list gains: "failed to produce", "refused to provide", "did not respond", "non-compliant", "violation", "should have", "was required to" (unless the person has recorded independent evidence, which the report quotes as theirs, not Chronium's) |
+| 2. Reviewer decisions | Store locally; preserve in portable exports; keep automatic results reproducible | No conflict | Adopted as designed (`recoveryReviews`, optional list in `.chronium.json`; calculated items never stored) |
+| 3. Cadence threshold | Four documents as an initial heuristic, **configurable**; a series gap is never proof that a record was created or withheld | **Amendment**: the plan hard-coded four | Threshold becomes an option (`cadenceMinDocuments`, default 4, allowed 3 to 12, shown in the report and editable by the person on the screen and saved with the case). G2 wording additionally says the pattern "does not show that a record was created, or that one was withheld" |
+| 4. Placement | (Her section 4 list) Big Picture and Deep Dive integration, then a report appendix | **Addition**: she also asks for request parsing and user correction, and an **editable follow-up request** | See below |
+
+### Conflict found: matching tiers (section 5)
+
+Section 5 said a **Series match and a Reference match close a gap automatically**. Mari's direction: **Exact and Series matches can support a responsive finding only when the contents and the relevant date, agency and record type have been verified; Reference matches and Candidates cannot independently close a gap.** Resolution:
+
+- **Exact** (same SHA-256 or the same original address): supports "located".
+- **Series**: supports "located" **only if the date, the body (agency) and the type were each established from the document's own text** (basis "document text"), not merely from a file name or link text. A Series match whose facts rest on names or links only is downgraded to **Candidate**.
+- **Reference match**: no longer closes anything. It is listed as "possible match, requires review" with the quote.
+- **Candidate**: never closes a gap.
+- A **person's confirmation** (stored decision "Possible match confirmed", naming the record) can close a gap that automatic rules cannot; the item then shows "closed by <reviewer> on <date>", never "found by Chronium".
+- Every closed item states the basis in words ("same file", "same body, type and date, each read from the document's own text").
+
+### Scope additions from Mari's instructions (the plan's non-goals are amended)
+
+The plan listed Public Information Act request drafting as a non-goal and "Phase 4". Mari's instructions now include these in Phase 3, so they are added, **still local, deterministic and without AI or network requests**:
+
+1. **Request parsing and user correction (new step R0).** A person pastes the text of a records request they made (or intend to make). Deterministic rules split it into requested items (record type, body, date or period, subject words, "all" / "each" quantifiers) and mark every field with the words it came from and a confidence ("read from your text" / "inferred" / "needs your confirmation"). The person edits any item (type, body, dates, wording), adds or removes items, and the corrected list is saved with the case (`recoveryRequests`). Nothing is guessed silently: an item that cannot be understood stays as free text and is reported "cannot assess automatically; requires review".
+2. **Inventory versus request.** For each corrected item the report states, in neutral words: *Located in this case* (Exact or verified Series match, with records and dates), *Partly located* (some of the range), *Possible match, requires review*, *Not held in this case* (with what was searched), or *Cannot assess automatically*. Never "produced / not produced".
+3. **Editable follow-up request (report appendix).** From the items that are *Not held in this case*, *Partly located* or *requires review*, Chronium produces a plain-language draft the person can edit in a text box and copy. It lists the items, what the person's own case holds, what was searched and when, and asks the records office to confirm what exists and to identify the records or explain; it **states that it is based on the person's own research inventory**. It contains no accusation, no deadline claims and no legal conclusions, and it **is never sent by Chronium**. The draft is stored with the request so the edits persist.
+
+### Other amendments
+
+- **A new workspace tab "Records Recovery"** holds the interactive parts (request box and correction, items, reviewer decisions, cadence setting, follow-up draft). The four main navigation areas are unchanged. Big Picture gets a summary panel linking to it; Deep Dive gets the full item list with evidence; the Report gets the appendix. (The plan had said Big Picture, Deep Dive and Report only; the tab is needed for editing.)
+- **Extension**: the recovery modules are shared and synced; the extension gets the report appendix text in Reports first; the full editing screen in the panel is a follow-up if it does not fit this phase (to be stated in the completion report).
+- **Database version 12** adds `recoveryReviews` and `recoveryRequests` (both carry `investigationId`, both in `.chronium.json`).
+- The detectors G1 to G8 stay as designed, with the matching change above.

@@ -7,6 +7,8 @@ import { answerHtml } from './lib/askRender.js';
 import { extractSearchTerms } from './lib/askCommands.js';
 import { readInvestigationForExport } from './lib/portableDb.js';
 import { buildModel, viewHtml, resolveTarget, VIEWS } from './lib/views.js';
+import { buildRecoveryModel } from './lib/recovery/model.js';
+import { recoveryText } from './lib/recovery/report.js';
 import { exportInvestigationFile, previewImport, importBundle, describeReport, PortableFileError } from './lib/portable.js';
 import { listDiscoveryRuns, listDiscoveryLedger } from './lib/db.js';
 import { mountDiscoveryPanel } from './lib/discovery/panel.js';
@@ -115,7 +117,7 @@ async function renderViewer() {
   const inv = cases.find((x) => x.id === viewCaseId);
   if (!inv) { viewCaseId = null; box.innerHTML = ''; return; }
   let model;
-  try { model = buildModel(await readInvestigationForExport(viewCaseId)); } catch (err) { box.innerHTML = `<p class="notice" role="alert">Could not load this case: ${esc(err.message)}</p>`; return; }
+  try { const snap = await readInvestigationForExport(viewCaseId); model = buildModel(snap); try { model.recovery = buildRecoveryModel(snap); model.recoveryLink = null; } catch { model.recovery = null; } } catch (err) { box.innerHTML = `<p class="notice" role="alert">Could not load this case: ${esc(err.message)}</p>`; return; }
   const t = viewTab === 'deepdive' && viewTarget ? resolveTarget(model, viewTarget) : null;
   const tabs = VIEWS.map((v) => `<button type="button" role="tab" id="vt-${v.id}" aria-selected="${v.id === viewTab}" aria-controls="vpanel" tabindex="${v.id === viewTab ? 0 : -1}" data-viewtab="${v.id}">${esc(v.label)}</button>`).join('');
   const crumbs = `<ol class="vw-crumb-list"><li>My Research</li><li>${esc(inv.name)}</li><li${t ? '' : ' aria-current="page"'}>${esc(VIEW_LABEL[viewTab])}</li>${t ? `<li aria-current="page">${esc(t.title.slice(0, 50))}</li>` : ''}</ol>${viewTab === 'deepdive' && t ? `<button type="button" data-goto="${viewBefore}">← Back to ${esc(VIEW_LABEL[viewBefore])}</button>` : ''}`;
@@ -274,7 +276,9 @@ async function renderReport() {
   if (!activeCaseId) { $('#reportBox').innerHTML = '<p class="notice">Create a case and save some sources first.</p>'; return; }
   const rows = await listInvestigationRecords(activeCaseId);
   if (!rows.length) { $('#reportBox').innerHTML = '<p class="notice">This case has no saved sources yet.</p>'; return; }
-  const md = rows.map((r, i) => `${i + 1}. ${r.title || r.originalUrl || 'Untitled'}\n   - Original: ${r.originalUrl || 'n/a'}\n   - Archive: ${r.archiveUrl || 'n/a'}\n   - Source: ${r.source || 'n/a'}; capture date: ${r.captureDate || 'n/a'}; saved: ${r.savedAt || 'n/a'}`).join('\n');
+  let md = rows.map((r, i) => `${i + 1}. ${r.title || r.originalUrl || 'Untitled'}\n   - Original: ${r.originalUrl || 'n/a'}\n   - Archive: ${r.archiveUrl || 'n/a'}\n   - Source: ${r.source || 'n/a'}; capture date: ${r.captureDate || 'n/a'}; saved: ${r.savedAt || 'n/a'}`).join('\n');
+  // Appendix: what this case holds and does not hold (Records Recovery), in plain text with its notice and unknowns.
+  try { md += `\n\n${recoveryText(buildRecoveryModel(await readInvestigationForExport(activeCaseId)))}`; } catch { /* the source list still stands */ }
   $('#reportBox').innerHTML = `<pre class="report">${esc(md)}</pre><button type="button" id="copyReport">Copy</button> <button type="button" id="dlReport">Download .txt</button>`;
   $('#copyReport').onclick = () => navigator.clipboard.writeText(md);
   $('#dlReport').onclick = () => {

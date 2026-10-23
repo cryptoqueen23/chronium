@@ -90,6 +90,19 @@ None of these has been run by a person.
 
 **NOT RUN.** The automated extension test pre-grants its test site, so Chrome's real prompt has never been shown to a test. Full protocol and expected results: `docs/RECORDS_RECOVERY_PLAN.md`, section 13. In short: load the real `extension/` in ordinary Chrome; press Start on a new site; the prompt must name exactly that site; "Don't allow" must leave a plain message, return focus to the address field, make no request and install no rules; "Allow" must run the search with the Chronium User-Agent and the private-address block active; a second search on the same site must not prompt; another origin must prompt; revoking must bring the prompt back; the sequence must work by keyboard. Record Chrome version, date, tester and each result.
 
+## J. Records Recovery (website tab, Big Picture summary, Deep Dive section, report appendix)
+
+None of these has been run by a person.
+
+1. Screen reader: is "Records Recovery" found as a heading, and is the note about inventory versus the government's records read before the counts? Are the counts read as a list?
+2. Each table: are the caption, column headers and row headers read, and is the status ("Status: Open") heard with the item? Do the wide tables scroll by keyboard inside their labelled region?
+3. Decisions: Acknowledge, Confirm a match, Not applicable, Reopen. Is the result announced in the status line? When "Not applicable" is submitted without a reason, is the error read and does focus land in the field?
+4. Request box: after "Read my request", does focus move to the "Check how your request was read" heading, and is each item's fieldset and legend read with its fields? Are the notes ("partly inferred", "requires your review") understood?
+5. Follow-up text: is the box labelled, editable, and is it clear that Chronium never sends it?
+6. Wording: is any sentence confusing, or does any read as blaming an agency? (The automated scan covers fixed words only.)
+7. Phone and tablet, real touch: every button and field tappable; the tables usable at 320 px with large text.
+8. High Contrast and 400% zoom: boundaries kept, nothing clipped.
+
 ## Results log
 
 | Date | Tester | Tool / version | Browser / device | Section | Result | Notes |

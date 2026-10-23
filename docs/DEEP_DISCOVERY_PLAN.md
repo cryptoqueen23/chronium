@@ -204,3 +204,7 @@ What changed from the plan:
 4. **Extension "User-Agent" risk is closed**: a declarativeNetRequest rule sets it per granted site, verified in Chrome for Testing. The earlier plan note that browser fetchers cannot validate redirects before they happen is closed for the extension by network rules that block private targets (verified by a redirect to a loopback address that never arrived); the engine's after-the-fact check remains as a second layer.
 5. **The Worker also enforces the host registry and robots.txt**, so the proxy cannot be used to route around the engine's policy.
 6. Continuing a stopped run does not use one of the 3 runs a day; the 500 requests per host per day ceiling still applies.
+
+## Phase 3 status (2026-10-23)
+
+Records Recovery (gap detectors, the "not held in this case" lists, request comparison, reviewer decisions, report appendix) is **built locally**; see `docs/RECORDS_RECOVERY_PHASE3.md`. Phase 4 (a Public Information Act request *drafted from* the gaps) is partly covered by the editable follow-up request there; formal request drafting, sending and tracking remain unbuilt.

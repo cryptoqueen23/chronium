@@ -4,7 +4,7 @@
 // is a hint shown to the person, never a claim about the document's contents.
 // Pure module.
 
-const RULES = [
+export const RULES = [
   ['minutes', /\bminutes?\b/],
   ['packet', /\b(agenda\s*)?(packet|attachments?|backup|exhibits?)\b/],
   ['agenda', /\bagendas?\b/],

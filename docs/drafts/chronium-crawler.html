@@ -1,0 +1,69 @@
+<!doctype html>
+<!-- DRAFT of the public page that Chronium's User-Agent points to. NOT PUBLISHED. It lives in docs/drafts/ until Mari
+     approves it: then it moves to public/crawler.html, the contact line below is filled in with an address she chooses
+     (never invented), and the User-Agent text in public/discovery/config.js is changed to point at it in the same
+     approved change. Every statement below was checked against the code on 2026-10-23 (see the list at the end of
+     docs/CIVICPLUS_PERMISSION_REQUEST_DRAFT.md). If the code changes, this page must change with it. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>About ChroniumMind, the Chronium Mind reader</title>
+<meta name="description" content="What ChroniumMind is, how politely it reads public websites, and how to ask it to stop.">
+<style>
+  :root { color-scheme: light dark; --bg: #f6f4ee; --fg: #1b1a16; --line: #6b675c; --accent: #8a5a00; --panel: #ffffff; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #090b0d; --fg: #f3efe6; --line: #7a828b; --accent: #d6a84b; --panel: #14181c; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 1rem/1.6 system-ui, sans-serif; }
+  .skip { position: absolute; left: -999px; } .skip:focus { left: 8px; top: 8px; background: var(--accent); color: var(--bg); padding: 8px; }
+  main, header, footer { max-width: 46rem; margin: 0 auto; padding: 0 16px; }
+  h1 { font-size: clamp(1.5rem, 1.2rem + 1.5vw, 2rem); } h2 { font-size: 1.25rem; margin-top: 2rem; }
+  a { color: var(--accent); } a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  table { border-collapse: collapse; width: 100%; } th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+  code { background: var(--panel); border: 1px solid var(--line); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+  pre { background: var(--panel); border: 1px solid var(--line); padding: 12px; overflow-x: auto; border-radius: 8px; }
+  .note { border: 1px solid var(--line); border-left-width: 6px; padding: 10px 12px; border-radius: 8px; background: var(--panel); }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header><h1>About ChroniumMind</h1></header>
+<main id="main">
+  <p>If you run a website and saw <code>ChroniumMind</code> in your logs, this page explains who we are, what the tool does, and how to ask it to stop or slow down.</p>
+
+  <h2>What it is</h2>
+  <p>Chronium Mind is a free research tool that helps residents, journalists and students find and read public records, such as meeting agendas and minutes, that governments already publish on the open web. A person starts each search themselves, from a government website's address that they paste in. It is not a search-engine crawler, it does not run on a schedule, and it does not index the web.</p>
+
+  <h2>How it behaves</h2>
+  <table>
+    <caption>Rules the tool follows on every site</caption>
+    <thead><tr><th scope="col">Rule</th><th scope="col">What it means for your server</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">It identifies itself</th><td>Every request sends <code>ChroniumMind/0.1</code> as the User-Agent, with a link to this page.</td></tr>
+      <tr><th scope="row">It reads robots.txt first</th><td>It reads <code>/robots.txt</code> before anything else on your site, obeys Allow and Disallow rules, and follows the group written for <code>ChroniumMind</code> if you have one, otherwise the group for <code>*</code>.</td></tr>
+      <tr><th scope="row">It never goes faster than you ask</th><td>It obeys <code>Crawl-delay</code>. With no Crawl-delay it waits at least 3 seconds between requests. If a site asks for more than 60 seconds between requests, it does not search that site rather than hurry.</td></tr>
+      <tr><th scope="row">One request at a time</th><td>Never in parallel to one site.</td></tr>
+      <tr><th scope="row">It backs off</th><td>It honours <code>Retry-After</code>, waits longer after HTTP 429 or 503, and gives up on a site after three such answers in a row.</td></tr>
+      <tr><th scope="row">Small searches</th><td>One search reads at most about 150 pages and 100 documents, and at most 400 requests. A single browser makes at most 500 requests a day to one site.</td></tr>
+      <tr><th scope="row">Public pages only</th><td>It sends plain GET requests, no cookies, no logins, no forms, no scripts run. It does not try to get around CAPTCHAs, bot protection or access controls: if it is refused, it stops.</td></tr>
+      <tr><th scope="row">Safe addresses only</th><td>It refuses private, local and internal addresses, and does not follow a redirect to one.</td></tr>
+      <tr><th scope="row">It keeps the source clear</th><td>For each document it saves, it records the address, the time it was read and a fingerprint, so anyone can check it against your site. Documents are stored on the person's own device, not republished.</td></tr>
+    </tbody>
+  </table>
+  <p class="note">Where requests come from: when a person uses the Chronium Mind <em>extension</em>, requests come from that person's own browser and network. When they use the Chronium Mind <em>website</em>, requests go out from Chronium's server on Cloudflare's network, with the same User-Agent and the same rules, and at most 25 requests per search.</p>
+
+  <h2>How to ask it to stop, slow down or use something else</h2>
+  <p>Any of these works, and none needs an account:</p>
+  <ul>
+    <li>Add this to your <code>robots.txt</code>, and ChroniumMind will not read that part of your site:
+<pre>User-agent: ChroniumMind
+Disallow: /</pre></li>
+    <li>Add <code>Crawl-delay: 30</code> (or any number of seconds) to the same group to slow it down.</li>
+    <li>Tell us what you would prefer, such as a bulk export, a feed or an API, and we will use it instead. Write to: <strong>[CONTACT ADDRESS: to be filled in by Mari before this page is published. Not invented.]</strong></li>
+  </ul>
+
+  <h2>Who runs it</h2>
+  <p>Chronium Mind is built by Marimer Cruz. It is free to use and has no advertising. <strong>[Project page and contact details to be confirmed before publishing.]</strong></p>
+</main>
+<footer><p>Last updated: [date of publishing].</p></footer>
+</body>
+</html>

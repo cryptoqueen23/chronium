@@ -1,4 +1,4 @@
-# Claude Handoff: Chronium Mind (updated 2026-10-23, after Deep Discovery Phase 1 pushed; Records Recovery PLANNED only)
+# Claude Handoff: Chronium Mind (updated 2026-10-23: Deep Discovery Phase 1 pushed; Records Recovery built locally, not pushed)
 
 Start a new session here. This file is rewritten at the end of meaningful work, not appended to. Read it, then `docs/CANON.md` (binding rules: Product Principles, Investigative Standard, Bootstrap Rule, Accessibility standard), then `docs/ROADMAP.md`.
 
@@ -8,8 +8,8 @@ Repo: github.com/cryptoqueen23/chronium, local clone `C:\Users\insur\chronium`. 
 
 | Item | State |
 |---|---|
-| `origin/main` | `32aeebd` (Deep Discovery Phase 1; pushed 2026-10-23 with Mari's approval, after review and regression tests) |
-| Local only | Docs commit after `32aeebd`: `RECORDS_RECOVERY_PLAN.md`, `CIVICPLUS_PERMISSION_REQUEST_DRAFT.md`, handoff/manual-test updates (see `git log`). **Not pushed** until Mari says. **Nothing deployed.** |
+| `origin/main` | `a6bab09` (Deep Discovery Phase 1 + the Records Recovery plan and CivicPlus request draft; pushed 2026-10-23 with Mari's approval) |
+| Local only | **Records Recovery Phase 3 implementation** (one commit on top of `a6bab09`; see `git log`). **Not pushed.** Needs Mari's approval. **Nothing deployed.** |
 | Live site `https://chronium-mind.truewolfflix777.workers.dev` | **Unchanged since before all of this work.** None of Ask Chronium, export/import, the three views, light theme or Deep Discovery is live. **Nothing has been deployed.** |
 | Working tree | clean after the Phase 1 commit |
 
@@ -36,6 +36,15 @@ Measured on a synthetic local site at default caps: 151 requests, 0.42 MB, 25 mi
 
 Phase 0 tests: `npm run test:discovery` (37 unit and integration tests against a deterministic local site, fake clock, no real network; included in `npm test`) and `node scripts/test-discovery-browser.mjs --chrome=<CfT>` (26 checks: live status, keyboard Pause/Resume/Cancel, coverage and request-log tables, axe at 320 to 1280 px in both schemes). A test caught a real bug (a seed's redirect bypassed the scope check); fixed and covered.
 
+## Records Recovery (Phase 3) (built and tested locally; committed locally, NOT pushed, NOT deployed)
+
+Write-up: `docs/RECORDS_RECOVERY_PHASE3.md`. Design: `docs/RECORDS_RECOVERY_PLAN.md` (**section 14 overrides sections 3 to 10**). Approved by Mari 2026-10-23 with these directions: Exact and verified Series matches may support a responsive result, **References and Candidates never close a gap**; the pattern threshold (default 4) is **configurable**; reviewer decisions are stored locally and travel in exports while calculated results stay reproducible; neutral wording; and **a gap in Chronium's evidence inventory is not necessarily a gap in the government's records or its response to a request** (on every output).
+
+- Pure modules `public/recovery/{config,facts,series,match,request,detect,model,report}.js`; store `store.js` (IndexedDB **version 12**: `recoveryReviews`, `recoveryRequests`, `recoverySettings`; all in `.chronium.json`); screen `panel.js` + `recovery.css` (website tab **Records Recovery**); Big Picture summary, Deep Dive section and Report appendix in the website; Big Picture summary and Reports appendix in the extension (editing screen is website-only for now).
+- Request parsing with user correction; evidence inventory and matching; detectors G1 to G8; reviewer decisions (Not applicable needs a reason); an **editable follow-up request** that Chronium never sends.
+- Tests: `npm test` 219; `scripts/test-recovery.mjs` 38 (answer keys: complete series = 0 gaps, planted series = exactly 7); `scripts/test-recovery-ui.mjs` 75 (needs `wrangler dev --port 8791`); all older suites unchanged.
+- Not built: Ask Chronium "what is not held?" intents; the full editing screen in the extension; PDF text extraction in the extension (so extension pairings are mostly "requires review").
+
 ## Deep Discovery Phase 1 (built, tested, pushed as `32aeebd`; NOT deployed)
 
 Full write-up: `docs/DEEP_DISCOVERY_PHASE1.md` (what it does, policy gates, tests, CivicPlus findings, live-validation log, measured costs, limitations). Approved by Mari on 2026-10-23, with the addition **user-directed discovery**: paste any government website or document-library address.
@@ -58,7 +67,8 @@ Phase 3 (gap detectors, Records Recovery lists in Big Picture / Reports) and lat
 | Command | Result |
 |---|---|
 | `npm run check` | syntax clean |
-| `npm test` | 181 unit and integration tests (118 earlier + 37 Phase 0 + 26 Phase 1) |
+| `npm test` | 219 unit and integration tests (118 earlier + 37 Phase 0 + 26 Phase 1 + 38 Records Recovery) |
+| `node scripts/test-recovery-ui.mjs` | 75 (needs `wrangler dev --port 8791`) |
 | `node scripts/test-discovery-ui.mjs` | 74 (needs `wrangler dev --port 8791 --var DISCOVERY_ALLOW_PRIVATE:127.0.0.1:8790 --var DISCOVERY_IP_PER_MINUTE:5000 --var DISCOVERY_HOST_PER_MINUTE:5000`; the test starts its own fixture site on 8790) |
 | `node scripts/test-discovery-extension.mjs --chrome=<CfT>` | 28 (headed Chrome; test copy of the extension; the Worker on 8791 is only the panel's server address) |
 | `node scripts/live-validation.mjs --allow=<host> --seed=<url>` | NOT a test: a deliberate tiny live run; refuses to start without `--allow` |
@@ -96,9 +106,10 @@ Browser tests need `wrangler dev` on port 8787 and **Chrome for Testing** (regul
 
 1. Phases 0 and 1 are pushed. Never push or deploy without Mari's explicit say-so.
 2. **CivicPlus / Copperas Cove stays blocked.** The written request is drafted in `docs/CIVICPLUS_PERMISSION_REQUEST_DRAFT.md` and is **NOT sent** (needs Mari's approval and her contact details). Until a reply is recorded, the only way a Copperas Cove document enters a case is a person saving it by hand and importing it (or pasting one address into Add URL); Chronium makes no request to the host.
-3. **Records Recovery is PLANNED, not started**: `docs/RECORDS_RECOVERY_PLAN.md` (architecture, matching rules, gap detectors G1 to G8, report wording, acceptance tests, four decisions awaiting Mari). Do not implement until she approves it.
-4. **Release gate before any production deployment: test the extension's REAL per-site permission prompt** (protocol: plan section 13, `docs/MANUAL_A11Y_TESTS.md` section I). Not run yet; the automated test only simulates it.
-5. Then Phase 4 (request drafts) and more connectors, each only with approval and after the provider's terms are checked.
+3. **Records Recovery is built locally** (see its section above). Next, only with Mari's approval: push it; Ask Chronium intents; the extension editing screen; PDF text in the extension; formal request drafting (Phase 4).
+4. **CivicPlus letter**: recipients verified from the city's and CivicPlus's own pages, the final letter and a public User-Agent page are drafted (`docs/CIVICPLUS_PERMISSION_REQUEST_DRAFT.md`, `docs/drafts/chronium-crawler.html`). **Not sent. Needs Mari to approve the letter, choose a contact address (none was invented), and approve publishing the page and pointing the User-Agent at it (a deployment).** Copperas Cove stays blocked.
+5. **Release gate before any production deployment: test the extension's REAL per-site permission prompt** (protocol: plan section 13, `docs/MANUAL_A11Y_TESTS.md` section I). Not run yet; the automated test only simulates it.
+6. Then Phase 4 (request drafts) and more connectors, each only with approval and after the provider's terms are checked.
 4. A person should run `docs/MANUAL_A11Y_TESTS.md` (NVDA/VoiceOver/touch); still not done.
 5. Remaining roadmap follow-ups: harness that separates correct abstentions from retrieval failures; financial extraction beyond `$`; structured vote identification; evidence-based contradiction analysis; real document comparison in Compare; Spanish; per-field error association in the investigation forms.
 

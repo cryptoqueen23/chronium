@@ -56,7 +56,7 @@ import {
 } from './ingestionReview.js';
 
 const DB_NAME = 'chronium';
-const DB_VERSION = 11;
+const DB_VERSION = 12;
 let dbPromise = null;
 // Drops the cached connection so the next call reopens the database. Used by
 // tests that swap in a fresh IndexedDB to simulate a second device.
@@ -260,6 +260,21 @@ export function openDb() {
         ledger.createIndex('investigationId', 'investigationId', { unique: false });
         ledger.createIndex('runId', 'runId', { unique: false });
       }
+      // Records Recovery (additive). Calculated results are never stored; only a reviewer's decisions (append-only,
+      // latest wins), the person's records requests with their corrections and follow-up drafts, and the per-case
+      // settings. All carry investigationId so they travel in .chronium.json.
+      if (!db.objectStoreNames.contains('recoveryReviews')) {
+        const rv = db.createObjectStore('recoveryReviews', { keyPath: 'id' });
+        rv.createIndex('investigationId', 'investigationId', { unique: false });
+        rv.createIndex('itemKey', 'itemKey', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('recoveryRequests')) {
+        const rq = db.createObjectStore('recoveryRequests', { keyPath: 'id' });
+        rq.createIndex('investigationId', 'investigationId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('recoverySettings')) {
+        db.createObjectStore('recoverySettings', { keyPath: 'investigationId' });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -335,8 +350,9 @@ export async function createInvestigation({ name, description }) {
 
 export async function deleteInvestigation(investigationId) {
   const db = await openDb();
-  await tx(db, ['investigations', 'investigationRecords', 'discoveryRuns', 'discoveryLedger'], 'readwrite', async (t) => {
-    for (const name of ['discoveryRuns', 'discoveryLedger']) {
+  await tx(db, ['investigations', 'investigationRecords', 'discoveryRuns', 'discoveryLedger', 'recoveryReviews', 'recoveryRequests', 'recoverySettings'], 'readwrite', async (t) => {
+    t.objectStore('recoverySettings').delete(investigationId);
+    for (const name of ['discoveryRuns', 'discoveryLedger', 'recoveryReviews', 'recoveryRequests']) {
       for (const row of await reqToPromise(t.objectStore(name).index('investigationId').getAll(investigationId))) t.objectStore(name).delete(row.id);
     }
     t.objectStore('investigations').delete(investigationId);

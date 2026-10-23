@@ -175,7 +175,11 @@ try {
   await web.setViewport({ width: 1280, height: 900 });
   await web.evaluate(() => { location.hash = '#/workspace/bigpicture'; });
   await sleep(500);
-  const webBigPicture = await web.$eval('#viewBody-bigpicture', (e) => e.innerText.replace(/\s+/g, ' ').trim());
+  // The Records Recovery summary differs by design (the website links to its tab; the panel explains where to go), so it is compared separately.
+  const stripRR = (e) => { const c = e.cloneNode(true); c.querySelectorAll('.rr-summary').forEach((x) => x.remove()); return c.innerText.replace(/\s+/g, ' ').trim(); };
+  const rrCounts = (e) => (e.querySelector('.rr-summary li') ? e.querySelector('.rr-summary li').innerText.replace(/\s+/g, ' ').trim() : '');
+  const webBigPicture = await web.$eval('#viewBody-bigpicture', stripRR);
+  const webRR = await web.$eval('#viewBody-bigpicture', rrCounts);
 
   const panel = await b.newPage();
   panel.on('pageerror', (e) => errs.push('ext: ' + e.message));
@@ -189,7 +193,9 @@ try {
   await panel.waitForSelector('[data-open]');
   await panel.click('[data-open]');
   await panel.waitForSelector('#vpanel .vw-section');
-  const extBigPicture = await panel.$eval('#vpanel', (e) => e.innerText.replace(/\s+/g, ' ').trim());
+  const extBigPicture = await panel.$eval('#vpanel', (e) => { const c = e.cloneNode(true); c.querySelectorAll('.rr-summary').forEach((x) => x.remove()); return c.innerText.replace(/\s+/g, ' ').trim(); });
+  const extRR = await panel.$eval('#vpanel', (e) => (e.querySelector('.rr-summary li') ? e.querySelector('.rr-summary li').innerText.replace(/\s+/g, ' ').trim() : ''));
+  check('extension: the Records Recovery summary shows the same counts as the website', extRR === webRR, `web: ${webRR} | ext: ${extRR}`);
   check('extension: a case imported from the website shows the identical Big Picture', extBigPicture === webBigPicture, extBigPicture === webBigPicture ? '' : `\nweb: ${webBigPicture.slice(0, 160)}\next: ${extBigPicture.slice(0, 160)}`);
   await shot(panel, 'extension-bigpicture-320.png');
 

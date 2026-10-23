@@ -71,3 +71,11 @@ Run with `node scripts/test-discovery-ui.mjs` (74 checks, website) and `node scr
 - Wide tables scroll inside focusable, labelled regions (the page itself never scrolls sideways). Report tables have captions, column headers and row headers.
 
 **Not tested here, not claimed**: NVDA, VoiceOver, a real touch device, real Windows High Contrast, the browser's per-site permission prompt in ordinary Chrome. The new checklist is section H of `docs/MANUAL_A11Y_TESTS.md`. **Conformance: not claimed.**
+
+## Test log: 2026-10-23 (Records Recovery)
+
+Run with `node scripts/test-recovery-ui.mjs` (75 checks), Chrome for Testing 152, Windows 11, plus the unchanged suites listed in `docs/RECORDS_RECOVERY_PHASE3.md`.
+
+**Done and passing (automated or emulated)**: axe WCAG 2.0 to 2.2 A/AA clean in dark and light themes at 320 and 1440 px (website) and on the extension's case view; no horizontal page scroll at 320, 375, 768, 1024 and 1440 px in both themes; nothing clipped; every control at least 44 x 44 px; WCAG text-spacing values at 320 px; forced colors (controls keep a boundary). Keyboard: decisions, the required-reason error (text, announced, tied to its field with aria-describedby and aria-invalid, focus returned), the correction editor with every field labelled, focus moved to the editor heading after reading a request, status messages in a polite live region. Tables have captions and column and row headers and scroll inside focusable labelled regions.
+
+**Not tested here, not claimed**: NVDA, VoiceOver, a real touch device, real Windows High Contrast; checklist `docs/MANUAL_A11Y_TESTS.md` section J. **Conformance: not claimed.**

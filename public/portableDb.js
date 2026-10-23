@@ -11,10 +11,10 @@ export const PORTABLE_ID_STORES = [
   'ingestionBatches', 'evidenceItems', 'claims', 'quantitativeFindings', 'qualitativeFindings',
   'crossValidations', 'askSourcesHistory', 'entities', 'relationships', 'entityAliases', 'entityMentions',
   'claimEvidence', 'claimFindings', 'claimHistory', 'ingestionItems', 'reviewCandidates', 'watchlists',
-  'watchlistMatches', 'reviewHistory', 'discoveryRuns', 'discoveryLedger'
+  'watchlistMatches', 'reviewHistory', 'discoveryRuns', 'discoveryLedger', 'recoveryReviews', 'recoveryRequests'
 ];
 // Stores keyed by investigationId itself (one row per investigation).
-export const PORTABLE_SINGLETON_STORES = ['outlines', 'qualitativeAnalysis'];
+export const PORTABLE_SINGLETON_STORES = ['outlines', 'qualitativeAnalysis', 'recoverySettings'];
 // Fields holding a global `records` id that must follow a record remap.
 const RECORD_REF_FIELDS = { evidenceItems: 'sourceRecordId', ingestionItems: 'recordId', reviewCandidates: 'recordId', watchlistMatches: 'recordId' };
 
