@@ -86,6 +86,10 @@ None of these has been run by a person.
 7. Extension only: the browser's permission prompt for reading a new site, using ordinary Chrome (not the test copy): is the prompt understandable, and does choosing "Don't allow" leave a clear message (it reads "Chronium needs your permission ...")?
 8. High Contrast on a real machine, 400% zoom: any control that loses its boundary, any clipped text?
 
+## I. Extension per-site permission prompt (RELEASE GATE before any production deployment or store submission)
+
+**NOT RUN.** The automated extension test pre-grants its test site, so Chrome's real prompt has never been shown to a test. Full protocol and expected results: `docs/RECORDS_RECOVERY_PLAN.md`, section 13. In short: load the real `extension/` in ordinary Chrome; press Start on a new site; the prompt must name exactly that site; "Don't allow" must leave a plain message, return focus to the address field, make no request and install no rules; "Allow" must run the search with the Chronium User-Agent and the private-address block active; a second search on the same site must not prompt; another origin must prompt; revoking must bring the prompt back; the sequence must work by keyboard. Record Chrome version, date, tester and each result.
+
 ## Results log
 
 | Date | Tester | Tool / version | Browser / device | Section | Result | Notes |

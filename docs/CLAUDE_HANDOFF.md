@@ -1,4 +1,4 @@
-# Claude Handoff: Chronium Mind (updated 2026-10-23, after Deep Discovery Phase 1; Phase 1 is a local commit, not pushed)
+# Claude Handoff: Chronium Mind (updated 2026-10-23, after Deep Discovery Phase 1 pushed; Records Recovery PLANNED only)
 
 Start a new session here. This file is rewritten at the end of meaningful work, not appended to. Read it, then `docs/CANON.md` (binding rules: Product Principles, Investigative Standard, Bootstrap Rule, Accessibility standard), then `docs/ROADMAP.md`.
 
@@ -8,8 +8,8 @@ Repo: github.com/cryptoqueen23/chronium, local clone `C:\Users\insur\chronium`. 
 
 | Item | State |
 |---|---|
-| `origin/main` | `21896dd` (Deep Discovery Phase 0 + the handoff docs commit; pushed with Mari's approval) |
-| Local only | **Deep Discovery Phase 1**, one commit on top of `21896dd` (see `git log`). **Not pushed, not deployed.** Needs Mari's approval to push. |
+| `origin/main` | `32aeebd` (Deep Discovery Phase 1; pushed 2026-10-23 with Mari's approval, after review and regression tests) |
+| Local only | Docs commit after `32aeebd`: `RECORDS_RECOVERY_PLAN.md`, `CIVICPLUS_PERMISSION_REQUEST_DRAFT.md`, handoff/manual-test updates (see `git log`). **Not pushed** until Mari says. **Nothing deployed.** |
 | Live site `https://chronium-mind.truewolfflix777.workers.dev` | **Unchanged since before all of this work.** None of Ask Chronium, export/import, the three views, light theme or Deep Discovery is live. **Nothing has been deployed.** |
 | Working tree | clean after the Phase 1 commit |
 
@@ -36,7 +36,7 @@ Measured on a synthetic local site at default caps: 151 requests, 0.42 MB, 25 mi
 
 Phase 0 tests: `npm run test:discovery` (37 unit and integration tests against a deterministic local site, fake clock, no real network; included in `npm test`) and `node scripts/test-discovery-browser.mjs --chrome=<CfT>` (26 checks: live status, keyboard Pause/Resume/Cancel, coverage and request-log tables, axe at 320 to 1280 px in both schemes). A test caught a real bug (a seed's redirect bypassed the scope check); fixed and covered.
 
-## Deep Discovery Phase 1 (built and tested locally; committed locally, NOT pushed, NOT deployed)
+## Deep Discovery Phase 1 (built, tested, pushed as `32aeebd`; NOT deployed)
 
 Full write-up: `docs/DEEP_DISCOVERY_PHASE1.md` (what it does, policy gates, tests, CivicPlus findings, live-validation log, measured costs, limitations). Approved by Mari on 2026-10-23, with the addition **user-directed discovery**: paste any government website or document-library address.
 
@@ -94,9 +94,11 @@ Browser tests need `wrangler dev` on port 8787 and **Chrome for Testing** (regul
 
 ## Immediate next steps for a new session
 
-1. Phases 0 (and the handoff docs) are pushed; **Phase 1 is a local commit awaiting Mari's approval to push**. Never push or deploy without her explicit say-so.
-2. Get Mari's decision on **CivicPlus / Copperas Cove** (`docs/CIVICPLUS_VERIFICATION.md`; request text drafted, not sent). Until then keep the host `unverified`.
-3. Next engine work, only with her approval: Phase 3 (gap detectors, Records Recovery in Big Picture / Reports), then Phase 4 (request drafts). More connectors only after each provider's terms are checked.
+1. Phases 0 and 1 are pushed. Never push or deploy without Mari's explicit say-so.
+2. **CivicPlus / Copperas Cove stays blocked.** The written request is drafted in `docs/CIVICPLUS_PERMISSION_REQUEST_DRAFT.md` and is **NOT sent** (needs Mari's approval and her contact details). Until a reply is recorded, the only way a Copperas Cove document enters a case is a person saving it by hand and importing it (or pasting one address into Add URL); Chronium makes no request to the host.
+3. **Records Recovery is PLANNED, not started**: `docs/RECORDS_RECOVERY_PLAN.md` (architecture, matching rules, gap detectors G1 to G8, report wording, acceptance tests, four decisions awaiting Mari). Do not implement until she approves it.
+4. **Release gate before any production deployment: test the extension's REAL per-site permission prompt** (protocol: plan section 13, `docs/MANUAL_A11Y_TESTS.md` section I). Not run yet; the automated test only simulates it.
+5. Then Phase 4 (request drafts) and more connectors, each only with approval and after the provider's terms are checked.
 4. A person should run `docs/MANUAL_A11Y_TESTS.md` (NVDA/VoiceOver/touch); still not done.
 5. Remaining roadmap follow-ups: harness that separates correct abstentions from retrieval failures; financial extraction beyond `$`; structured vote identification; evidence-based contradiction analysis; real document comparison in Compare; Spanish; per-field error association in the investigation forms.
 

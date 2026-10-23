@@ -79,3 +79,5 @@ The reusable **adapter interface** (`CivicPlusAdapter` in `public/discovery/conn
 Suggested short request (not sent):
 
 > To the City Clerk / IT Department, City of Copperas Cove, and to CivicPlus: Chronium Mind is a free research tool that helps people find public meeting records. With a person's permission it can read a city's public agenda and document pages one request at a time, waiting at least 10 seconds between requests (the Crawl-delay in your robots.txt), identifying itself as "ChroniumMind" with a contact address, and never faster than one request every 10 seconds. May it do this for www.copperascovetx.gov (the /AgendaCenter and /DocumentCenter areas)? If you would prefer another method, such as a bulk export or a feed, please tell us. We will follow your answer and keep it on record.
+
+**Update 2026-10-23 (later):** the written request is drafted in `docs/CIVICPLUS_PERMISSION_REQUEST_DRAFT.md` (not sent). Mari confirmed the block stays; only individually selected, user-directed capture is permitted meanwhile, and it needs no code change because Chronium makes no request to the host in that path.
