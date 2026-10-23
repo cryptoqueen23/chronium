@@ -171,3 +171,6 @@ Build lean, stay independent, keep free access within reasonable limits, let pay
 **Pre-deployment review (2026-10-22):** opening an investigation lands on Big Picture; light theme added; missing/not-reviewed/unresolved made visually distinct; 400% zoom, theme, keyboard and emulated-touch checks automated (`scripts/test-a11y-deep.mjs`). **NVDA, VoiceOver and real-device touch testing are NOT done** (checklist in `docs/MANUAL_A11Y_TESTS.md`); no WCAG conformance claim.
 
 **Accessibility corrections (2026-10-22):** non-text contrast fixed (control boundaries 1.3 to 1.5:1 -> 4.5+:1, `docs/CONTRAST_REPORT.md`); forced-colors, prefers-contrast, text-spacing, reduced-motion, focus-visibility and form-error tests added (`scripts/test-a11y-modes.mjs`). NVDA, VoiceOver and real-device touch remain NOT tested; no WCAG conformance claim. Still open: per-field error association for the investigation forms; manual tests in `docs/MANUAL_A11Y_TESTS.md`.
+
+### Deep Discovery: plan written, awaiting approval (2026-10-23)
+See `docs/DEEP_DISCOVERY_PLAN.md`: architecture (extension-first direct fetch, small guarded Worker proxy, recovery via existing archive providers), first source Copperas Cove (CivicPlus, `Crawl-delay: 10`), cost model, security boundaries, acceptance tests, phases 0 to 5, open decisions. Nothing implemented.
