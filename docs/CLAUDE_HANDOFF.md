@@ -8,8 +8,8 @@ Repo: github.com/cryptoqueen23/chronium, local clone `C:\Users\insur\chronium`. 
 
 | Item | State |
 |---|---|
-| `origin/main` | `e6fd5f4` (pushed and verified equal to local when pushed) |
-| Local only | **Deep Discovery Phase 0 commit** (and, if present, any docs commit after it). **Not pushed.** Mari said: commit locally, wait for approval before pushing or starting Phase 1. |
+| `origin/main` | `408b366` (Deep Discovery Phase 0; pushed and verified equal to local) |
+| Local only | nothing, except possibly this handoff update (docs only), which needs Mari's approval to push |
 | Live site `https://chronium-mind.truewolfflix777.workers.dev` | **Unchanged since before all of this work.** None of Ask Chronium, export/import, the three views, light theme or Deep Discovery is live. **Nothing has been deployed.** |
 | Working tree | clean after the Phase 0 commit |
 
@@ -25,7 +25,7 @@ Standing rules from the owner (Mari): never force-push; push only commits she na
 - **Extension** (`extension/`): side panel with Search, Compare (placeholder), My Research (cases, import/export, views, Ask Chronium), Reports. Shared code is copied into `extension/lib/` by `node scripts/sync-extension.mjs` (run after changing `public/{db,entities,claims,ingestionReview,portable,portableDb,askRouter,askRender,askCommands,views}.js`).
 - **Themes**: dark and light (system setting), `prefers-contrast`, reduced motion, forced-colors tab styling. Control boundaries use `--control-border` (website) / `--control` (extension) at 4.5:1 or more; decorative borders deliberately do not.
 
-## Deep Discovery Phase 0 (built, not pushed)
+## Deep Discovery Phase 0 (built and pushed)
 
 Plan: `docs/DEEP_DISCOVERY_PLAN.md` (read its "Changes to this plan after Phase 0"). Code: `public/discovery/` (config, urlGuard, robots, scheduler, links, outcomes, ledger, connector, fetchers, engine, report). Foundation only: robots.txt policy with Crawl-delay, per-host serial scheduling, URL and redirect safety with private-address blocking, bounded link discovery, hard limits, outcome words, a ledger and coverage table ("where Chronium looked"), a connector interface and a host policy registry, a fetcher contract, and accessible progress/status UI pieces. **No document retrieval, no sitemaps, no archive recovery, no UI in the product yet (Phase 1+).** Library files are in `public/` so they would ship as static assets on the next deploy; they have no route and are not wired into any page. They are NOT copied into `extension/lib/` yet.
 
@@ -79,7 +79,7 @@ Browser tests need `wrangler dev` on port 8787 and **Chrome for Testing** (regul
 
 ## Immediate next steps for a new session
 
-1. Ask Mari whether to **push the Phase 0 commit** (normal push, verify `origin/main` equals local). Do not start Phase 1 or deploy without approval.
+1. Phase 0 is pushed. Do not start Phase 1 or deploy without Mari's explicit approval.
 2. Get Mari's decision on **CivicPlus / Copperas Cove** (see above). Until then keep the host `unverified`.
 3. Phase 1 plan items (above), then Phase 2 (bounded crawl, recovery via the existing archive providers, three outcomes) per `docs/DEEP_DISCOVERY_PLAN.md`.
 4. A person should run `docs/MANUAL_A11Y_TESTS.md` (NVDA/VoiceOver/touch); still not done.
