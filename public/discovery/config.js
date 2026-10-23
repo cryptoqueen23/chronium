@@ -5,7 +5,7 @@
 
 export const ENGINE_VERSION = '0.2.0-phase1';
 export const USER_AGENT_TOKEN = 'ChroniumMind';
-export const USER_AGENT = `${USER_AGENT_TOKEN}/0.1 (+https://chronium-mind.truewolfflix777.workers.dev/; public-records research; honors robots.txt and Crawl-delay)`;
+export const USER_AGENT = `${USER_AGENT_TOKEN}/0.1 (+https://chronium-mind.truewolfflix777.workers.dev/crawler.html; public-records research; honors robots.txt and Crawl-delay)`;
 
 const MB = 1024 * 1024;
 

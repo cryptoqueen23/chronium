@@ -93,7 +93,7 @@ Notes for Mari:
 
 ### Public User-Agent information page (drafted, not published)
 
-`docs/drafts/chronium-crawler.html`: a plain, accessible page that says who ChroniumMind is, the rules it follows (identification, robots.txt, Crawl-delay never shortened, 3-second floor, one request at a time, back-off, small searches, public pages only, no logins or forms, refuses private addresses, where requests come from in extension versus website mode), and how to stop or slow it (a robots.txt group for `ChroniumMind`, Crawl-delay, or a contact address). It contains two placeholders that must be filled by Mari: the **contact address** and the **date**.
+`public/crawler.html` (moved from `docs/drafts/` on 2026-10-23 after Mari approved the contact address; **in the repository but not live until a deployment**): a plain, accessible page that says who ChroniumMind is, the rules it follows (identification, robots.txt, Crawl-delay never shortened, 3-second floor, one request at a time, back-off, small searches, public pages only, no logins or forms, refuses private addresses, where requests come from in extension versus website mode), and how to stop or slow it (a robots.txt group for `ChroniumMind`, Crawl-delay, or a contact address). It contains two placeholders that must be filled by Mari: the **contact address** and the **date**.
 
 **Verified against the code on 2026-10-23** (so the page does not promise more than the tool does): User-Agent token `ChroniumMind` and the 0.1 version string (`config.js`); robots.txt group selection by that token (`robots.js`); `Crawl-delay` honored with a 3,000 ms floor and refusal above 60 s (`config.js`, `engine.js`); one request at a time per host (`scheduler.js`); `Retry-After`, back-off on 429/503 and stop after three (`engine.js`); caps of 150 pages, 100 documents, 400 requests per search and 500 requests per host per day per browser (`config.js`); GET only, `credentials: omit`, no scripts run (`fetchers.js`); private and loopback addresses refused including redirects (`urlGuard.js`, `extension/network.js`); website mode limited to 25 requests per search (`config.js`, `src/discoveryProxy.js`).
 
@@ -111,7 +111,7 @@ Notes for Mari:
 >
 > **What I would like to do.** When a person starts a search themselves, the tool would read the public Agenda Center and Document Center pages that your robots.txt already allows, and save the public documents it finds to that person's own computer.
 >
-> **How it behaves.** One request at a time. At least 10 seconds between requests, which is the Crawl-delay in your robots.txt, and never faster. It identifies itself as "ChroniumMind" in every request, with a link to a page that explains the tool and how to stop it [link: to be added once published]. It obeys robots.txt, does not log in, submit forms or use any page that needs an account, and stops if your site asks it to slow down. A single search reads at most about 150 pages and 100 documents, and one person's browser makes at most 500 requests a day to your site. Documents are kept on the person's device and are not republished; each is saved with its web address, the time it was read and a fingerprint, so anyone can check it against your site.
+> **How it behaves.** One request at a time. At least 10 seconds between requests, which is the Crawl-delay in your robots.txt, and never faster. It identifies itself as "ChroniumMind" in every request, with a link to a page that explains the tool and how to stop it (https://chronium-mind.truewolfflix777.workers.dev/crawler.html). It obeys robots.txt, does not log in, submit forms or use any page that needs an account, and stops if your site asks it to slow down. A single search reads at most about 150 pages and 100 documents, and one person's browser makes at most 500 requests a day to your site. Documents are kept on the person's device and are not republished; each is saved with its web address, the time it was read and a fingerprint, so anyone can check it against your site.
 >
 > **My question.** Please tell me, in writing, whether this is acceptable. If you would prefer a different way, such as a bulk export, a feed or a data download, I will use that instead. If it is not acceptable, I will not read your pages automatically; people will still be able to save documents by hand.
 >
@@ -122,12 +122,12 @@ Notes for Mari:
 > Thank you for your time and for publishing these records.
 >
 > Marimer Cruz, Chronium Mind
-> [Email: to be chosen by Mari]   [Page: to be added once published]
+> Email: marimercruz8@gmail.com   Page: https://chronium-mind.truewolfflix777.workers.dev/crawler.html (live only after the approved deployment)
 
 ### What must happen before this is sent (checklist)
 
 - [ ] Mari approves this letter, or edits it.
-- [ ] Mari chooses the contact address and approves publishing it.
+- [x] Contact address chosen and approved for publication by Mari (2026-10-23): marimercruz8@gmail.com. It is now in the page and the letter.
 - [ ] Mari approves moving the User-Agent page into `public/` and changing `USER_AGENT` to link to it, and approves the deployment that makes it live (nothing is deployed today).
 - [ ] A person re-checks the names and routes above on the day.
 - [ ] Mari chooses the route (contact forms, phone call first, or post).

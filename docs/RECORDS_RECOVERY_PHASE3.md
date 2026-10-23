@@ -113,5 +113,5 @@ The follow-up draft for the same request lists only the three open items (the lo
 1. **Nothing is deployed; nothing in this phase is pushed** until Mari says so.
 2. **Release gate not run:** the extension's **real per-site permission prompt** (`docs/RECORDS_RECOVERY_PLAN.md` section 13, `docs/MANUAL_A11Y_TESTS.md` section I) is **NOT RUN**. Simulated browser tests do not replace it, and this feature does not change that.
 3. **Manual accessibility checks are not done** (NVDA, VoiceOver, real touch, real High Contrast). New items are in `docs/MANUAL_A11Y_TESTS.md` section J. No conformance claim is made.
-4. **CivicPlus / Copperas Cove stays blocked.** The permission letter and the public User-Agent page are drafts awaiting Mari (`docs/CIVICPLUS_PERMISSION_REQUEST_DRAFT.md`, `docs/drafts/chronium-crawler.html`); deploying the page and changing the User-Agent link needs her approval.
+4. **CivicPlus / Copperas Cove stays blocked.** The permission letter and the public User-Agent page are drafts awaiting Mari (`docs/CIVICPLUS_PERMISSION_REQUEST_DRAFT.md`, `public/crawler.html`); deploying the page and changing the User-Agent link needs her approval.
 5. Database version 12 is an additive upgrade, tested from versions 10 and 11, but has not been tried on a large real case.
