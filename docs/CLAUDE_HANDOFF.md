@@ -1,4 +1,4 @@
-# Claude Handoff: Chronium Mind (rewritten 2026-10-23)
+# Claude Handoff: Chronium Mind (updated 2026-10-23, after Deep Discovery Phase 0)
 
 Start a new session here. This file is rewritten at the end of meaningful work, not appended to. Read it, then `docs/CANON.md` (binding rules: Product Principles, Investigative Standard, Bootstrap Rule, Accessibility standard), then `docs/ROADMAP.md`.
 
@@ -8,10 +8,10 @@ Repo: github.com/cryptoqueen23/chronium, local clone `C:\Users\insur\chronium`. 
 
 | Item | State |
 |---|---|
-| `origin/main` | `2167c12` (pushed, verified equal to local at that time) |
-| Local only | **`08f9cd0`** accessibility corrections (contrast, mode tests). **Not pushed.** Needs explicit approval. |
-| Live site `https://chronium-mind.truewolfflix777.workers.dev` | **Unchanged since before this work.** It has none of: Ask Chronium, export/import, the three views, light theme. `views.js` and `portable.js` return 404 there. **Nothing has been deployed.** Needs explicit approval. |
-| Working tree | clean after `08f9cd0` |
+| `origin/main` | `e6fd5f4` (pushed and verified equal to local when pushed) |
+| Local only | **Deep Discovery Phase 0 commit** (and, if present, any docs commit after it). **Not pushed.** Mari said: commit locally, wait for approval before pushing or starting Phase 1. |
+| Live site `https://chronium-mind.truewolfflix777.workers.dev` | **Unchanged since before all of this work.** None of Ask Chronium, export/import, the three views, light theme or Deep Discovery is live. **Nothing has been deployed.** |
+| Working tree | clean after the Phase 0 commit |
 
 Standing rules from the owner (Mari): never force-push; push only commits she names; never deploy without explicit approval; do not claim WCAG conformance; report benchmark numbers honestly (official harness result, hand-grading is only supporting evidence); free-only / Bootstrap Rule (no billing, accounts, paywalls, paid APIs, or mandatory AI yet); keep the four main areas Search / Compare / My Research / Reports; no new top-level navigation.
 
@@ -25,16 +25,29 @@ Standing rules from the owner (Mari): never force-push; push only commits she na
 - **Extension** (`extension/`): side panel with Search, Compare (placeholder), My Research (cases, import/export, views, Ask Chronium), Reports. Shared code is copied into `extension/lib/` by `node scripts/sync-extension.mjs` (run after changing `public/{db,entities,claims,ingestionReview,portable,portableDb,askRouter,askRender,askCommands,views}.js`).
 - **Themes**: dark and light (system setting), `prefers-contrast`, reduced motion, forced-colors tab styling. Control boundaries use `--control-border` (website) / `--control` (extension) at 4.5:1 or more; decorative borders deliberately do not.
 
+## Deep Discovery Phase 0 (built, not pushed)
+
+Plan: `docs/DEEP_DISCOVERY_PLAN.md` (read its "Changes to this plan after Phase 0"). Code: `public/discovery/` (config, urlGuard, robots, scheduler, links, outcomes, ledger, connector, fetchers, engine, report). Foundation only: robots.txt policy with Crawl-delay, per-host serial scheduling, URL and redirect safety with private-address blocking, bounded link discovery, hard limits, outcome words, a ledger and coverage table ("where Chronium looked"), a connector interface and a host policy registry, a fetcher contract, and accessible progress/status UI pieces. **No document retrieval, no sitemaps, no archive recovery, no UI in the product yet (Phase 1+).** Library files are in `public/` so they would ship as static assets on the next deploy; they have no route and are not wired into any page. They are NOT copied into `extension/lib/` yet.
+
+**CivicPlus finding (important):** `docs/CIVICPLUS_VERIFICATION.md`. Copperas Cove is CivicPlus-hosted; robots.txt (group `*`) allows the agenda and document paths with `Crawl-delay: 10` (the extra blocks for calendar/RSSFeed/bids are only for named AI crawlers); the AgendaCenter list loads by a script POST to `/AgendaCenter/UpdateCategoryList`; the CivicPlus Terms of Use (updated 2022-09-01, read through a summarising tool, a person should re-read) forbid automated systems beyond human request rates and access outside the provided interface, with liquidated damages above 1,000 page requests a day; the city asserts copyright and states nothing about automation. **Automation for `copperascovetx.gov` is registered `unverified` and the engine refuses to contact it.** The CivicPlus adapter is NOT written. Decision needed from Mari: ask the city/CivicPlus in writing, accept a recorded risk, or use only user-directed capture / user-supplied URLs / a Public Information Act request.
+
+Limits (centralised in `config.js`, hard ceilings cannot be exceeded): depth 2, 150 pages, 100 document links, 3 runs/day, 25 website-mode fetches, 400 requests/run, 500 requests/host/day, 10 MB per file, 2 MB per page, 3 redirects, 20 s timeout, politeness floor 3 s, never faster than a site's Crawl-delay.
+Measured on a synthetic local site at default caps: 151 requests, 0.42 MB, 25 minutes at a 10 s Crawl-delay, about 330 ms CPU, about 4 MB memory (`node scripts/discovery-measure.mjs`).
+
+Phase 0 tests: `npm run test:discovery` (37 unit and integration tests against a deterministic local site, fake clock, no real network; included in `npm test`) and `node scripts/test-discovery-browser.mjs --chrome=<CfT>` (26 checks: live status, keyboard Pause/Resume/Cancel, coverage and request-log tables, axe at 320 to 1280 px in both schemes). A test caught a real bug (a seed's redirect bypassed the scope check); fixed and covered.
+
+Phase 1 (not started, needs approval): single-document retrieval with provenance, the extension fetcher (per-domain optional host permission, network rules blocking private targets, User-Agent via declarativeNetRequest if possible), website proxy `/api/fetch` (small, guarded), UI in My Research, user-directed capture of the page being viewed.
+
 ## Benchmark (official, do not inflate)
 
 `scripts/run-acceptance-test.mjs` (12 Ask questions, questions and expected outcomes unchanged): **7 WORKS, 2 PARTIALLY WORKS, 3 DOES NOT WORK.** Hand-graded supporting view: 10 correct, 2 partial, 0 wrong (Q7 "Historical Society" and Q9 "Ordinance 2026-29" are correct "nothing in the case" answers, verified by grep of the corpus, which the harness scores as not working). The earlier "6/12" contained a false positive (Q9). Full table in `docs/ASK_CHRONIUM.md`. One run in this session died with a Chrome "Target closed" error; a re-run was clean (flaky browser, not a regression).
 
-## Tests (all passing at `08f9cd0`)
+## Tests (all passing after Phase 0)
 
 | Command | Result |
 |---|---|
 | `npm run check` | syntax clean |
-| `npm test` | 118 unit tests |
+| `npm test` | 155 unit and integration tests (118 earlier + 37 Deep Discovery) |
 | `node scripts/test-extension.mjs --chrome=<CfT>` | 9 |
 | `node scripts/test-portable-browser.mjs --chrome=<CfT>` | 14 |
 | `node scripts/test-ask-browser.mjs --chrome=<CfT>` | 16 |
@@ -43,6 +56,7 @@ Standing rules from the owner (Mari): never force-push; push only commits she na
 | `node scripts/test-a11y-deep.mjs` | 128 (themes, keyboard walk incl. focus-not-obscured, real 400% zoom, emulated touch, accessibility tree) |
 | `node scripts/test-a11y-modes.mjs` | 146 (forced-colors, prefers-contrast, text spacing, reduced motion, pixel focus ring, form errors, reflow) |
 | `node scripts/test-contrast.mjs` | 132 measurements, 0 below 3:1 (report: `docs/CONTRAST_REPORT.md`) |
+| `node scripts/test-discovery-browser.mjs --chrome=<CfT>` | 26 (Deep Discovery status UI) |
 | `node scripts/screenshots-views.mjs` | 28 real screenshots in `docs/screenshots/` |
 
 Browser tests need `wrangler dev` on port 8787 and **Chrome for Testing** (regular Chrome 137+ ignores `--load-extension`): `~/.cache/puppeteer/chrome/win64-152.0.7977.75/chrome-win64/chrome.exe`. Set `PUPPETEER_EXECUTABLE_PATH` to it for `run-acceptance-test.mjs`.
@@ -65,9 +79,11 @@ Browser tests need `wrangler dev` on port 8787 and **Chrome for Testing** (regul
 
 ## Immediate next steps for a new session
 
-1. Ask Mari whether to **push `08f9cd0`** (normal push, verify `origin/main` equals local). Then ask about **deploying** (`npm run deploy`; verify live afterwards with curl; the Worker/KV config is unchanged by this work, only static assets and the extension are new).
-2. Have a person run `docs/MANUAL_A11Y_TESTS.md` (NVDA/VoiceOver/touch); record results in its log table.
-3. Then the connectors, in order, each starting with a terms-of-use check and a cost entry.
+1. Ask Mari whether to **push the Phase 0 commit** (normal push, verify `origin/main` equals local). Do not start Phase 1 or deploy without approval.
+2. Get Mari's decision on **CivicPlus / Copperas Cove** (see above). Until then keep the host `unverified`.
+3. Phase 1 plan items (above), then Phase 2 (bounded crawl, recovery via the existing archive providers, three outcomes) per `docs/DEEP_DISCOVERY_PLAN.md`.
+4. A person should run `docs/MANUAL_A11Y_TESTS.md` (NVDA/VoiceOver/touch); still not done.
+5. Remaining roadmap follow-ups: harness that separates correct abstentions from retrieval failures; financial extraction beyond `$`; structured vote identification; evidence-based contradiction analysis; real document comparison in Compare; Spanish; per-field error association in the investigation forms.
 
 ## Memory
 

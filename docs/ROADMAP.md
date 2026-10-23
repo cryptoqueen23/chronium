@@ -174,3 +174,5 @@ Build lean, stay independent, keep free access within reasonable limits, let pay
 
 ### Deep Discovery: plan written, awaiting approval (2026-10-23)
 See `docs/DEEP_DISCOVERY_PLAN.md`: architecture (extension-first direct fetch, small guarded Worker proxy, recovery via existing archive providers), first source Copperas Cove (CivicPlus, `Crawl-delay: 10`), cost model, security boundaries, acceptance tests, phases 0 to 5, open decisions. Nothing implemented.
+
+**Deep Discovery Phase 0 built (2026-10-23), not pushed:** robots/Crawl-delay policy, per-host scheduler, URL and redirect safety, bounded link discovery, hard limits, outcome words, ledger + coverage table, connector interface, host policy registry (`docs/DISCOVERY_SOURCE_REGISTRY.md`). CivicPlus/Copperas Cove automation is **not cleared** (`docs/CIVICPLUS_VERIFICATION.md`); adapter not written. Phase 1 needs approval.

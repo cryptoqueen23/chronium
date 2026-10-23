@@ -7,16 +7,18 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check": "node --check src/index.js && node --check src/schema.js && node --check public/app.js && node --check public/db.js && node --check public/citations.js && node --check public/artifacts.js && node --check public/askCommands.js && node --check public/discover.js && node --check public/entities.js && node --check public/claims.js && node --check public/ingestionReview.js && node --check public/reviewQueue.js && node --check public/portable.js && node --check public/portableDb.js && node --check public/askRouter.js && node --check public/askRender.js && node --check public/views.js && node --check extension/panel.js && node --check public/ingest/adapters.js && node --check public/ingest/pipeline.js",
+    "check": "node --check src/index.js && node --check src/schema.js && node --check public/app.js && node --check public/db.js && node --check public/citations.js && node --check public/artifacts.js && node --check public/askCommands.js && node --check public/discover.js && node --check public/entities.js && node --check public/claims.js && node --check public/ingestionReview.js && node --check public/reviewQueue.js && node --check public/portable.js && node --check public/portableDb.js && node --check public/askRouter.js && node --check public/askRender.js && node --check public/views.js && node --check extension/panel.js && node --check public/ingest/adapters.js && node --check public/ingest/pipeline.js && node --check public/discovery/config.js && node --check public/discovery/urlGuard.js && node --check public/discovery/robots.js && node --check public/discovery/scheduler.js && node --check public/discovery/links.js && node --check public/discovery/outcomes.js && node --check public/discovery/ledger.js && node --check public/discovery/connector.js && node --check public/discovery/fetchers.js && node --check public/discovery/engine.js && node --check public/discovery/report.js",
     "test:entities": "node --test scripts/test-entities.mjs",
     "test:claims": "node --test scripts/test-claims.mjs",
     "test:ingestion": "node --test scripts/test-ingestion-review.mjs",
     "test:portable": "node --test scripts/test-portable.mjs",
     "test:ask": "node --test scripts/test-ask-router.mjs scripts/test-views.mjs",
-    "test": "node --test scripts/test-entities.mjs scripts/test-claims.mjs scripts/test-ingestion-review.mjs scripts/test-portable.mjs scripts/test-ask-router.mjs scripts/test-views.mjs",
+    "test": "node --test scripts/test-entities.mjs scripts/test-claims.mjs scripts/test-ingestion-review.mjs scripts/test-portable.mjs scripts/test-ask-router.mjs scripts/test-views.mjs scripts/test-discovery.mjs",
     "test:contrast": "node scripts/test-contrast.mjs",
     "test:a11y:modes": "node scripts/test-a11y-modes.mjs",
-    "test:a11y:deep": "node scripts/test-a11y-deep.mjs"
+    "test:a11y:deep": "node scripts/test-a11y-deep.mjs",
+    "test:discovery": "node --test scripts/test-discovery.mjs",
+    "test:discovery:browser": "node scripts/test-discovery-browser.mjs"
   },
   "devDependencies": {
     "axe-core": "^4.14.0",

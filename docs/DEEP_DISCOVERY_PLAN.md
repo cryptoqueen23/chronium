@@ -176,3 +176,19 @@ Each phase ends with a local commit, test results, cost-row updates in `docs/COS
 - Extension direct fetching works only in Chromium browsers on desktop; the website's proxy mode is deliberately small.
 - Legal and terms judgements are made per source and recorded in the registry; they are not legal advice.
 - "Searched N sources" never means the whole internet; "Not located" never means the record does not exist.
+
+## Changes to this plan after Phase 0 (2026-10-23)
+
+Decisions recorded from Mari: honour Crawl-delay always (mandatory); extension-first with a tightly limited website proxy; Copperas Cove first but the adapter reusable; caps provisional and treated as ceilings; text and fingerprint by default with explicit opt-in to keep originals; free API keys acceptable if they cost nothing and are not exposed; EMMA link-only until verified.
+
+What Phase 0 changed or added:
+1. **The CivicPlus adapter is blocked, not just unwritten.** Verification (`docs/CIVICPLUS_VERIFICATION.md`) found the CivicPlus terms restrict automated systems and the city asserts copyright; automation for `copperascovetx.gov` is registered `unverified` and the engine refuses to contact it. Compliant alternatives (user-directed capture, user-supplied URLs, written permission, a Public Information Act request) replace the "run the adapter" step in Phases 1 and 2 until a recorded decision clears it.
+2. **A host policy registry** (`allowed` / `link-only` / `forbidden` / `unverified`) gates every request; unlisted hosts need an explicit per-run acknowledgment, recorded in the ledger (`docs/DISCOVERY_SOURCE_REGISTRY.md`).
+3. **Per-host daily request ceiling of 500** per browser, counted across runs, deliberately under the 1,000-pages-a-day figure in the CivicPlus terms.
+4. **Redirects**: each hop is its own checked, scheduled, robots-evaluated request; a redirect to a different host is re-queued through scope and policy, never followed inline. Redirect targets are never treated as seeds (a test caught that a seed's redirect could bypass the scope check; fixed).
+5. **robots.txt group selection** is by product token. The extra blocks the city wrote for named AI crawlers do not apply to us; the earlier plan text implying they did was wrong and is corrected.
+6. **Browser fetchers cannot validate redirects before they happen** (the Location header is hidden for manual redirects): the engine validates the final address afterwards and discards disallowed content, but the redirect request itself has then already been sent. Phase 1 must add network rules in the extension to block private targets.
+7. **New outcome words**: Found, Historical copy found, Partially retrieved, Not located in the sources searched, Source unavailable, Access restricted, Search incomplete; plus coverage statuses Searched, Partially searched, Not checked yet, Not accessible, Source unavailable. "Not located" is only produced when every consulted source gave a definite no.
+8. **Search transparency**: every run keeps a ledger (addresses, results, counts; never page text, never queries) and a coverage table per planned source, in words and as an accessible table.
+9. Sitemaps, document retrieval, recovery lookups and gap detection stay in later phases as planned; Phase 0 records document links as candidates only.
+
