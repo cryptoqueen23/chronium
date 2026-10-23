@@ -19,10 +19,10 @@ Method: read-only HTTP requests to the live site (no credentials were used or re
 
 ## 2. What the release contains
 
-A separate branch **`release/crawler-page`** (commit `e95379c`) created from `d80ef66`, in an isolated working copy (`.release/crawler`, outside version control's normal tree and excluded from commits). It differs from `d80ef66` by **one added file**:
+A separate branch **`release/crawler-page`** (commit `244a9d3`) created from `d80ef66`, in an isolated working copy (`.release/crawler`, outside version control's normal tree and excluded from commits). It differs from `d80ef66` by **one added file**:
 
 ```
-public/crawler.html     (67 lines, static HTML, inline CSS, no scripts, no external requests)
+public/crawler.html     (68 lines, static HTML, inline CSS, no scripts, no external requests)
 ```
 
 The deployment package is an LF-exact export of that commit (`.release/package`, made with `git -c core.autocrlf=false archive`). This matters: a normal Windows checkout converts line endings to CRLF and would change the bytes of all 14 existing assets. The export keeps them byte-identical to production.
