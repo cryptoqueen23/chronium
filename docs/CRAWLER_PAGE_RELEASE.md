@@ -1,6 +1,20 @@
 # Page-only release: the public crawler information page
 
-Status: **PREPARED AND TESTED LOCALLY. NOT DEPLOYED. Waiting for Mari's final approval.** Prepared 2026-10-23. Production is unchanged.
+Status: **DEPLOYED AND VERIFIED on 2026-10-23 (22:54 UTC). Accepted by Mari as successful. No rollback was needed.**
+
+## Release record
+
+| Item | Value |
+|---|---|
+| Deployed version (after) | **`60045ea5-992c-499e-8290-a8ef08572667`** (created 2026-10-23T22:54:14Z) |
+| **Rollback target** (the version live before) | **`799e564e-59ed-4b7a-b610-4f7f88d2428f`** (created 2026-08-28T21:18:47Z, a secret change). It and nine earlier versions are retained |
+| Worker / account / URL | `chronium-mind`; account `marimercruz8@gmail.com` (`c0059d95…`); https://chronium-mind.truewolfflix777.workers.dev |
+| What was published | The package at `.release/package` (branch `release/crawler-page`, commit `244a9d3`, based on `d80ef66`): one added file, `public/crawler.html`. Upload: 1 new asset, 15 already present. No Worker change, no new route, no binding change |
+| Verified after | Release verifier in "after" mode: all passed (14 of 14 original assets byte-identical, root page unchanged, existing API routes as before, `/api/fetch` and `/api/captures` 404, `/crawler` 200 and byte-identical to the package, `/crawler.html` redirects); the page's browser checks passed against the live URL. `/api/health`, `/api/ai/usage` and `/api/health/connectors` returned the same data |
+| Rollback command | `cd C:\Users\insur\chronium\.release\package; npx wrangler rollback 799e564e-59ed-4b7a-b610-4f7f88d2428f` |
+| Still not deployed | The rest of the application (everything after `d80ef66`: Find Records, Records Recovery, the three views, Ask Chronium, case export, `/api/fetch`, `/api/captures`) and the extension |
+
+The sections below are the pre-deployment package description, kept as written.
 
 Goal: make `https://chronium-mind.truewolfflix777.workers.dev/crawler` live, and nothing else. The current repository is **not** deployed, so none of the new features (Find Records, Records Recovery, `/api/fetch`, `/api/captures`, the three views, Ask Chronium, case export) reach production.
 
