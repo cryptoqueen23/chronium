@@ -192,3 +192,15 @@ What Phase 0 changed or added:
 8. **Search transparency**: every run keeps a ledger (addresses, results, counts; never page text, never queries) and a coverage table per planned source, in words and as an accessible table.
 9. Sitemaps, document retrieval, recovery lookups and gap detection stay in later phases as planned; Phase 0 records document links as candidates only.
 
+
+## Changes to this plan after Phase 1 (2026-10-23)
+
+Built (see `docs/DEEP_DISCOVERY_PHASE1.md`): document retrieval with hashes and full provenance; archived-copy lookup (Wayback availability) for documents that could not be retrieved; duplicate handling by content hash; a classification hint; pause, resume, cancel and **continue from a checkpoint**; a readable coverage report after every run; the Find Records screen (website tab and extension panel) with **user-directed discovery** (paste any government website or document-library address); the guarded Worker proxy `/api/fetch` for website mode and `/api/captures`; the extension's per-site optional host permission, network rules blocking private targets (including redirects), and an identifying User-Agent; the reusable CivicPlus **adapter interface**; IndexedDB version 11 (runs and ledger), included in case export and import.
+
+What changed from the plan:
+1. **The CivicPlus adapter does not retrieve anything.** Access rules were re-verified and are still not clear (`docs/CIVICPLUS_VERIFICATION.md`), so Copperas Cove stays blocked in the engine and the Worker. The plan's Phase 2 "CivicPlus adapter + live smoke on Copperas Cove" is therefore **not done**; the live smoke used the U.S. National Archives (public-domain federal content, Crawl-delay 10) instead.
+2. **Recovery is Wayback availability only.** The plan listed Arquivo.pt and Memento; their responses could not be verified, so they are not claimed. (Reachability of archive.org from the build machine, which the plan said was impossible, held on 2026-10-23; it can vary.)
+3. **Phase 1 and the start of Phase 2 were combined**: bounded crawl, outcomes and coverage summary exist; **gap detection (series holes, referenced-but-missing) and the Records Recovery lists in Big Picture / Reports are still Phase 3**.
+4. **Extension "User-Agent" risk is closed**: a declarativeNetRequest rule sets it per granted site, verified in Chrome for Testing. The earlier plan note that browser fetchers cannot validate redirects before they happen is closed for the extension by network rules that block private targets (verified by a redirect to a loopback address that never arrived); the engine's after-the-fact check remains as a second layer.
+5. **The Worker also enforces the host registry and robots.txt**, so the proxy cannot be used to route around the engine's policy.
+6. Continuing a stopped run does not use one of the 3 runs a day; the 500 requests per host per day ceiling still applies.

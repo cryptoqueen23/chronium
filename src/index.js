@@ -1,3 +1,4 @@
+import { handleFetch, handleCaptures } from "./discoveryProxy.js";
 import corpus from "../data/copperas-cove/normalized.json";
 import { getAIProvider } from "./ai/index.js";
 
@@ -159,6 +160,9 @@ const ARCHIVE_PROVIDERS = [
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/fetch") return handleFetch(request, env);
+    if (url.pathname === "/api/captures") return handleCaptures(request, env);
 
     if (url.pathname === "/api/health") {
       return json({ ok: true, service: "Chronium Mind", version: "0.2.0" });

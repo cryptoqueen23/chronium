@@ -57,3 +57,17 @@ New and changed:
 - Website form errors from the investigation forms (subjects, claims, findings, relationships) are reported through an announced alert toast, not next to the field with `aria-describedby`. Native `required` validation (a labelled field that is named and focused) is used for blank fields. Per-field association for those forms is not done.
 - Forced-colors and contrast preferences were emulated in Chrome only.
 
+
+## Test log: 2026-10-23 (Deep Discovery Phase 1: Find public records)
+
+Run with `node scripts/test-discovery-ui.mjs` (74 checks, website) and `node scripts/test-discovery-extension.mjs` (28 checks, side panel), Chrome for Testing 152 on Windows 11.
+
+**Done and passing (automated or emulated)**
+- Website "Find Records" tab and extension panel: axe-core WCAG 2.0 to 2.2 A/AA clean in dark and light themes (website at 320 and 1440 px; panel at 320 px).
+- No horizontal page scroll at 320, 375, 768, 1024 and 1440 px (panel: 320, 360, 480 px) in both themes; nothing clipped; every button, field and disclosure at least 44 x 44 px.
+- Text spacing (WCAG 1.4.12 values) at 320 px: nothing clipped, no horizontal scroll. Forced colors emulated: controls keep a visible boundary. Reduced motion: nothing animates.
+- Keyboard only: Start, Pause, Resume, Cancel and Continue all work from the keyboard. Focus moves to the field on an error, to the progress heading when a search starts, and to the report heading when it ends. Errors are text, tied to the field with aria-describedby, announced as alerts, and set aria-invalid.
+- Progress text sits in a polite status region and is throttled to one update every ten seconds (plus every state change). The progress bar has a visible text label. State is never carried by colour alone (every status is a word).
+- Wide tables scroll inside focusable, labelled regions (the page itself never scrolls sideways). Report tables have captions, column headers and row headers.
+
+**Not tested here, not claimed**: NVDA, VoiceOver, a real touch device, real Windows High Contrast, the browser's per-site permission prompt in ordinary Chrome. The new checklist is section H of `docs/MANUAL_A11Y_TESTS.md`. **Conformance: not claimed.**

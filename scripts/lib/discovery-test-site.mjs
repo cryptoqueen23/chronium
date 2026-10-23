@@ -12,6 +12,19 @@ const MODULE_DIR = path.resolve(HERE, '..', '..', 'public', 'discovery');
 
 const html = (body, title = 'Test') => `<!doctype html><html><head><title>${title}</title></head><body>${body}</body></html>`;
 const PDF = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n');
+// Phase 1: documents with distinct, deterministic bytes (so hashes differ), plus a library page that links them all.
+const pdfOf = (label) => Buffer.from(`%PDF-1.4\n% ${label}\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n`);
+export const DOC_BYTES = {
+  '/docs/agenda-2024-03-12.pdf': pdfOf('agenda 2024-03-12'),
+  '/docs/minutes-2024-03-12.pdf': pdfOf('minutes 2024-03-12'),
+  '/docs/budget-2024.xlsx': Buffer.from('PK-fake-xlsx-budget-2024'),
+  '/docs/check-register-2024-02.csv': Buffer.from('date,vendor,amount\n2024-02-01,Acme,100.00\n'),
+  '/docs/notes.txt': Buffer.from('Council notes, plain text.\n')
+};
+DOC_BYTES['/docs/agenda-copy.pdf'] = DOC_BYTES['/docs/agenda-2024-03-12.pdf']; // same content, second address
+const DOC_TYPES = { pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', csv: 'text/csv', txt: 'text/plain' };
+export const LIBRARY_LINKS = ['agenda-2024-03-12.pdf', 'minutes-2024-03-12.pdf', 'budget-2024.xlsx', 'check-register-2024-02.csv', 'notes.txt', 'agenda-copy.pdf', 'missing.pdf', 'forbidden.pdf', 'error500.pdf', 'slow.pdf', 'redirect.pdf', 'redirect-private.pdf', 'redirect-local.pdf', 'login.pdf', 'big.pdf'];
+export const LOOPBACK_TARGET = '/docs/notes.txt';
 
 export const DEFAULT_ROBOTS = `# test site
 User-agent: *
@@ -24,7 +37,7 @@ User-agent: ClaudeBot
 Disallow: /
 `;
 
-export async function startTestSite({ robots = DEFAULT_ROBOTS, robotsStatus = 200 } = {}) {
+export async function startTestSite({ robots = DEFAULT_ROBOTS, robotsStatus = 200, port: wantPort = 0 } = {}) {
   const log = [];
   const sockets = new Set();
   let port = 0;
@@ -47,11 +60,13 @@ export async function startTestSite({ robots = DEFAULT_ROBOTS, robotsStatus = 20
     '/nofollow-meta': () => `<!doctype html><html><head><meta name="robots" content="nofollow"></head><body><a href="/should-not-be-requested">x</a></body></html>`,
     '/private/secret.html': () => html('secret'),
     '/private/public-note.html': () => html('public note'),
-    '/big': () => html('x'.repeat(60000))
+    '/big': () => html('x'.repeat(60000)),
+    '/library': () => html(`<h1>Document library</h1>${LIBRARY_LINKS.map((n) => `<a href="/docs/${n}">${n.replace(/\.[a-z]+$/, '').replace(/-/g, ' ')}</a>`).join(' ')} <a href="/private/blocked.pdf">Blocked by robots</a> <a href="/library/2023">2023</a>`),
+    '/library/2023': () => html('<a href="/docs/agenda-2024-03-12.pdf">Agenda again</a> <a href="/library">Up</a>')
   };
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
-    log.push({ path: url.pathname + url.search, method: req.method, ua: req.headers['user-agent'] || '', at: Date.now() });
+    log.push({ path: url.pathname + url.search, method: req.method, ua: req.headers['user-agent'] || '', host: req.headers.host || '', at: Date.now() });
     const p = url.pathname;
     // Browser-test harness: serves the engine modules and a harness page from this same origin (so no CORS), not logged as site traffic.
     if (p === '/__harness') { log.pop(); res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return res.end(fs.readFileSync(path.join(HERE, 'discovery-harness.html'))); }
@@ -66,12 +81,23 @@ export async function startTestSite({ robots = DEFAULT_ROBOTS, robotsStatus = 20
     if (p === '/throttle') { res.writeHead(429, { 'retry-after': '120' }); return res.end('slow down'); }
     if (p === '/forbidden') { res.writeHead(403); return res.end('no'); }
     if (p === '/error500') { res.writeHead(500); return res.end('oops'); }
+    if (p === '/docs/missing.pdf') { res.writeHead(404, { 'content-type': 'text/html' }); return res.end(html('gone')); }
+    if (p === '/docs/forbidden.pdf') { res.writeHead(403); return res.end('no'); }
+    if (p === '/docs/error500.pdf') { res.writeHead(500); return res.end('oops'); }
+    if (p === '/docs/slow.pdf') return; // never answers
+    if (p === '/docs/redirect.pdf') { res.writeHead(302, { location: '/docs/agenda-2024-03-12.pdf' }); return res.end(); }
+    if (p === '/docs/redirect-local.pdf') { res.writeHead(302, { location: `http://127.0.0.1:${port}${LOOPBACK_TARGET}` }); return res.end(); }
+    if (p === '/docs/redirect-private.pdf') { res.writeHead(302, { location: 'http://169.254.169.254/latest/meta-data/' }); return res.end(); }
+    if (p === '/docs/login.pdf') { res.writeHead(200, { 'content-type': 'text/html' }); return res.end(html('Please sign in')); }
+    if (p === '/docs/big.pdf') { res.writeHead(200, { 'content-type': 'application/pdf' }); return res.end(Buffer.concat([pdfOf('big'), Buffer.alloc(200000, 65)])); }
+    if (DOC_BYTES[p]) { const ext = p.split('.').pop(); res.writeHead(200, { 'content-type': DOC_TYPES[ext] || 'application/octet-stream', etag: '"d1"', 'last-modified': 'Tue, 12 Mar 2024 12:00:00 GMT' }); return res.end(DOC_BYTES[p]); }
+    if (p === '/private/blocked.pdf') { res.writeHead(200, { 'content-type': 'application/pdf' }); return res.end(pdfOf('should never be requested')); }
     if (p.startsWith('/files/')) { res.writeHead(200, { 'content-type': 'application/pdf' }); return res.end(PDF); }
     if (pages[p]) { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', etag: '"v1"' }); return res.end(pages[p]()); }
     res.writeHead(404, { 'content-type': 'text/html' }); res.end(html('not found'));
   });
   server.on('connection', (s) => { sockets.add(s); s.on('close', () => sockets.delete(s)); });
-  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  await new Promise((r) => server.listen(wantPort, '127.0.0.1', r));
   port = server.address().port;
   return {
     origin: `http://127.0.0.1:${port}`, host: '127.0.0.1', port, hostPort: `127.0.0.1:${port}`, log,

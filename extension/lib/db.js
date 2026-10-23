@@ -56,7 +56,7 @@ import {
 } from './ingestionReview.js';
 
 const DB_NAME = 'chronium';
-const DB_VERSION = 10;
+const DB_VERSION = 11;
 let dbPromise = null;
 // Drops the cached connection so the next call reopens the database. Used by
 // tests that swap in a fresh IndexedDB to simulate a second device.
@@ -249,6 +249,17 @@ export function openDb() {
         // actions to.
         db.createObjectStore('investigators', { keyPath: 'id' });
       }
+      // Deep Discovery Phase 1 (additive): one row per discovery run, and the run's ledger of every address
+      // requested or skipped. Both carry investigationId so they travel in .chronium.json.
+      if (!db.objectStoreNames.contains('discoveryRuns')) {
+        const runs = db.createObjectStore('discoveryRuns', { keyPath: 'id' });
+        runs.createIndex('investigationId', 'investigationId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('discoveryLedger')) {
+        const ledger = db.createObjectStore('discoveryLedger', { keyPath: 'id' });
+        ledger.createIndex('investigationId', 'investigationId', { unique: false });
+        ledger.createIndex('runId', 'runId', { unique: false });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -324,7 +335,10 @@ export async function createInvestigation({ name, description }) {
 
 export async function deleteInvestigation(investigationId) {
   const db = await openDb();
-  await tx(db, ['investigations', 'investigationRecords'], 'readwrite', async (t) => {
+  await tx(db, ['investigations', 'investigationRecords', 'discoveryRuns', 'discoveryLedger'], 'readwrite', async (t) => {
+    for (const name of ['discoveryRuns', 'discoveryLedger']) {
+      for (const row of await reqToPromise(t.objectStore(name).index('investigationId').getAll(investigationId))) t.objectStore(name).delete(row.id);
+    }
     t.objectStore('investigations').delete(investigationId);
     const idx = t.objectStore('investigationRecords').index('investigationId');
     const links = await reqToPromise(idx.getAll(investigationId));
@@ -1914,4 +1928,38 @@ export async function listInvestigators() {
   const db = await openDb();
   const rows = await tx(db, ['investigators'], 'readonly', (t) => reqToPromise(t.objectStore('investigators').getAll()));
   return rows.sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+// ---------------------------------------------------------------------------
+// Deep Discovery runs and ledger (Phase 1). A run row holds what is needed to
+// show the coverage report again and to continue a stopped run (the
+// checkpoint); the ledger rows are the addresses requested or skipped. Neither
+// holds page text, document text or search queries.
+// ---------------------------------------------------------------------------
+export async function saveDiscoveryRun(investigationId, run) {
+  const db = await openDb();
+  const row = { ...run, id: run.id, investigationId, savedAt: new Date().toISOString() };
+  await tx(db, ['discoveryRuns'], 'readwrite', (t) => t.objectStore('discoveryRuns').put(row));
+  return row;
+}
+export async function listDiscoveryRuns(investigationId) {
+  const db = await openDb();
+  const rows = await tx(db, ['discoveryRuns'], 'readonly', (t) => reqToPromise(t.objectStore('discoveryRuns').index('investigationId').getAll(investigationId)));
+  return rows.sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)));
+}
+export async function getDiscoveryRun(runId) {
+  const db = await openDb();
+  return tx(db, ['discoveryRuns'], 'readonly', (t) => reqToPromise(t.objectStore('discoveryRuns').get(runId)));
+}
+export async function saveDiscoveryLedger(investigationId, runId, entries) {
+  const db = await openDb();
+  await tx(db, ['discoveryLedger'], 'readwrite', (t) => {
+    const store = t.objectStore('discoveryLedger');
+    for (const e of entries) store.put({ ...e, id: runId + ':' + e.seq, investigationId, runId });
+  });
+}
+export async function listDiscoveryLedger(investigationId, runId) {
+  const db = await openDb();
+  const rows = await tx(db, ['discoveryLedger'], 'readonly', (t) => reqToPromise(t.objectStore('discoveryLedger').index('runId').getAll(runId)));
+  return rows.filter((r) => r.investigationId === investigationId).sort((a, b) => a.seq - b.seq);
 }

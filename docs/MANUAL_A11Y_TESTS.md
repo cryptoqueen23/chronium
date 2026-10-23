@@ -73,6 +73,19 @@ high-contrast on: see D3.
 
 Spanish is **not implemented**. When it is: language switch reachable by keyboard, `lang` attribute changes, names and quotations are not translated.
 
+## H. Find public records (Deep Discovery), website tab "Find Records" and the extension's My Research
+
+None of these has been run by a person.
+
+1. Screen reader: is "Find public records" found as a heading, and are the address field, its hint and its error read together? After pressing Start with an empty field, is the error announced and is focus on the field?
+2. Start a small search. Is the progress status announced, without being flooded (it is limited to one update every ten seconds and on each state change)? Does the progress bar read "n of about m pages" or "n of m documents"?
+3. Pause, Resume and Cancel by keyboard only: are their states (disabled, enabled) clear when listened to? When the search ends, does focus land on the "Coverage report" heading and is it read?
+4. Coverage report: are the tables read with their captions, column headers and row headers? Is "Not located in the sources searched" understandable without sight? Does "What remains unknown" read as a list?
+5. The wide tables scroll inside a labelled region: can that region be reached and scrolled by keyboard, and is its label read?
+6. Phone and tablet, real touch: can the fields, the three tick boxes and every button be tapped without mistakes? Does the report stay readable at 320 px with large text?
+7. Extension only: the browser's permission prompt for reading a new site, using ordinary Chrome (not the test copy): is the prompt understandable, and does choosing "Don't allow" leave a clear message (it reads "Chronium needs your permission ...")?
+8. High Contrast on a real machine, 400% zoom: any control that loses its boundary, any clipped text?
+
 ## Results log
 
 | Date | Tester | Tool / version | Browser / device | Section | Result | Notes |

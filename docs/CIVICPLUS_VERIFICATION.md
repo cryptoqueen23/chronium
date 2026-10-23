@@ -50,3 +50,32 @@ Blocked on a recorded permission or risk decision. After that: verify the exact 
 - Quotes of the CivicPlus terms came from a summarising fetch tool; a person should read the page.
 - Only the Copperas Cove site and `civicplus.com` were examined. Other CivicPlus cities may have different robots files and notices.
 - Earlier, before Phase 0 was approved, about eleven light GET requests were made to `www.copperascovetx.gov` within roughly a minute while learning what the site was. That was faster than its published 10-second delay. Requests since then were spaced by at least 10 seconds. No large crawl has been run.
+
+## Phase 1 re-verification (2026-10-23, later the same day)
+
+Purpose: before any CivicPlus adapter is enabled for `copperascovetx.gov`, check the applicable access rules again, this time reading the CivicPlus Terms of Use directly rather than relying on the Phase 0 summary.
+
+| Item | Finding |
+|---|---|
+| CivicPlus Terms of Use, fetched again through the page-reading tool (still an extract, not a human reading) | Same text as the Phase 0 note. **"Site"** is defined as "the CivicPlus proprietary websites" (Section 3). **"Solution(s)"** is defined only as the engagement tools described in Section 2. **"You"** is "a user of the Site or Solution of CivicPlus" (Section 1). Section 7 (Prohibited Use) forbids automated systems ("robots," "spiders," "offline readers") that access "the Site or any Solution" at a rate above what a person could produce with a conventional browser, and forbids access "by any means other than through the interface that is provided by CivicPlus". Section 13 sets liquidated damages of $0.25 per page request after the first 1,000 in 24 hours. |
+| Does the document say whether it governs a city's CivicPlus-hosted site or that site's visitors? | **It does not say either way.** It never names government customer sites. Section 1 says a separately agreed set of terms prevails if there is a conflict, and Section 3 mentions "the master services agreement, statement of work, and/or these TOS", which suggests city contracts may carry their own terms. The city's contract with CivicPlus is not public here. |
+| City site (`/copyright`, `/site/privacy`, from Phase 0) | Copyright is asserted over site content; no licence for reuse; no statement about automated access in either direction. |
+| `robots.txt` | Unchanged since Phase 0: group `*` allows `/AgendaCenter/` and `/DocumentCenter/`, with `Crawl-delay: 10`. |
+| Anything new that grants permission | **Nothing.** No written permission has been received, no export or API was found, and no statement says automated access to the city's agenda and document areas is acceptable. |
+
+**Decision recorded: access rules NOT verified as permitting automation. `copperascovetx.gov` and `civicplus.com` stay `unverified` in the host policy registry, and the engine and the Worker both refuse to contact them.** This is tested: the engine makes zero requests to the host even with an acknowledgment (`scripts/test-discovery-phase1.mjs`, "CivicPlus-hosted Copperas Cove stays blocked"), and the Worker answers HTTP 403 `policy-refused` (same file, "proxy: refuses ..."). The browser test also confirms the Find Records screen explains the refusal in words and makes no request.
+
+### What exists now for CivicPlus
+
+The reusable **adapter interface** (`CivicPlusAdapter` in `public/discovery/connector.js`): it recognises the address shapes seen on the public pages (`/AgendaCenter/ViewFile/...`, `/DocumentCenter/View/<id>/...`, the two centre landing pages), ranks document links first when a capped run has to choose, and offers a `listingCalls()` hook that returns nothing. The engine uses a connector's listing calls **only for hosts whose registry entry is explicitly `allowed`** (an acknowledgment is not enough; tested). The list endpoint (`/AgendaCenter/UpdateCategoryList`) answers a script POST whose response was never captured, so **no list parser exists**; guessing one would be writing against an unverified shape.
+
+### Ways to proceed (for Mari to choose; none has been done)
+
+1. **Ask in writing** (suggested text below). A reply that grants permission, or a refusal, is recorded in the registry entry with its date and text.
+2. **Accept a recorded residual risk** and set the entry to `allowed` with the date and basis. The terms' $0.25-per-request clause applies after 1,000 pages in 24 hours; this tool's ceiling is 500 requests per host per day.
+3. **User-directed capture only.** The person opens an agenda or document in their own browser and saves that one page to the case (the existing "Add URL" and file import already do this). No automation.
+4. **A Texas Public Information Act request** for records that cannot be obtained otherwise.
+
+Suggested short request (not sent):
+
+> To the City Clerk / IT Department, City of Copperas Cove, and to CivicPlus: Chronium Mind is a free research tool that helps people find public meeting records. With a person's permission it can read a city's public agenda and document pages one request at a time, waiting at least 10 seconds between requests (the Crawl-delay in your robots.txt), identifying itself as "ChroniumMind" with a contact address, and never faster than one request every 10 seconds. May it do this for www.copperascovetx.gov (the /AgendaCenter and /DocumentCenter areas)? If you would prefer another method, such as a bulk export or a feed, please tell us. We will follow your answer and keep it on record.

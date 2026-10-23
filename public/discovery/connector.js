@@ -28,6 +28,7 @@ export const AUTOMATION = Object.freeze({ ALLOWED: 'allowed', LINK_ONLY: 'link-o
  * @property {(input:string)=>string[]} seeds
  * @property {(seeds:string[])=>{mode:string, allowHosts:string[]}} scopeOptions
  * @property {(page:{url:string, depth:number, links:Array<{href:string,text:string}>})=>Array<{href:string,text:string}>} expandPage
+ * @property {(seeds:string[])=>Array<{url:string, method?:'GET'}>} listingCalls  extra listing addresses a verified connector knows about; GET only
  */
 export class Connector {
   constructor({ id, label, kind = 'official-website' }) { this.id = id; this.label = label; this.kind = kind; }
@@ -36,6 +37,9 @@ export class Connector {
   scopeOptions() { return { mode: 'registrable', allowHosts: [] }; }
   // May add or filter links for a page. Must not perform requests.
   expandPage({ links }) { return links; }
+  // Extra listing addresses (for example a documented public list URL). The engine requests them through the SAME
+  // gate as every other address, and only when the host's registry entry is `allowed` (an acknowledgment is not enough).
+  listingCalls() { return []; }
 }
 
 // Works for any ordinary website through its own links, within the engine's policy.
@@ -44,13 +48,32 @@ export class GenericLinkConnector extends Connector {
   matches() { return true; }
 }
 
-// Recognises CivicPlus-hosted sites so they can be reported correctly. It has
-// NO retrieval logic: the adapter is not written until access is verified
-// (docs/CIVICPLUS_VERIFICATION.md).
-export class CivicPlusPlaceholder extends Connector {
+// CivicPlus agenda and document centres (many Texas cities use them). This is the reusable ADAPTER INTERFACE:
+// it recognises CivicPlus address shapes and classifies them. It performs no retrieval of its own and its
+// listingCalls() returns nothing unless a host's registry entry is `allowed`; the engine enforces that, so
+// writing this adapter does not clear any site. Automated retrieval for copperascovetx.gov stays blocked
+// (docs/CIVICPLUS_VERIFICATION.md). The address shapes below were seen on that site's public pages; the
+// responses of its list endpoints were NOT captured, so no list parser exists.
+export class CivicPlusAdapter extends Connector {
   constructor(hostPatterns = []) { super({ id: 'civicplus', label: 'CivicPlus agenda and document centres', kind: 'meeting-system' }); this.hostPatterns = hostPatterns; }
   matches(url) { const h = new URL(url).hostname.toLowerCase(); return this.hostPatterns.some((p) => h === p || h.endsWith('.' + p)); }
+  // 'agenda-center' | 'document-center' | 'agenda-file' | 'document-file' | null
+  static linkShape(url) {
+    let p; try { p = new URL(url).pathname.toLowerCase().replace(/\/+$/, ''); } catch { return null; }
+    if (p.startsWith('/agendacenter/viewfile/')) return 'agenda-file';
+    if (/^\/documentcenter\/view\/\d+/.test(p)) return 'document-file';
+    if (p === '/agendacenter') return 'agenda-center';
+    if (p === '/documentcenter' || /^\/documentcenter\/index\/\d+/.test(p)) return 'document-center';
+    return null;
+  }
+  // Same links, in a stable order, with the agenda and document files first so a capped run spends its budget on records.
+  expandPage({ links }) {
+    const rank = (l) => { const k = CivicPlusAdapter.linkShape(l.href); return k === 'agenda-file' || k === 'document-file' ? 0 : k ? 1 : 2; };
+    return links.map((l, i) => ({ l, i, r: rank(l) })).sort((a, b) => a.r - b.r || a.i - b.i).map((x) => x.l);
+  }
 }
+// Kept for older imports.
+export const CivicPlusPlaceholder = CivicPlusAdapter;
 
 export class ConnectorRegistry {
   #list = [];
@@ -92,5 +115,5 @@ export function defaultHostPolicies() {
 }
 
 export function defaultConnectors() {
-  return new ConnectorRegistry().register(new CivicPlusPlaceholder(['copperascovetx.gov', 'civicplus.com'])).register(new GenericLinkConnector());
+  return new ConnectorRegistry().register(new CivicPlusAdapter(['copperascovetx.gov', 'civicplus.com'])).register(new GenericLinkConnector());
 }

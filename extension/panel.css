@@ -107,3 +107,7 @@ input[aria-invalid="true"]{border-color:var(--bad);border-width:2px}
 @media (prefers-contrast:more) and (prefers-color-scheme:light){:root{--line:#55514a;--control:#3b3830;--muted:#2c2a25}}
 
 @media (forced-colors:active){[role="tab"]{border-bottom-color:Canvas!important}[role="tab"][aria-selected="true"]{border-bottom-color:Highlight!important;text-decoration:underline;text-underline-offset:6px}}
+
+/* Deep Discovery (lib/discovery.css): colour roles from this palette. */
+:root{--dc-fg:var(--text);--dc-muted:var(--muted);--dc-line:var(--control);--dc-panel:var(--panel);--dc-accent:var(--accent);--dc-on-accent:#000;--dc-bad:var(--bad);--dc-link:var(--accent)}
+@media (prefers-color-scheme: light){:root{--dc-on-accent:#fff}}

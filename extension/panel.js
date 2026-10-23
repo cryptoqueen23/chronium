@@ -8,6 +8,11 @@ import { extractSearchTerms } from './lib/askCommands.js';
 import { readInvestigationForExport } from './lib/portableDb.js';
 import { buildModel, viewHtml, resolveTarget, VIEWS } from './lib/views.js';
 import { exportInvestigationFile, previewImport, importBundle, describeReport, PortableFileError } from './lib/portable.js';
+import { listDiscoveryRuns, listDiscoveryLedger } from './lib/db.js';
+import { mountDiscoveryPanel } from './lib/discovery/panel.js';
+import { createFetchApiFetcher, createArchiveLookup } from './lib/discovery/fetchers.js';
+import { plainTextExtract } from './lib/discovery/save.js';
+import { requestSiteAccess } from './network.js';
 
 const DEFAULT_WORKER = 'https://chronium-mind.truewolfflix777.workers.dev';
 const $ = (s) => document.querySelector(s);
@@ -17,6 +22,7 @@ const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.p
 
 let workerUrl = DEFAULT_WORKER;
 let activeCaseId = null;
+let activeCaseName = '';
 let current = [];
 let savedKeys = new Set();
 
@@ -53,6 +59,7 @@ async function refreshActiveCase() {
   if (!cases.find((c) => c.id === activeCaseId)) activeCaseId = cases[0]?.id || null;
   savedKeys = activeCaseId ? await getSavedCanonicalKeys(activeCaseId) : new Set();
   const active = cases.find((c) => c.id === activeCaseId);
+  activeCaseName = active ? active.name : '';
   $('#caseBar').textContent = active ? `Saving to case: ${active.name}` : 'No case yet. Create one under My Research to save sources.';
   return cases;
 }
@@ -70,6 +77,7 @@ async function renderCases() {
   await renderViewer();
   const active = cases.find((c) => c.id === activeCaseId);
   $('#askCaseLine').textContent = active ? `Asking about: ${active.name}` : 'No case selected.';
+  if (discovery) discovery.refresh();
 }
 $('#newCaseForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -289,9 +297,27 @@ $('#saveWorkerUrl').addEventListener('click', async () => {
   workerUrl = u.replace(/\/$/, ''); await setStore('workerUrl', workerUrl);
 });
 
+// ---- Deep Discovery (Find public records) ----
+let discovery = null;
+function mountDiscovery() {
+  discovery = mountDiscoveryPanel($('#discoveryMount'), {
+    mode: 'extension',
+    getInvestigation: () => (activeCaseId ? { id: activeCaseId, name: activeCaseName || 'Open case' } : null),
+    // The side panel reads sites directly (host permission granted per site); redirects are validated by the engine afterwards.
+    makeFetcher: () => createFetchApiFetcher({ manualRedirects: false }),
+    archiveLookup: (u) => createArchiveLookup({ base: workerUrl })(u),
+    requestAccess: requestSiteAccess,
+    extract: plainTextExtract,
+    budgetStorage: { get: (k) => store('dc:' + k, null), set: (k, v) => setStore('dc:' + k, v) },
+    listRuns: listDiscoveryRuns, listLedger: listDiscoveryLedger,
+    onSaved: () => { refreshActiveCase(); }
+  });
+}
+
 (async function init() {
   workerUrl = await store('workerUrl', DEFAULT_WORKER);
   activeCaseId = await store('activeCaseId', null);
   $('#workerUrl').value = workerUrl;
   await refreshActiveCase();
+  mountDiscovery();
 })();

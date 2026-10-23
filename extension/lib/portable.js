@@ -22,7 +22,7 @@ const LABELS = {
   entities: 'subjects', relationships: 'relationships', entityAliases: 'alternate names', entityMentions: 'name matches',
   claimEvidence: 'claim-evidence links', claimFindings: 'findings', claimHistory: 'claim history', ingestionItems: 'imported files',
   reviewCandidates: 'review items', watchlists: 'watch terms', watchlistMatches: 'watch-term hits', reviewHistory: 'review history',
-  outlines: 'outline', qualitativeAnalysis: 'saved analysis', blobs: 'stored file copies'
+  discoveryRuns: 'document search runs', discoveryLedger: 'document search log entries', outlines: 'outline', qualitativeAnalysis: 'saved analysis', blobs: 'stored file copies'
 };
 export const labelFor = (store) => LABELS[store] || store;
 

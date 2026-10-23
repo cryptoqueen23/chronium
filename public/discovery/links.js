@@ -149,6 +149,12 @@ export class Frontier {
     this.pages.push({ url: canonical, depth, parent, text, isSeed, seq: this.seq++ });
     return { accepted: true, kind: 'page', url: canonical };
   }
+  // Continues an earlier run: finished pages are remembered as seen; pending pages and all document candidates are queued again.
+  restore({ pagesDone = [], pagesPending = [], docCandidates = [] } = {}) {
+    for (const u of pagesDone) this.seen.add(u);
+    for (const p of pagesPending) this.add({ url: p.url, depth: p.depth, parent: p.parent, text: p.text, isSeed: !!p.isSeed });
+    for (const d of docCandidates) this.add({ url: d.url, depth: d.depth, parent: d.parent, text: d.text });
+  }
   // Breadth-first: pages are appended in discovery order, depth never decreases along the queue.
   nextPage() { return this.cursor < this.pages.length ? this.pages[this.cursor++] : null; }
   get pagesRemaining() { return this.pages.length - this.cursor; }

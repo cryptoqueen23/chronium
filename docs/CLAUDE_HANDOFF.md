@@ -1,4 +1,4 @@
-# Claude Handoff: Chronium Mind (updated 2026-10-23, after Deep Discovery Phase 0)
+# Claude Handoff: Chronium Mind (updated 2026-10-23, after Deep Discovery Phase 1; Phase 1 is a local commit, not pushed)
 
 Start a new session here. This file is rewritten at the end of meaningful work, not appended to. Read it, then `docs/CANON.md` (binding rules: Product Principles, Investigative Standard, Bootstrap Rule, Accessibility standard), then `docs/ROADMAP.md`.
 
@@ -8,10 +8,10 @@ Repo: github.com/cryptoqueen23/chronium, local clone `C:\Users\insur\chronium`. 
 
 | Item | State |
 |---|---|
-| `origin/main` | `408b366` (Deep Discovery Phase 0; pushed and verified equal to local) |
-| Local only | nothing, except possibly this handoff update (docs only), which needs Mari's approval to push |
+| `origin/main` | `21896dd` (Deep Discovery Phase 0 + the handoff docs commit; pushed with Mari's approval) |
+| Local only | **Deep Discovery Phase 1**, one commit on top of `21896dd` (see `git log`). **Not pushed, not deployed.** Needs Mari's approval to push. |
 | Live site `https://chronium-mind.truewolfflix777.workers.dev` | **Unchanged since before all of this work.** None of Ask Chronium, export/import, the three views, light theme or Deep Discovery is live. **Nothing has been deployed.** |
-| Working tree | clean after the Phase 0 commit |
+| Working tree | clean after the Phase 1 commit |
 
 Standing rules from the owner (Mari): never force-push; push only commits she names; never deploy without explicit approval; do not claim WCAG conformance; report benchmark numbers honestly (official harness result, hand-grading is only supporting evidence); free-only / Bootstrap Rule (no billing, accounts, paywalls, paid APIs, or mandatory AI yet); keep the four main areas Search / Compare / My Research / Reports; no new top-level navigation.
 
@@ -36,7 +36,18 @@ Measured on a synthetic local site at default caps: 151 requests, 0.42 MB, 25 mi
 
 Phase 0 tests: `npm run test:discovery` (37 unit and integration tests against a deterministic local site, fake clock, no real network; included in `npm test`) and `node scripts/test-discovery-browser.mjs --chrome=<CfT>` (26 checks: live status, keyboard Pause/Resume/Cancel, coverage and request-log tables, axe at 320 to 1280 px in both schemes). A test caught a real bug (a seed's redirect bypassed the scope check); fixed and covered.
 
-Phase 1 (not started, needs approval): single-document retrieval with provenance, the extension fetcher (per-domain optional host permission, network rules blocking private targets, User-Agent via declarativeNetRequest if possible), website proxy `/api/fetch` (small, guarded), UI in My Research, user-directed capture of the page being viewed.
+## Deep Discovery Phase 1 (built and tested locally; committed locally, NOT pushed, NOT deployed)
+
+Full write-up: `docs/DEEP_DISCOVERY_PHASE1.md` (what it does, policy gates, tests, CivicPlus findings, live-validation log, measured costs, limitations). Approved by Mari on 2026-10-23, with the addition **user-directed discovery**: paste any government website or document-library address.
+
+- **Screen**: website tab **Find Records** (inside an investigation) and the extension's My Research, one shared module (`public/discovery/panel.js`, `discovery.css`). Pause / Resume / Cancel / Continue, accessible progress, coverage report after every run, earlier runs listed with their reports.
+- **Engine** (`engine.js` and friends): document retrieval (opt-in per run), redirects hop by hop, content-hash duplicates, archived-copy lookup (Wayback availability only) for documents that were not found or whose site did not answer, classification hint (`classify.js`), checkpoint to continue. Saves into the case through `save.js` (one record per content, all addresses and provenance kept, originals not copied by default); runs and ledger live in IndexedDB **version 11** and travel in `.chronium.json`.
+- **Worker** (`src/discoveryProxy.js`): `/api/fetch` (website mode only; same URL guard, host registry, robots and limits as the engine) and `/api/captures`. No KV writes. Test-only env vars: `DISCOVERY_ALLOW_PRIVATE`, `DISCOVERY_IP_PER_MINUTE`, `DISCOVERY_HOST_PER_MINUTE`, `DISCOVERY_UPSTREAM_TIMEOUT_MS`.
+- **Extension** (`extension/network.js`): optional host permission per site; rules that block private and loopback targets for the extension's own requests (including redirects) and set the identifying User-Agent per granted site (both verified in Chrome for Testing; the first version silently failed because one rule was too big, now several small rules).
+- **CivicPlus**: access rules **re-verified and still not clear** (`docs/CIVICPLUS_VERIFICATION.md`, "Phase 1 re-verification", with suggested request text). Copperas Cove stays `unverified`; the engine and the Worker both refuse it (tested). The reusable adapter *interface* exists (address shapes, ranking, an inert `listingCalls()` hook honoured only for registry-`allowed` hosts); no list parser exists because the list endpoint's response was never captured.
+- **Live validation** (permitted, tiny): www.archives.gov, 8 requests, Crawl-delay 10 honored, one PDF retrieved and saved (hash in the doc). Skipped for uncertain permission: Copperas Cove / CivicPlus, www.cbo.gov (bot challenge), www.gao.gov (Crawl-delay 420 s); others were robots.txt reads only.
+
+Phase 3 (gap detectors, Records Recovery lists in Big Picture / Reports) and later phases are **not started**.
 
 ## Benchmark (official, do not inflate)
 
@@ -47,7 +58,10 @@ Phase 1 (not started, needs approval): single-document retrieval with provenance
 | Command | Result |
 |---|---|
 | `npm run check` | syntax clean |
-| `npm test` | 155 unit and integration tests (118 earlier + 37 Deep Discovery) |
+| `npm test` | 181 unit and integration tests (118 earlier + 37 Phase 0 + 26 Phase 1) |
+| `node scripts/test-discovery-ui.mjs` | 74 (needs `wrangler dev --port 8791 --var DISCOVERY_ALLOW_PRIVATE:127.0.0.1:8790 --var DISCOVERY_IP_PER_MINUTE:5000 --var DISCOVERY_HOST_PER_MINUTE:5000`; the test starts its own fixture site on 8790) |
+| `node scripts/test-discovery-extension.mjs --chrome=<CfT>` | 28 (headed Chrome; test copy of the extension; the Worker on 8791 is only the panel's server address) |
+| `node scripts/live-validation.mjs --allow=<host> --seed=<url>` | NOT a test: a deliberate tiny live run; refuses to start without `--allow` |
 | `node scripts/test-extension.mjs --chrome=<CfT>` | 9 |
 | `node scripts/test-portable-browser.mjs --chrome=<CfT>` | 14 |
 | `node scripts/test-ask-browser.mjs --chrome=<CfT>` | 16 |
@@ -74,14 +88,15 @@ Browser tests need `wrangler dev` on port 8787 and **Chrome for Testing** (regul
 - `npm install` of one dev dependency previously **removed untracked packages** (puppeteer); they are now in `package.json` devDependencies.
 - Puppeteer: **clicks hang on background tabs** (call `bringToFront()` first); screenshot `clip` uses **page** coordinates (add scroll offset); enabling touch emulation **reloads** the page; `[class] .btn` style selectors often match hidden dialog elements (scope to the visible view).
 - Kill stale `wrangler dev`/`workerd` listeners before restarting (check port 8787 with `netstat`); a stale one answers requests with old files.
+- **Phase 1 tooling gotchas**: the shell tool mangles backslashes in heredocs; write scripts with the Write tool. Several source files are CRLF and others LF: use exact-string edits that detect the line ending. Running `node --test scripts/*.mjs` executes the corpus builders and dirties `data/` (timestamps only): use `npm test`. DNR regex rules are limited to 2 KB each: keep patterns small.
 - Quick real-browser zoom: `chrome.tabs.setZoom` via the extension's service worker (website) or `chrome.tabs.getCurrent()` from the panel page.
 - The extension's saved cases live in the **extension's own IndexedDB**, separate from the website's; move cases with Export / Import case file.
 
 ## Immediate next steps for a new session
 
-1. Phase 0 is pushed. Do not start Phase 1 or deploy without Mari's explicit approval.
-2. Get Mari's decision on **CivicPlus / Copperas Cove** (see above). Until then keep the host `unverified`.
-3. Phase 1 plan items (above), then Phase 2 (bounded crawl, recovery via the existing archive providers, three outcomes) per `docs/DEEP_DISCOVERY_PLAN.md`.
+1. Phases 0 (and the handoff docs) are pushed; **Phase 1 is a local commit awaiting Mari's approval to push**. Never push or deploy without her explicit say-so.
+2. Get Mari's decision on **CivicPlus / Copperas Cove** (`docs/CIVICPLUS_VERIFICATION.md`; request text drafted, not sent). Until then keep the host `unverified`.
+3. Next engine work, only with her approval: Phase 3 (gap detectors, Records Recovery in Big Picture / Reports), then Phase 4 (request drafts). More connectors only after each provider's terms are checked.
 4. A person should run `docs/MANUAL_A11Y_TESTS.md` (NVDA/VoiceOver/touch); still not done.
 5. Remaining roadmap follow-ups: harness that separates correct abstentions from retrieval failures; financial extraction beyond `$`; structured vote identification; evidence-based contradiction analysis; real document comparison in Compare; Spanish; per-field error association in the investigation forms.
 

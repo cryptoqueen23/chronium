@@ -11,3 +11,10 @@ for (const f of ['db.js', 'entities.js', 'claims.js', 'ingestionReview.js', 'por
   fs.copyFileSync(path.join(root, 'public', f), path.join(root, 'extension', 'lib', f));
   console.log('synced', f);
 }
+// Deep Discovery: the engine modules, the screen and its stylesheet (imports stay relative, so ../db.js resolves to lib/db.js).
+const dsrc = path.join(root, 'public', 'discovery'); const ddst = path.join(root, 'extension', 'lib', 'discovery');
+fs.mkdirSync(ddst, { recursive: true });
+for (const f of fs.readdirSync(dsrc).filter((n) => /\.(js|css)$/.test(n))) {
+  fs.copyFileSync(path.join(dsrc, f), path.join(ddst, f));
+  console.log('synced discovery/' + f);
+}

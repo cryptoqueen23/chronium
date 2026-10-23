@@ -469,7 +469,7 @@ test('engine: provenance for every fetched page', async () => {
     assert.equal(p.originalUrl, site.origin + '/'); assert.equal(p.finalUrl, site.origin + '/');
     assert.match(p.retrievedAt, /^\d{4}-\d\d-\d\dT/); assert.equal(p.httpStatus, 200); assert.match(p.contentType, /text\/html/);
     assert.equal(p.etag, '"v1"'); assert.equal(p.bytes, body.length); assert.equal(p.partial, false);
-    assert.equal(p.discovery.depth, 0); assert.equal(p.discovery.robots, 'allowed'); assert.equal(p.fetcher, 'extension'); assert.match(p.engineVersion, /phase0/);
+    assert.equal(p.discovery.depth, 0); assert.equal(p.discovery.robots, 'allowed'); assert.equal(p.fetcher, 'extension'); assert.match(p.engineVersion, /phase/);
     assert.equal(p.discovery.runId, result.runId);
     assert.equal(await sha256Hex(new TextEncoder().encode('abc')), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
   } finally { await site.close(); }
@@ -665,7 +665,7 @@ test('engine: progress messages are plain language and carry what a status regio
     for (const p of seen) for (const k of ['state', 'message', 'pagesFetched', 'pagesRemaining', 'pagesPlanned', 'documentsFound', 'requests', 'requestsMax', 'bytes', 'bytesMax', 'elapsedMs', 'etaMs', 'waitingMs', 'host']) assert.ok(k in p, k);
     assert.ok(seen.some((p) => /Waiting 10 seconds before the next request to 127\.0\.0\.1 \(the site asks for this\)/.test(p.message)));
     assert.ok(seen.every((p) => typeof p.message === 'string' && p.message.length > 0 && !/undefined|NaN|\[object/.test(p.message)));
-    assert.match(result.message, /^Finished\./); assert.match(result.message, /not retrieved yet/);
+    assert.match(result.message, /^Finished\./); assert.match(result.message, /not retrieved/);
     assert.ok(result.usage.requests > 0 && result.usage.minutes > 0);
   } finally { await site.close(); }
 });

@@ -688,3 +688,9 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
   [role="tab"] { border-bottom-color: Canvas !important; }
   [role="tab"][aria-selected="true"] { border-bottom-color: Highlight !important; text-decoration: underline; text-underline-offset: 6px; }
 }
+
+/* Deep Discovery (public/discovery/discovery.css): colour roles taken from this palette, so both themes follow. */
+:root {
+  --dc-fg: var(--text); --dc-muted: var(--text-secondary); --dc-line: var(--control-border); --dc-panel: var(--surface-raised);
+  --dc-accent: var(--accent); --dc-on-accent: var(--on-accent); --dc-bad: var(--danger); --dc-link: var(--link);
+}

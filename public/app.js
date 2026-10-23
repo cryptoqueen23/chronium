@@ -15,7 +15,8 @@ import {
   createEntityMention, listMentionsForEntity, listMentionsForEvidence, deleteEntityMention,
   getClaim, listClaimsForEntity,
   createClaimEvidence, listClaimEvidenceForClaim, listClaimEvidenceForEvidence, deleteClaimEvidence,
-  createClaimFinding, listClaimFindings, listClaimFindingsForClaim, listClaimFindingsForEntity, deleteClaimFinding
+  createClaimFinding, listClaimFindings, listClaimFindingsForClaim, listClaimFindingsForEntity, deleteClaimFinding,
+  listDiscoveryRuns, listDiscoveryLedger
 } from './db.js';
 import {
   ENTITY_TYPES, ENTITY_TYPE_LABELS, RELATIONSHIP_STATUSES, RELATIONSHIP_STATUS_LABELS,
@@ -26,6 +27,9 @@ import {
   FINDING_CLASSIFICATIONS, FINDING_CLASSIFICATION_LABELS, FINDING_CLASSIFICATIONS_REQUIRING_EVIDENCE
 } from './claims.js';
 import { ingestFiles, ingestZip } from './ingest/pipeline.js';
+import { extractContent } from './ingest/adapters.js';
+import { mountDiscoveryPanel, webStorage } from './discovery/panel.js';
+import { createProxyFetcher, createArchiveLookup } from './discovery/fetchers.js';
 import { renderReviewQueuePanel } from './reviewQueue.js';
 import { openOverlay, openMenu, confirmDialog } from './ui.js';
 import { answerQuestion } from './askRouter.js';
@@ -157,6 +161,7 @@ const WORKSPACE_TABS = [
   { id: 'overview', label: 'Overview', icon: 'icon-timeline' },
   { id: 'deepdive', label: 'Deep Dive', icon: 'icon-file' },
   { id: 'research', label: 'Research', icon: 'icon-search' },
+  { id: 'discover', label: 'Find Records', icon: 'icon-file' },
   { id: 'review', label: 'Review Queue', icon: 'icon-list' },
   { id: 'subjects', label: 'Subjects', icon: 'icon-user' },
   { id: 'evidence', label: 'Evidence', icon: 'icon-flag' },
@@ -1251,6 +1256,28 @@ async function renderInvestigationView(tab, target, inv) {
   else pendingScrollY = viewScroll[tab] || 0;
 }
 
+// Deep Discovery (Find Records): mounted once so a search keeps running while you look at other tabs.
+let discoveryPanel = null;
+function renderDiscoverPanel(inv) {
+  const mount = document.querySelector('#discoveryMount');
+  if (!discoveryPanel) {
+    // Test-only options (a local test site, no waiting). Honoured only when this page itself is served from the local machine.
+    const t = (['127.0.0.1', 'localhost'].includes(location.hostname) && window.__chroniumDiscoveryTest) || {};
+    discoveryPanel = mountDiscoveryPanel(mount, {
+      mode: 'website', guardOptions: t.guardOptions, limits: t.limits,
+      getInvestigation: () => (activeInvestigationId ? { id: activeInvestigationId, name: document.querySelector('#workspaceTitle').textContent || 'Investigation' } : null),
+      makeFetcher: () => createProxyFetcher({ base: '' }),
+      archiveLookup: createArchiveLookup({ base: '' }),
+      requestAccess: async () => true,
+      extract: extractContent,
+      budgetStorage: webStorage(),
+      listRuns: listDiscoveryRuns,
+      listLedger: listDiscoveryLedger,
+      onSaved: async () => { savedKeys = activeInvestigationId ? await getSavedCanonicalKeys(activeInvestigationId) : new Set(); lastDashboardData = null; }
+    });
+  } else discoveryPanel.refresh();
+}
+
 async function renderWorkspaceView(tab, subtab, arg) {
   const emptyState = document.querySelector('#workspaceEmptyState');
   const body = document.querySelector('#workspaceBody');
@@ -1278,6 +1305,8 @@ async function renderWorkspaceView(tab, subtab, arg) {
     askSourcesAnswer.classList.add('hidden');
     investigationQuery.value = '';
     await renderAskSourcesHistory();
+  } else if (tab === 'discover') {
+    renderDiscoverPanel(inv);
   } else if (tab === 'review') {
     await renderReviewQueuePanel(activeInvestigationId);
   } else if (tab === 'subjects') {

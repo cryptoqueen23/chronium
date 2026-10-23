@@ -15,7 +15,8 @@
   table { border-collapse: collapse; width: 100%; } th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
   caption { text-align: left; font-weight: 700; padding: 6px 0; }
   .scroll { overflow-x: auto; max-width: 100%; }
-  .dc-stats { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; } .dc-stats dd { margin: 0; }
+  .dc-stats { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; } .dc-stats dd { margin: 0; }
+  @media (max-width: 480px) { .dc-stats { grid-template-columns: 1fr; } .dc-stats dd { margin-bottom: 6px; } }
   progress { width: 60%; max-width: 360px; }
   dt { font-weight: 700; } dd { margin: 0 0 8px; }
 </style>

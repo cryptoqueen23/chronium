@@ -11,7 +11,7 @@ export const PORTABLE_ID_STORES = [
   'ingestionBatches', 'evidenceItems', 'claims', 'quantitativeFindings', 'qualitativeFindings',
   'crossValidations', 'askSourcesHistory', 'entities', 'relationships', 'entityAliases', 'entityMentions',
   'claimEvidence', 'claimFindings', 'claimHistory', 'ingestionItems', 'reviewCandidates', 'watchlists',
-  'watchlistMatches', 'reviewHistory'
+  'watchlistMatches', 'reviewHistory', 'discoveryRuns', 'discoveryLedger'
 ];
 // Stores keyed by investigationId itself (one row per investigation).
 export const PORTABLE_SINGLETON_STORES = ['outlines', 'qualitativeAnalysis'];

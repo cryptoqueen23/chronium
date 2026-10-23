@@ -3,7 +3,7 @@
 // exceeded by any configuration. Limits are safety ceilings, not targets.
 // Pure module: runs in the browser, the extension, the Worker, and Node.
 
-export const ENGINE_VERSION = '0.1.0-phase0';
+export const ENGINE_VERSION = '0.2.0-phase1';
 export const USER_AGENT_TOKEN = 'ChroniumMind';
 export const USER_AGENT = `${USER_AGENT_TOKEN}/0.1 (+https://chronium-mind.truewolfflix777.workers.dev/; public-records research; honors robots.txt and Crawl-delay)`;
 
@@ -28,7 +28,8 @@ export const HARD_CEILINGS = Object.freeze({
   requestTimeoutMs: 60000,
   maxRobotsBytes: 512 * 1024,
   maxLinksPerPage: 2000,
-  maxAcceptedCrawlDelayMs: 120000
+  maxAcceptedCrawlDelayMs: 120000,
+  maxArchiveLookups: 100
 });
 
 // Approved provisional maximums: depth 2, 150 pages, 100 documents, 3 runs a
@@ -51,10 +52,11 @@ export const DEFAULT_LIMITS = Object.freeze({
   maxRobotsBytes: 512 * 1024,
   maxLinksPerPage: 1000,
   maxAcceptedCrawlDelayMs: 60000, // a host that asks for more than this is reported as too slow to search, never sped up
+  maxArchiveLookups: 25,          // lookups for archived copies of documents that could not be retrieved (each is one Worker request)
   minDelayMs: 3000                // politeness floor when a host states no Crawl-delay
 });
 
-const MINIMUMS = { maxDepth: 0, maxPages: 1, maxDocuments: 0, maxRunsPerDay: 1, maxWebsiteFetches: 1, maxTotalRequests: 1, maxRedirects: 0, maxResponseBytes: 1024, maxHtmlBytes: 1024, maxTotalBytes: 1024, maxRunMs: 1000, maxConcurrentTotal: 1, maxRequestsPerHostPerDay: 1, requestTimeoutMs: 100, maxRobotsBytes: 1024, maxLinksPerPage: 1, maxAcceptedCrawlDelayMs: 1000, minDelayMs: 0 };
+const MINIMUMS = { maxDepth: 0, maxPages: 1, maxDocuments: 0, maxRunsPerDay: 1, maxWebsiteFetches: 1, maxTotalRequests: 1, maxRedirects: 0, maxResponseBytes: 1024, maxHtmlBytes: 1024, maxTotalBytes: 1024, maxRunMs: 1000, maxConcurrentTotal: 1, maxRequestsPerHostPerDay: 1, requestTimeoutMs: 100, maxRobotsBytes: 1024, maxLinksPerPage: 1, maxAcceptedCrawlDelayMs: 1000, maxArchiveLookups: 0, minDelayMs: 0 };
 
 // Merges overrides over the defaults and clamps every number into
 // [minimum, hard ceiling]. Unknown keys are ignored. `clamped` lists what was

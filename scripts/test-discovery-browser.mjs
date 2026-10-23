@@ -54,7 +54,7 @@ try {
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => !document.querySelector('#results').hidden, { timeout: 30000 });
   const summary = await page.$eval('#summary', (e) => e.textContent);
-  check('the run finishes and says what it found and that documents are not retrieved yet', /^Finished\./.test(summary) && /not retrieved yet/.test(summary), summary);
+  check('the run finishes and says what it found and that documents are not retrieved yet', /^Finished\./.test(summary) && /not retrieved/.test(summary), summary);
   check('after finishing: all three controls are disabled', await page.evaluate(() => ['pause', 'resume', 'cancel'].every((n) => document.querySelector(`#dc-${n}`).disabled)));
 
   const cov = await page.$eval('#coverage', (e) => e.innerText);

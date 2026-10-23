@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Chronium Mind",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Search. Discover. Verify. Free research across public sources, documents and historical archives.",
   "minimum_chrome_version": "114",
-  "permissions": ["sidePanel", "storage"],
+  "permissions": ["sidePanel", "storage", "declarativeNetRequest"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
   "host_permissions": [
     "https://chronium-mind.truewolfflix777.workers.dev/*",
     "http://127.0.0.1:8787/*"
