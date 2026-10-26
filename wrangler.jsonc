@@ -39,12 +39,13 @@
   // STAGING: a separate Worker with its own name, its own storage and its own (empty) secrets. It cannot read or
   // write production data and holds no production AI credential. Create its KV namespace first
   //   wrangler kv namespace create CONNECTOR_HEALTH --env staging
-  // and replace the placeholder id; scripts/validate-production-config.mjs refuses to deploy while it is a placeholder.
+  // The namespace "staging-CONNECTOR_HEALTH" was created on 2026-10-26; its id is below. The validator still refuses a
+  // placeholder, the production id, or a reused id.
   "env": {
     "staging": {
       "name": "chronium-mind-staging",
       "kv_namespaces": [
-        { "binding": "CONNECTOR_HEALTH", "id": "REPLACE_WITH_STAGING_KV_NAMESPACE_ID" }
+        { "binding": "CONNECTOR_HEALTH", "id": "8253207c950845bb8c32622952585e14" }
       ],
       "vars": {
         "AI_PROVIDER": "anthropic",

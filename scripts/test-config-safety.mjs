@@ -56,9 +56,12 @@ test('variables reported by a dry run are checked too (a --var typed on the comm
   assert.ok(problems.some((p) => /TEST_MODE/.test(p)) && problems.some((p) => /DISCOVERY_ALLOW_PRIVATE/.test(p)));
 });
 test('staging is isolated: its own Worker name, its own storage, never production\'s, and no placeholder left', () => {
-  const stagingAsCommitted = validateConfig(real, { env: 'staging' });
-  assert.ok(stagingAsCommitted.some((p) => /placeholder/.test(p)), 'the committed staging block cannot be deployed until its namespace exists');
-  let c = clone(real); c.env.staging.kv_namespaces[0].id = 'aaaabbbbccccddddeeeeffff00001111';
+  assert.deepEqual(validateConfig(real, { env: 'staging' }), [], 'the committed staging block is deployable: its own namespace, every switch off');
+  assert.match(real.env.staging.kv_namespaces[0].id, /^[0-9a-f]{32}$/);
+  assert.notEqual(real.env.staging.kv_namespaces[0].id, real.kv_namespaces[0].id, "never production's namespace");
+  let c = clone(real); c.env.staging.kv_namespaces[0].id = 'REPLACE_WITH_STAGING_KV_NAMESPACE_ID';
+  assert.ok(validateConfig(c, { env: 'staging' }).some((p) => /placeholder/.test(p)), 'a placeholder is still refused');
+  c = clone(real); c.env.staging.kv_namespaces[0].id = 'aaaabbbbccccddddeeeeffff00001111';
   assert.deepEqual(validateConfig(c, { env: 'staging' }), []);
   c.env.staging.name = 'chronium-mind'; assert.ok(validateConfig(c, { env: 'staging' }).some((p) => /separate Worker/.test(p)));
   c = clone(real); c.env.staging.kv_namespaces[0].id = real.kv_namespaces[0].id; assert.ok(validateConfig(c, { env: 'staging' }).some((p) => /PRODUCTION KV/.test(p)));
