@@ -260,3 +260,51 @@ Gaps found by reading the code (not by a failure): the Worker never read the pro
 - Page: `public/aiGate.js` `acceptFreshAiResult` refuses anything not explicitly `complete: true` with `parseError: false` **before** saving to the case or showing it (also protects against old, cached or hand-made results), and the plain-language messages for the four refusals are in `apiErrorMessage`.
 - **The 600-token output limit, 8,000-character evidence limit and 256 KB body limit are unchanged.** Nothing raises the output limit automatically. A cut-off answer is now a visible refusal, so the rate at which that happens is measurable in the staging AI phase; only measured evidence (the share of calls ending in `max_tokens`, with output token counts) should change the limit, and only by an approved edit.
 - Tests: `scripts/test-ai-incomplete.mjs` (22 tests, in `npm test`): stop-reason matrix; **every proper prefix** of a valid analysis, a valid Ask answer and a fenced answer is refused even when the provider claims it finished; 40+ wrong-shape and chatter variants; citations to unsent ids; refusal bodies contain no model text; end to end through the real Worker entry point for both routes (cut-off, cut-off-but-claimed-finished, unverified, empty or wrong JSON, bad citations, never cached, a complete answer accepted and cached and still marked complete); and the page gate.
+
+
+## 16. Staging creation plan for approval (2026-10-26; NOTHING below has been created)
+
+**Account facts, from Mari's dashboard check:** Workers **Free** plan; **6 of 100,000** requests today; **101** requests this billing period; **162.03 ms** total CPU; **$0.00** billable. The existing account is therefore far from every Free-plan limit, and the shared-allowance risk in 15.2 is small at these volumes. No purchase, upgrade or domain is part of this plan.
+
+### 16.1 Free-plan quotas that apply (official documentation, read 2026-10-26)
+
+| Quota | Free-plan value | This plan's use |
+|---|---|---|
+| Worker requests | 100,000 per day, account-wide wording, resets 00:00 UTC | hard budget below: at most 60 requests across both phases (0.06%) |
+| CPU per request | 10 ms | measured, not assumed (section 8) |
+| Memory per isolate | 128 MB | measured at P99 |
+| Subrequests per request | 50 | not approached |
+| KV | 100,000 reads and **1,000 writes per day** (per account), 1 GB | this plan writes nothing to KV in phases A and B (features off, then only the limiter probe, which refuses before any KV use). The 1,000 daily writes are shared with production's own use, which I cannot see |
+| Workers per account | 100 | +1 |
+| Environment variables per Worker | 64 | 8 |
+| Static assets | not a stated limit | the staging bundle is 68 files, 5.97 MB (dry run); static files are served without running the Worker, and I did not verify whether they count toward the daily allowance, so the budget treats them as if they do |
+| Workers Logs | 200,000 events per day, 3-day retention | default |
+
+### 16.2 Rate Limiting binding: what is and is not confirmed
+
+- **Confirmed (official):** generally available since 2025-09-19; windows of 10 or 60 s; per-location, approximate; needs Wrangler 4.36 or later (installed: 4.127.0); `wrangler deploy --env staging --dry-run` accepts the three bindings (`RL_FETCH 15/60s`, `RL_VIEWCAPTURE 15/60s`, `RL_AI 3/60s`).
+- **Not stated anywhere in Cloudflare's documentation:** whether the **Free** plan accepts it. A third-party write-up used it on a Free account without any restriction, which is not an official statement.
+- **Cannot be settled without a deploy.** The first deploy is therefore designed as the test, and it is safe either way: if the account rejects the binding, `wrangler deploy` fails and **creates no Worker**; nothing is left to clean up except the KV namespace. Fallback if rejected: staging runs on the existing counters only (no binding), which needs a reviewed change to the staging config and validator, and the Stage 0 counters' per-data-centre looseness stays documented.
+- Local result (simulation only): `scripts/probe-staging-limiter.mjs` against `wrangler dev --env staging`: 15 requests passed, then `429 burst`; stopped after 19 requests.
+
+### 16.3 Exactly what I intend to create (in this order, each only after your go-ahead for the whole list)
+
+1. **One KV namespace**, with `npx wrangler kv namespace create CONNECTOR_HEALTH --env staging`. Expected title `chronium-mind-staging-CONNECTOR_HEALTH`. Its id replaces the placeholder in `wrangler.jsonc` (a small commit for your review before any deploy; the validator refuses a placeholder, the production id, or a reused id).
+2. **One Worker**, `chronium-mind-staging`, deployed with `npm run deploy:staging` (validator and dry run first). Contents per the dry run: the app's 68 static files; `ENVIRONMENT=staging`; **every feature switch `off`** (fetch, captures, capture viewer, Ask Sources, AI); `RATE_LIMIT_BINDING=required`; bindings `CONNECTOR_HEALTH` (the new namespace), `RL_FETCH`, `RL_VIEWCAPTURE`, `RL_AI` (account-unique namespace ids 7101, 7102, 7103). **No secrets of any kind**, so no Anthropic key. Public address: `https://chronium-mind-staging.truewolfflix777.workers.dev`.
+3. **Nothing else.** In particular **no fixtures Worker yet** (not needed for phases A and B), no custom domain, no Turnstile, no WAF rule, no Anthropic workspace, no paid plan, no change to the production Worker, its KV, its D1 databases or its variables. The production hostname is refused by both test scripts.
+
+If namespace ids 7101 to 7103 are already used by another Worker in the account, the deploy fails and I will report it, not reuse or change anything of another project's.
+
+### 16.4 First staging test: small, controlled, with stop conditions
+
+**Phase A, off state (10 requests):** `node scripts/smoke-staging.mjs --base=<staging address> --budget=12 --log=<file>`. Every guarded route must answer 404 `not-available`, every feature must report off, pages and the upgrade script must load. **Stop** if anything but expected: no further phase until reviewed.
+
+**Phase B, limiter probe (at most 25 requests, one switch on):** one redeploy of the same Worker with **only** `FEATURE_DISCOVERY_FETCH=on` (validator run with `--allow-on=FEATURE_DISCOVERY_FETCH`, then `wrangler deploy --env staging --var FEATURE_DISCOVERY_FETCH:on`; the committed file keeps it `off`) (AI, captures, capture viewer all off), then `node scripts/probe-staging-limiter.mjs --base=<staging address> --log=<file>`. Every request names the reserved host `probe.invalid`, so **no website is contacted**; the Worker only passes the limiter, fails the DNS check and answers 400. Expected: about 15 answers of `400 address-refused`, then `429 burst`. **Stop conditions, built into the script:** 25 requests; any 2xx (a real fetch happened); any 5xx (binding unsupported or broken, or quota trouble); 3 network errors in a row; or the limiter has engaged and stayed engaged for 3 more requests. Afterwards redeploy with the switch **off** and rerun phase A (10 more requests).
+
+**Totals:** at most about 10 + 25 + 10 = 45 requests, plus the redeploys; hard cap 60. Dashboard check afterwards: requests, errors, CPU, memory, and `$0.00`. The Worker is then **deleted** (`wrangler delete --env staging`) or left with every switch off, as you choose. No real municipal or CivicPlus host is ever requested; the scripts refuse any `.gov`, Copperas Cove or CivicPlus address.
+
+**Success criteria:** phase A all green; phase B shows the binding letting requests through and then refusing, with no other kind of answer; dashboard totals match the scripts' logs; no cost. **If phase B fails** (for example the account does not support the binding): stop, report the exact error, and do not try workarounds without approval.
+
+### 16.5 Not part of this step
+
+Fixtures Worker; edge CPU and memory measurement of document fetching (needs fixtures and a further approval); the AI phase; the real-browser database-upgrade and extension tests (manual, section 10); any production change.
