@@ -48,6 +48,7 @@ import {
   classifyAskAnswer, FACT_STATE_LABELS, parseDepthRequest, DEPTH_LABELS
 } from './askCommands.js';
 import { discoverSources, summarizeDiscoverCoverage } from './discover.js';
+import { acceptFreshAiResult } from './aiGate.js';
 
 // ---------------------------------------------------------------------------
 // Element refs
@@ -1311,7 +1312,7 @@ function loadFeatures() {
 // Plain-language reasons for the server's refusals.
 function apiErrorMessage(res, data, fallback) {
   const code = data && data.error;
-  const text = { 'not-available': 'This feature is switched off right now.', 'daily-limit': 'You have reached today\'s limit for this feature. Try again tomorrow.', 'unavailable-today': 'This feature is unavailable for the rest of today.', 'rate-limited': 'Too many requests. Wait a minute and try again.', 'protection-unavailable': 'This feature is temporarily unavailable.', 'unsafe-configuration': 'This feature is temporarily unavailable.', 'caller-not-allowed': 'Reload the page and try again.', busy: 'The server is busy. Try again in a few seconds.', 'too-large': 'That request is too large.' }[code];
+  const text = { 'not-available': 'This feature is switched off right now.', 'daily-limit': 'You have reached today\'s limit for this feature. Try again tomorrow.', 'unavailable-today': 'This feature is unavailable for the rest of today.', 'rate-limited': 'Too many requests. Wait a minute and try again.', 'protection-unavailable': 'This feature is temporarily unavailable.', 'unsafe-configuration': 'This feature is temporarily unavailable.', 'caller-not-allowed': 'Reload the page and try again.', busy: 'The server is busy. Try again in a few seconds.', 'ai-truncated': 'The AI\'s answer was cut off before it finished, so it is not shown as an analysis and nothing was saved. Try again with fewer items.', 'ai-malformed': 'The AI\'s answer did not come back in the expected form, so it is not shown as an analysis and nothing was saved. Try again.', 'ai-unverified': 'The AI\'s answer could not be confirmed as finished, so it is not shown as an analysis and nothing was saved. Try again.', 'ai-refused': 'The AI declined to answer, so there is no analysis. Nothing was saved.', 'too-large': 'That request is too large.' }[code];
   return text || (typeof code === 'string' && code.length < 120 ? code : fallback);
 }
 
@@ -1905,6 +1906,7 @@ askRunAiBtn.addEventListener('click', async () => {
     const data = await res.json();
     if (!res.ok || data.ok === false) throw new Error(apiErrorMessage(res, data, 'Analysis failed.'));
     if (data.skipped) { askSourcesStatus.textContent = data.reason; return; }
+    if (!acceptFreshAiResult(data)) throw new Error(apiErrorMessage(res, { error: 'ai-malformed' }, 'Analysis failed.')); // never show or record an answer that is not marked complete
     renderAskSourcesAiResult(data.result, passages);
     if (data.result && !data.result.insufficient && !data.result.parseError) lastAskAiAnswer = data.result.answer || '';
     askSourcesStatus.textContent = `${data.cached ? 'Loaded a recent analysis' : 'Analysis complete'} (${data.model || 'AI'}).${data.truncated ? ' Based on a subset of matched passages — the full set was too large for one pass.' : ''}`;
@@ -3592,6 +3594,7 @@ async function renderQualitativeSection(evidenceItems, claims, outline) {
       const data = await res.json();
       if (!res.ok || data.ok === false) throw new Error(apiErrorMessage(res, data, 'Analysis failed.'));
       if (data.skipped) { statusEl.textContent = data.reason; return; }
+      if (!acceptFreshAiResult(data)) throw new Error(apiErrorMessage(res, { error: 'ai-malformed' }, 'Analysis failed.')); // never save or show an answer that is not marked complete
       await saveQualitativeAnalysis(activeInvestigationId, { result: data.result, model: data.model });
       renderQualitativeResult(data.result, evidenceItems, claims);
       statusEl.textContent = `${data.cached ? 'Loaded a recent analysis' : 'Analysis complete'} (${data.model || 'AI'}).${data.truncated ? ' Based on a subset of your evidence — the full set was too large for one pass.' : ''}`;

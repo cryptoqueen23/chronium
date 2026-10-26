@@ -1,5 +1,6 @@
 import { handleFetch, handleCaptures, handleFeatures } from "./discoveryProxy.js";
 import { aiRouteGuard, aiCaps } from "./guard.js";
+import { interpretAnalysis, interpretAskSources, incompleteBody } from "./aiResult.js";
 import { handleViewCapture } from "./viewCapture.js";
 import corpus from "../data/copperas-cove/normalized.json";
 import { getAIProvider } from "./ai/index.js";
@@ -794,13 +795,13 @@ async function handleQualitativeAnalysis(request, env, ctx) {
     return json({ ok: true, skipped: true, reason: `Add at least ${AI_MIN_EVIDENCE_ITEMS} evidence items before running analysis.`, result: null });
   }
 
-  const { promptBody, truncated } = buildEvidencePromptBody(evidenceItems, claims, aiCaps(env).maxInputChars);
+  const { promptBody, truncated, usedIds } = buildEvidencePromptBody(evidenceItems, claims, aiCaps(env).maxInputChars);
   const prompt = `Research question: ${researchQuestion || "(not set)"}\n\n${promptBody}`;
   const contentHash = hashString(ANALYSIS_SYSTEM_PROMPT + "|" + prompt);
 
-  const cacheKey = new Request(`https://cache.internal/analyze/qualitative?h=${contentHash}`);
+  const cacheKey = new Request(`https://cache.internal/analyze/qualitative/v2?h=${contentHash}`);
   const cacheHit = await caches.default.match(cacheKey);
-  if (cacheHit) return json({ ...(await cacheHit.json()), cached: true, truncated });
+  if (cacheHit) { const cachedPayload = await cacheHit.json(); if (cachedPayload?.result?.complete === true) return json({ ...cachedPayload, cached: true, truncated }); }
 
   let provider;
   try {
@@ -814,8 +815,13 @@ async function handleQualitativeAnalysis(request, env, ctx) {
     const completion = await provider.complete({ system: ANALYSIS_SYSTEM_PROMPT, prompt, maxTokens: aiCaps(env).maxOutputTokens, env });
     recordAiUsage(env, ctx, provider.id, { calls: 1, inputTokens: completion.inputTokens, outputTokens: completion.outputTokens, errors: 0 });
 
-    const result = parseAnalysisResponse(completion.text);
-    const payload = { ok: true, result, model: completion.model, tookMs: Date.now() - started };
+    // Only a finished, well-formed answer that cites only what was sent is an analysis. Anything else is refused, not cached.
+    const read = interpretAnalysis(completion.text, completion.stopReason, new Set(usedIds));
+    if (!read.complete) {
+      console.error(`qualitative analysis refused as incomplete: ${read.reason} (stop reason ${completion.stopReason}, ${completion.outputTokens} output tokens)`);
+      return json(incompleteBody(read.reason), 502);
+    }
+    const payload = { ok: true, result: read.result, model: completion.model, tookMs: Date.now() - started };
 
     const cacheResponse = new Response(JSON.stringify(payload), { headers: { "content-type": "application/json", "cache-control": `public, max-age=${AI_CACHE_TTL_S}` } });
     ctx.waitUntil(caches.default.put(cacheKey, cacheResponse));
@@ -835,12 +841,14 @@ export function buildEvidencePromptBody(evidenceItems, claims, maxChars) {
   const lines = ["Evidence items:"];
   let truncated = false;
   let usedItems = 0;
+  const usedIds = [];
   for (const item of evidenceItems) {
     const line = `- [${item.id}] (${item.excerptType || "excerpt"}${item.location ? ", " + item.location : ""}): ${String(item.excerptText || "").slice(0, 600)}`;
     const candidate = lines.join("\n") + "\n" + line;
     if (candidate.length > maxChars) { truncated = true; break; }
     lines.push(line);
     usedItems++;
+    usedIds.push(String(item.id));
   }
   if (claims.length && !truncated) {
     lines.push("\nExisting claims:");
@@ -849,30 +857,14 @@ export function buildEvidencePromptBody(evidenceItems, claims, maxChars) {
       const candidate = lines.join("\n") + "\n" + line;
       if (candidate.length > maxChars) { truncated = true; break; }
       lines.push(line);
+      usedIds.push(String(c.claimId || c.id));
     }
   }
   if (truncated) lines.push(`\n(Analysis is based on the first ${usedItems} of ${evidenceItems.length} evidence items - the full set was too large for one analysis pass.)`);
-  return { promptBody: lines.join("\n"), truncated };
+  return { promptBody: lines.join("\n"), truncated, usedIds };
 }
 
-// The model is instructed to return only JSON, but never trust that
-// unconditionally - fall back to returning the raw text as the synthesis
-// rather than silently discarding an answer that didn't parse cleanly.
-function parseAnalysisResponse(text) {
-  try {
-    const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/```\s*$/, "");
-    const parsed = JSON.parse(cleaned);
-    return {
-      themes: Array.isArray(parsed.themes) ? parsed.themes : [],
-      patterns: Array.isArray(parsed.patterns) ? parsed.patterns : [],
-      contradictions: Array.isArray(parsed.contradictions) ? parsed.contradictions : [],
-      synthesis: typeof parsed.synthesis === "string" ? parsed.synthesis : "",
-      parseError: false
-    };
-  } catch {
-    return { themes: [], patterns: [], contradictions: [], synthesis: text, parseError: true };
-  }
-}
+// Structured answers are read strictly by src/aiResult.js: a cut-off, malformed or unfinished answer is refused, never shown.
 
 // ---------------------------------------------------------------------------
 // Ask Sources (AI-assisted, opt-in) - the last-resort layer behind Ask
@@ -911,16 +903,16 @@ async function handleAskSources(request, env, ctx) {
     return json({ ok: true, skipped: true, reason: "No matched passages to analyze - ask a question that finds sources first.", result: null });
   }
 
-  const { promptBody, truncated } = buildPassagePromptBody(passages, aiCaps(env).maxInputChars);
+  const { promptBody, truncated, usedIds } = buildPassagePromptBody(passages, aiCaps(env).maxInputChars);
   const contextClause = previousQuestion
     ? `Previous question: ${previousQuestion}\nPrevious answer: ${previousAnswer || "(not answered by AI)"}\n\n`
     : "";
   const prompt = `${contextClause}Question: ${question}\n\n${promptBody}`;
   const contentHash = hashString(ASK_SOURCES_SYSTEM_PROMPT + "|" + prompt);
 
-  const cacheKey = new Request(`https://cache.internal/analyze/ask-sources?h=${contentHash}`);
+  const cacheKey = new Request(`https://cache.internal/analyze/ask-sources/v2?h=${contentHash}`);
   const cacheHit = await caches.default.match(cacheKey);
-  if (cacheHit) return json({ ...(await cacheHit.json()), cached: true, truncated });
+  if (cacheHit) { const cachedPayload = await cacheHit.json(); if (cachedPayload?.result?.complete === true) return json({ ...cachedPayload, cached: true, truncated }); }
 
   let provider;
   try {
@@ -934,8 +926,12 @@ async function handleAskSources(request, env, ctx) {
     const completion = await provider.complete({ system: ASK_SOURCES_SYSTEM_PROMPT, prompt, maxTokens: aiCaps(env).maxOutputTokens, env });
     recordAiUsage(env, ctx, provider.id, { calls: 1, inputTokens: completion.inputTokens, outputTokens: completion.outputTokens, errors: 0 });
 
-    const result = parseAskSourcesResponse(completion.text);
-    const payload = { ok: true, result, model: completion.model, tookMs: Date.now() - started };
+    const read = interpretAskSources(completion.text, completion.stopReason, new Set(usedIds));
+    if (!read.complete) {
+      console.error(`ask-sources analysis refused as incomplete: ${read.reason} (stop reason ${completion.stopReason}, ${completion.outputTokens} output tokens)`);
+      return json(incompleteBody(read.reason), 502);
+    }
+    const payload = { ok: true, result: read.result, model: completion.model, tookMs: Date.now() - started };
 
     const cacheResponse = new Response(JSON.stringify(payload), { headers: { "content-type": "application/json", "cache-control": `public, max-age=${ASK_CACHE_TTL_S}` } });
     ctx.waitUntil(caches.default.put(cacheKey, cacheResponse));
@@ -954,32 +950,17 @@ export function buildPassagePromptBody(passages, maxChars) {
   const lines = ["Matched passages:"];
   let truncated = false;
   let usedItems = 0;
+  const usedIds = [];
   for (const p of passages) {
     const line = `- [${p.id}]${p.location ? " (" + p.location + ")" : ""}: ${String(p.excerptText || "").slice(0, 600)}`;
     const candidate = lines.join("\n") + "\n" + line;
     if (candidate.length > maxChars) { truncated = true; break; }
     lines.push(line);
     usedItems++;
+    usedIds.push(String(p.id));
   }
   if (truncated) lines.push(`\n(Answer is based on the first ${usedItems} of ${passages.length} matched passages - the full set was too large for one pass.)`);
-  return { promptBody: lines.join("\n"), truncated };
-}
-
-// Same not-trusted-unconditionally parsing pattern as parseAnalysisResponse.
-function parseAskSourcesResponse(text) {
-  try {
-    const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/```\s*$/, "");
-    const parsed = JSON.parse(cleaned);
-    return {
-      answer: typeof parsed.answer === "string" ? parsed.answer : "",
-      citedPassageIds: Array.isArray(parsed.citedPassageIds) ? parsed.citedPassageIds : [],
-      insufficient: !!parsed.insufficient,
-      missing: typeof parsed.missing === "string" ? parsed.missing : "",
-      parseError: false
-    };
-  } catch {
-    return { answer: text, citedPassageIds: [], insufficient: false, missing: "", parseError: true };
-  }
+  return { promptBody: lines.join("\n"), truncated, usedIds };
 }
 
 // AI usage/cost tracking - reuses the CONNECTOR_HEALTH KV namespace (same

@@ -7,7 +7,7 @@ export class AIProvider {
   constructor({ id, label, complete }) {
     this.id = id;
     this.label = label;
-    this._complete = complete; // async ({ system, prompt, maxTokens, env }) => { text, inputTokens, outputTokens, model }
+    this._complete = complete; // async ({ system, prompt, maxTokens, env }) => { text, inputTokens, outputTokens, model, stopReason }
   }
 
   async complete(args) {

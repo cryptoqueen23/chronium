@@ -37,7 +37,10 @@ async function complete({ system, prompt, maxTokens, env }) {
     text,
     inputTokens: data.usage?.input_tokens || 0,
     outputTokens: data.usage?.output_tokens || 0,
-    model: data.model || ANTHROPIC_MODEL
+    model: data.model || ANTHROPIC_MODEL,
+    // Why the model stopped ("end_turn" = it finished; "max_tokens" = it was cut off). Callers must not treat an answer as
+    // complete unless this says so (src/aiResult.js).
+    stopReason: typeof data.stop_reason === 'string' ? data.stop_reason : null
   };
 }
 

@@ -67,7 +67,7 @@ async function callWorker(envExtra, items) {
   globalThis.fetch = async (url, init) => {
     if (String(url).startsWith('https://api.anthropic.com/')) {
       sent.push(JSON.parse(init.body));
-      return new Response(JSON.stringify({ model: 'stub', content: [{ type: 'text', text: '{"themes":[],"patterns":[],"contradictions":[],"synthesis":"ok"}' }], usage: { input_tokens: 1, output_tokens: 1 } }), { headers: { 'content-type': 'application/json' } });
+      return new Response(JSON.stringify({ model: 'stub', content: [{ type: 'text', text: '{"themes":[],"patterns":[],"contradictions":[],"synthesis":"ok"}' }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } }), { headers: { 'content-type': 'application/json' } });
     }
     throw new Error(`unexpected network call: ${url}`);
   };
