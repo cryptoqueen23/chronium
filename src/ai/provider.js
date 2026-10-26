@@ -7,7 +7,8 @@ export class AIProvider {
   constructor({ id, label, complete }) {
     this.id = id;
     this.label = label;
-    this._complete = complete; // async ({ system, prompt, maxTokens, env }) => { text, inputTokens, outputTokens, model, stopReason }
+    this._complete = complete; // async ({ system, prompt, maxTokens, schema, safetyId, env }) => { text, inputTokens, outputTokens, model, stopReason }
+    // stopReason uses one shared vocabulary (see src/aiResult.js): "end_turn" = finished, "max_tokens" = cut off, "refusal", or null = unknown.
   }
 
   async complete(args) {

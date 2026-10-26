@@ -1,5 +1,6 @@
 import { handleFetch, handleCaptures, handleFeatures } from "./discoveryProxy.js";
-import { aiRouteGuard, aiCaps } from "./guard.js";
+import { aiRouteGuard, aiCaps, visitorHash } from "./guard.js";
+import { ANALYSIS_SCHEMA, ASK_SOURCES_SCHEMA } from "./ai/schemas.js";
 import { interpretAnalysis, interpretAskSources, incompleteBody } from "./aiResult.js";
 import { handleViewCapture } from "./viewCapture.js";
 import corpus from "../data/copperas-cove/normalized.json";
@@ -812,7 +813,7 @@ async function handleQualitativeAnalysis(request, env, ctx) {
 
   const started = Date.now();
   try {
-    const completion = await provider.complete({ system: ANALYSIS_SYSTEM_PROMPT, prompt, maxTokens: aiCaps(env).maxOutputTokens, env });
+    const completion = await provider.complete({ system: ANALYSIS_SYSTEM_PROMPT, prompt, maxTokens: aiCaps(env).maxOutputTokens, schema: ANALYSIS_SCHEMA, safetyId: await visitorHash(request, env), env });
     recordAiUsage(env, ctx, provider.id, { calls: 1, inputTokens: completion.inputTokens, outputTokens: completion.outputTokens, errors: 0 });
 
     // Only a finished, well-formed answer that cites only what was sent is an analysis. Anything else is refused, not cached.
@@ -923,7 +924,7 @@ async function handleAskSources(request, env, ctx) {
 
   const started = Date.now();
   try {
-    const completion = await provider.complete({ system: ASK_SOURCES_SYSTEM_PROMPT, prompt, maxTokens: aiCaps(env).maxOutputTokens, env });
+    const completion = await provider.complete({ system: ASK_SOURCES_SYSTEM_PROMPT, prompt, maxTokens: aiCaps(env).maxOutputTokens, schema: ASK_SOURCES_SCHEMA, safetyId: await visitorHash(request, env), env });
     recordAiUsage(env, ctx, provider.id, { calls: 1, inputTokens: completion.inputTokens, outputTokens: completion.outputTokens, errors: 0 });
 
     const read = interpretAskSources(completion.text, completion.stopReason, new Set(usedIds));

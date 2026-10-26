@@ -347,3 +347,7 @@ Every guarded feature `off` on staging (fetch, captures, capture viewer, Ask Sou
 ### 17.5 A production note found along the way (not changed)
 
 The production Worker has an `ANTHROPIC_API_KEY` secret bound, and the live production build predates Stage 0 (its `/api/features` route does not exist), so it has none of the Stage 0 AI switch, ceilings or protections as far as I can tell; I did not call its AI routes to find out. This is the exposure Stage 0 was written to remove (blocker B5, paid AI abuse); it remains live until a production release is separately approved. Nothing was changed.
+
+### 15.11 Provider decision (2026-10-26): sections about Anthropic above are superseded
+
+Mari chose **OpenAI** as the AI provider. The Anthropic workspace, the $5 Anthropic cap and the Haiku 4.5 cost figures in sections 5, 6 and 15.4 are **withdrawn**; the caps (600 output tokens, 8,000 evidence characters, 256 KB body), the ceilings, the strict validation and the rule that AI stays off until approved are unchanged. The replacement plan, costs, key-handling procedure and measurement plan are in `docs/AI_OPENAI_PLAN.md`. Staging still carries `AI_PROVIDER=anthropic` as a deployed variable with no key; that is harmless while AI is off and is to be changed only at an approved redeploy.

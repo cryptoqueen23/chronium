@@ -17,10 +17,11 @@
   "vars": {
     // Which src/ai/index.js adapter handles Qualitative Analysis. Swapping
     // providers is this one line, not a code change - see src/ai/provider.js.
-    // The actual credential is a secret, never a var: run
-    //   wrangler secret put ANTHROPIC_API_KEY
-    // locally to set it (never committed, never sent to the client).
-    "AI_PROVIDER": "anthropic",
+    // OpenAI is the provider. The credential is a Worker SECRET, never a var, never in the repository, the extension, the
+    // PWA or browser storage. The operator types it into a hidden prompt (nothing is echoed or saved in shell history):
+    //   wrangler secret put OPENAI_API_KEY --env staging
+    // AI stays off until it is deliberately switched on (AI_ENABLED, with both cost ceilings).
+    "AI_PROVIDER": "openai",
 
     // PRODUCTION SAFETY (docs/STAGE0_SECURITY.md). Every new network-facing feature is OFF unless its switch is exactly
     // "on", and the Worker itself refuses requests to a feature that is off. Turning a feature on is a deliberate,
@@ -48,7 +49,7 @@
         { "binding": "CONNECTOR_HEALTH", "id": "8253207c950845bb8c32622952585e14" }
       ],
       "vars": {
-        "AI_PROVIDER": "anthropic",
+        "AI_PROVIDER": "openai",
         "ENVIRONMENT": "staging",
         "FEATURE_DISCOVERY_FETCH": "off",
         "FEATURE_DISCOVERY_CAPTURES": "off",

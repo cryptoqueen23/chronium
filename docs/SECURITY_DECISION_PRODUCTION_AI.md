@@ -36,3 +36,7 @@ No request to any AI route; no change to the production Worker, its variables or
 - Does the Anthropic workspace for this key have a spend limit, and what is this month's usage there?
 - Whether the key is used by anything else (another project) before it is rotated.
 - Whether you want AI features at all in the first public release (the current plan keeps them off).
+
+## Update 2026-10-26: a prepared way to do option C without any database upgrade
+
+A Worker-only "AI off" release is prepared and verified locally (branch `release/ai-off`, package `.release/ai-off-package`, verifier `scripts/verify-ai-off-release.mjs`): it changes five lines in the Worker, leaves all 16 static files byte-identical to production (proved against the live site), and so cannot upgrade anyone's saved cases. Nothing was deployed. Details, the approval-time steps, the rollback target and the suggested order (cap the Anthropic workspace, then deploy this, then delete the secret) are in `docs/AI_OPENAI_PLAN.md`, section 6. The provider going forward is OpenAI, not Anthropic.

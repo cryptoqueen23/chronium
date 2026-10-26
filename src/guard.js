@@ -135,6 +135,13 @@ export function acquireSlot(route, max) {
 }
 export const _inflightForTests = inflight;
 
+// A one-way hash of the visitor for the provider's abuse monitoring (OpenAI safety_identifier). Never the address itself.
+export async function visitorHash(request, env) {
+  const bytes = new TextEncoder().encode(`chronium-visitor:${visitorKey(request, env)}`);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 export function visitorKey(request, env) {
   return request.headers.get('cf-connecting-ip') || (isTestMode(env) ? 'test-visitor' : 'unknown');
 }
