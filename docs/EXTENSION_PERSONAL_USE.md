@@ -131,3 +131,7 @@ Do not move or rename `ChroniumMind-Personal` while it is loaded, and do not edi
 | The extension reading a site you did not choose | Each site needs your explicit Allow; all-site access is optional and per site; private addresses are blocked; Copperas Cove and CivicPlus are refused by the program |
 | A stranger with access to your Windows account reading the research | It is not encrypted; use a Windows password and a locked screen |
 | The extension's address list includes the live Chronium server | Search sends your search words to that server (it does not receive your saved cases) |
+
+## 9. Integrity of the installed copy (checked read-only, 2026-10-26)
+
+`C:\Users\insur\ChroniumMind-Personal` (built from commit `4e41c39`, ID `eabmjgghjpgpncnmlkboplfbclcjcpfn`) was compared file by file with what Git stored for that commit: **50 files, no content differences, nothing missing, nothing extra.** Six text files (`lib/askCommands.js`, `lib/askRouter.js`, `lib/db.js`, `panel.css`, `panel.html`, `panel.js`) have Windows line endings (CRLF) where the commit has LF: the same code with different line breaks, which Chrome ignores. The folder was **not modified**. The manifest differs from the development manifest only by the four documented changes (`key`, `version_name`, `unlimitedStorage`, no localhost permission). The extension code has not changed since that commit, so no update is needed. The line-ending rewrite that caused this is now prevented (`docs/DEPLOYMENT_RULES.md`); a future rebuild, only with Mari's permission, will be byte-exact.
