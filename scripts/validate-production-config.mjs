@@ -54,7 +54,7 @@ export function validateConfig(config, { env = null, vars = null, allowOn = [] }
     if (!isWhole(v.AI_PER_VISITOR_PER_DAY) || !isWhole(v.AI_DAILY_CEILING)) problems.push('paid AI cannot be on without AI_PER_VISITOR_PER_DAY and AI_DAILY_CEILING set to whole numbers');
     if (v.FEATURE_ASK_SOURCES === 'on' && v.AI_ENABLED !== 'on') problems.push('FEATURE_ASK_SOURCES needs AI_ENABLED to be on as well');
   }
-  for (const name of Object.keys(v)) if (/^LIMIT_/.test(name) && !isWhole(v[name])) problems.push(`${name} must be a whole number`);
+  for (const name of Object.keys(v)) if (/^(LIMIT_|AI_MAX_)/.test(name) && !isWhole(v[name])) problems.push(`${name} must be a whole number`);
   if (!block.name && !env) problems.push('the Worker has no name');
   if (!config.compatibility_date) problems.push('compatibility_date is missing');
   if (!(config.assets?.run_worker_first || []).includes('/api/*')) problems.push('assets.run_worker_first must include "/api/*" so the Worker sees every API request');

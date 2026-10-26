@@ -177,6 +177,21 @@ export async function enforceLimits(request, env, route, { site = null } = {}) {
   return null;
 }
 
+// Paid-AI size caps, enforced by the Worker (never by the page). Output and the amount of evidence text sent to the model are
+// the two things that cost money per call, so both are capped low by default. Configuration may only LOWER them (the same
+// rule as the LIMIT_* variables); test mode may set exact values. The request-body cap only bounds what the Worker will read
+// and parse: the page sends all of a case's evidence and the Worker truncates it to maxInputChars, so a small body cap would
+// refuse medium-sized cases instead of truncating them, which is why its default stays larger.
+export const AI_CAP_DEFAULTS = Object.freeze({ maxOutputTokens: 600, maxInputChars: 8000, maxBodyBytes: 256 * 1024 });
+export function aiCaps(env) {
+  const base = { ...AI_CAP_DEFAULTS };
+  for (const [key, name] of [['maxOutputTokens', 'AI_MAX_OUTPUT_TOKENS'], ['maxInputChars', 'AI_MAX_INPUT_CHARS'], ['maxBodyBytes', 'AI_MAX_BODY_BYTES']]) {
+    const v = posInt(env?.[name]);
+    if (v !== null && (v < base[key] || isTestMode(env))) base[key] = v;
+  }
+  return base;
+}
+
 // AI: per-visitor and global ceilings per UTC day, plus a short per-minute burst limit. Configuration is required.
 export async function enforceAiLimits(request, env) {
   const c = aiCeilings(env);
@@ -205,7 +220,7 @@ export async function aiRouteGuard(request, env, kind /* 'qualitative' | 'ask-so
   if (!callerAllowed(request, env)) return reply({ error: 'caller-not-allowed' }, 403);
   const len = Number(request.headers.get('content-length') || 0);
   if (!len) return reply({ error: 'length-required' }, 411);
-  if (len > 256 * 1024) return reply({ error: 'too-large' }, 413);
+  if (len > aiCaps(env).maxBodyBytes) return reply({ error: 'too-large' }, 413);
   return enforceAiLimits(request, env);
 }
 

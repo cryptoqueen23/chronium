@@ -1,5 +1,5 @@
 import { handleFetch, handleCaptures, handleFeatures } from "./discoveryProxy.js";
-import { aiRouteGuard } from "./guard.js";
+import { aiRouteGuard, aiCaps } from "./guard.js";
 import { handleViewCapture } from "./viewCapture.js";
 import corpus from "../data/copperas-cove/normalized.json";
 import { getAIProvider } from "./ai/index.js";
@@ -13,8 +13,8 @@ const JSON_HEADERS = {
 // routing is cache -> deterministic -> cheap model -> premium model, and
 // nothing calls a paid API without a real reason to).
 const AI_MIN_EVIDENCE_ITEMS = 2; // below this, deterministic "not enough evidence yet" - no AI call at all
-const AI_MAX_INPUT_CHARS = 12000; // roughly ~3000 tokens of evidence text, leaves room for the response
-const AI_MAX_TOKENS = 1200;
+// The output-token and evidence-text caps are decided by the Worker's configuration, never by the page: see aiCaps() in
+// src/guard.js (defaults 600 output tokens and 8,000 characters of evidence text; configuration can only lower them).
 const AI_CACHE_TTL_S = 1800; // 30 min - re-running analysis on unchanged evidence is free within this window
 
 // Ask Sources cost controls - same shape as the Qualitative Analysis
@@ -794,7 +794,7 @@ async function handleQualitativeAnalysis(request, env, ctx) {
     return json({ ok: true, skipped: true, reason: `Add at least ${AI_MIN_EVIDENCE_ITEMS} evidence items before running analysis.`, result: null });
   }
 
-  const { promptBody, truncated } = buildEvidencePromptBody(evidenceItems, claims);
+  const { promptBody, truncated } = buildEvidencePromptBody(evidenceItems, claims, aiCaps(env).maxInputChars);
   const prompt = `Research question: ${researchQuestion || "(not set)"}\n\n${promptBody}`;
   const contentHash = hashString(ANALYSIS_SYSTEM_PROMPT + "|" + prompt);
 
@@ -811,7 +811,7 @@ async function handleQualitativeAnalysis(request, env, ctx) {
 
   const started = Date.now();
   try {
-    const completion = await provider.complete({ system: ANALYSIS_SYSTEM_PROMPT, prompt, maxTokens: AI_MAX_TOKENS, env });
+    const completion = await provider.complete({ system: ANALYSIS_SYSTEM_PROMPT, prompt, maxTokens: aiCaps(env).maxOutputTokens, env });
     recordAiUsage(env, ctx, provider.id, { calls: 1, inputTokens: completion.inputTokens, outputTokens: completion.outputTokens, errors: 0 });
 
     const result = parseAnalysisResponse(completion.text);
@@ -829,16 +829,16 @@ async function handleQualitativeAnalysis(request, env, ctx) {
 }
 
 // Builds the evidence/claims text block for the prompt, truncating to
-// AI_MAX_INPUT_CHARS if needed rather than silently sending everything (or
+// the input-character cap if needed rather than silently sending everything (or
 // silently dropping items without saying so).
-function buildEvidencePromptBody(evidenceItems, claims) {
+export function buildEvidencePromptBody(evidenceItems, claims, maxChars) {
   const lines = ["Evidence items:"];
   let truncated = false;
   let usedItems = 0;
   for (const item of evidenceItems) {
     const line = `- [${item.id}] (${item.excerptType || "excerpt"}${item.location ? ", " + item.location : ""}): ${String(item.excerptText || "").slice(0, 600)}`;
     const candidate = lines.join("\n") + "\n" + line;
-    if (candidate.length > AI_MAX_INPUT_CHARS) { truncated = true; break; }
+    if (candidate.length > maxChars) { truncated = true; break; }
     lines.push(line);
     usedItems++;
   }
@@ -847,7 +847,7 @@ function buildEvidencePromptBody(evidenceItems, claims) {
     for (const c of claims) {
       const line = `- [${c.claimId || c.id}] ${String(c.text || "").slice(0, 300)}`;
       const candidate = lines.join("\n") + "\n" + line;
-      if (candidate.length > AI_MAX_INPUT_CHARS) { truncated = true; break; }
+      if (candidate.length > maxChars) { truncated = true; break; }
       lines.push(line);
     }
   }
@@ -911,7 +911,7 @@ async function handleAskSources(request, env, ctx) {
     return json({ ok: true, skipped: true, reason: "No matched passages to analyze - ask a question that finds sources first.", result: null });
   }
 
-  const { promptBody, truncated } = buildPassagePromptBody(passages);
+  const { promptBody, truncated } = buildPassagePromptBody(passages, aiCaps(env).maxInputChars);
   const contextClause = previousQuestion
     ? `Previous question: ${previousQuestion}\nPrevious answer: ${previousAnswer || "(not answered by AI)"}\n\n`
     : "";
@@ -931,7 +931,7 @@ async function handleAskSources(request, env, ctx) {
 
   const started = Date.now();
   try {
-    const completion = await provider.complete({ system: ASK_SOURCES_SYSTEM_PROMPT, prompt, maxTokens: AI_MAX_TOKENS, env });
+    const completion = await provider.complete({ system: ASK_SOURCES_SYSTEM_PROMPT, prompt, maxTokens: aiCaps(env).maxOutputTokens, env });
     recordAiUsage(env, ctx, provider.id, { calls: 1, inputTokens: completion.inputTokens, outputTokens: completion.outputTokens, errors: 0 });
 
     const result = parseAskSourcesResponse(completion.text);
@@ -949,15 +949,15 @@ async function handleAskSources(request, env, ctx) {
 }
 
 // Builds the passages text block for the prompt, truncating to
-// AI_MAX_INPUT_CHARS rather than silently sending everything.
-function buildPassagePromptBody(passages) {
+// the input-character cap rather than silently sending everything.
+export function buildPassagePromptBody(passages, maxChars) {
   const lines = ["Matched passages:"];
   let truncated = false;
   let usedItems = 0;
   for (const p of passages) {
     const line = `- [${p.id}]${p.location ? " (" + p.location + ")" : ""}: ${String(p.excerptText || "").slice(0, 600)}`;
     const candidate = lines.join("\n") + "\n" + line;
-    if (candidate.length > AI_MAX_INPUT_CHARS) { truncated = true; break; }
+    if (candidate.length > maxChars) { truncated = true; break; }
     lines.push(line);
     usedItems++;
   }

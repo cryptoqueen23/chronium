@@ -46,6 +46,7 @@ test('turning a feature on needs a deliberate flag, and AI needs both ceilings',
   c = clone(real); c.vars.FEATURE_ASK_SOURCES = 'on'; c.vars.AI_PER_VISITOR_PER_DAY = '1'; c.vars.AI_DAILY_CEILING = '1';
   assert.ok(validateConfig(c, { allowOn: ['FEATURE_ASK_SOURCES'] }).some((p) => /needs AI_ENABLED/.test(p)));
   c = clone(real); c.vars.LIMIT_FETCH_PER_IP_PER_MIN = 'abc'; assert.ok(validateConfig(c).some((p) => /LIMIT_FETCH_PER_IP_PER_MIN/.test(p)));
+  for (const name of ['AI_MAX_OUTPUT_TOKENS', 'AI_MAX_INPUT_CHARS', 'AI_MAX_BODY_BYTES']) { c = clone(real); c.vars[name] = 'lots'; assert.ok(validateConfig(c).some((p) => p.includes(name)), name); c.vars[name] = '300'; assert.deepEqual(validateConfig(c), [], name); }
 });
 test('variables reported by a dry run are checked too (a --var typed on the command line is caught)', () => {
   const dry = `Your Worker has access to the following bindings:\nBinding  Resource\nenv.CONNECTOR_HEALTH (4ed1...)   KV Namespace\nenv.AI_PROVIDER ("anthropic")   Environment Variable\nenv.ENVIRONMENT ("production")   Environment Variable\nenv.TEST_MODE ("on")   Environment Variable\nenv.DISCOVERY_ALLOW_PRIVATE ("127.0.0.1:8790")   Environment Variable\nenv.FEATURE_DISCOVERY_FETCH ("off")   Environment Variable\n`;
