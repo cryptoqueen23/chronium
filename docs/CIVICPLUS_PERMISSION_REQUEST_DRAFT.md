@@ -1,5 +1,8 @@
 # DRAFT: written permission request to the City of Copperas Cove and CivicPlus
 
+> **SUPERSEDED. DO NOT USE OR SEND THIS DRAFT.** It is replaced by `docs/CIVICPLUS_LETTER_FINAL.md` (revised 2026-10-26 with Mari's wording corrections). This older text contains wording that has been withdrawn, including comparisons to the 1,000-request figure in the CivicPlus terms and the original "My question" paragraph. It is kept only as a record of how the letters evolved. Neither letter has been sent.
+
+
 **Status: DRAFT. NOT SENT. Do not send without Mari's approval.** Prepared 2026-10-23. Nothing in this file changes any behavior: until a reply is received and recorded, `copperascovetx.gov` and `civicplus.com` stay `unverified` and blocked for automated retrieval in both the engine and the Worker (`docs/CIVICPLUS_VERIFICATION.md`).
 
 ## Who to send it to (to confirm before sending)
