@@ -22,6 +22,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { findCrlf } from './check-deploy-tree.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (n) => { const a = process.argv.find((x) => x.startsWith(`--${n}=`)); return a ? a.slice(n.length + 3) : null; };
@@ -56,6 +57,9 @@ function cli() {
   try { commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(); } catch { /* no git */ }
   let dirty = false;
   try { dirty = execFileSync('git', ['status', '--porcelain', '--', 'extension', 'public'], { cwd: root, encoding: 'utf8' }).trim().length > 0; } catch { /* no git */ }
+  // The copy must be byte-for-byte what is committed: refuse an extension folder whose text files were rewritten with Windows line endings.
+  const crlf = findCrlf(root, ['extension']).bad;
+  if (crlf.length) { console.error(`The extension folder has Windows line endings (${crlf.slice(0, 5).map((b) => b.file).join(', ')}...). Run git checkout -- extension, then try again.`); process.exit(1); }
   if (dirty && !allowDirty) { console.error('The extension or shared code has uncommitted changes. Commit them first, so this copy matches a commit you can come back to.'); process.exit(1); }
 
   if (fs.existsSync(dest) && fs.readdirSync(dest).length) {
