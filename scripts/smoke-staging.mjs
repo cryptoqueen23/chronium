@@ -41,11 +41,15 @@ try {
   const f = features.json?.features || {};
   check('every guarded feature reports off', features.status === 200 && ['ai', 'askSources', 'discoveryCaptures', 'discoveryFetch', 'viewCapture'].every((k) => f[k] === false), JSON.stringify(f));
 
-  // Harmless example addresses on a reserved name; nothing is ever fetched because the routes are off.
+  // A deploy takes up to a minute to reach every location, and the previous version may still be serving. If any feature still
+  // reports on, stop here: sending the route probes could do real work. (Found on staging 2026-10-26.)
+  if (Object.values(f).some((v) => v !== false)) throw new Error('a feature still reports on (a deploy may still be propagating); not sending the route probes. Wait and rerun.');
+  // The probe address is the reserved name probe.invalid (RFC 2606), which cannot exist, so even a route wrongly switched on
+  // could not fetch anything from any website.
   const probes = [
-    ['GET', '/api/fetch?url=https%3A%2F%2Fexample.org%2F&ack=1&seed=1'],
-    ['GET', '/api/captures?url=https%3A%2F%2Fexample.org%2F'],
-    ['GET', '/api/view-capture?url=https%3A%2F%2Fweb.archive.org%2Fweb%2F2020%2Fhttps%3A%2F%2Fexample.org%2F'],
+    ['GET', '/api/fetch?url=https%3A%2F%2Fprobe.invalid%2F&ack=1&seed=1'],
+    ['GET', '/api/captures?url=https%3A%2F%2Fprobe.invalid%2F'],
+    ['GET', '/api/view-capture?url=https%3A%2F%2Fweb.archive.org%2Fweb%2F2020%2Fhttps%3A%2F%2Fprobe.invalid%2F'],
     ['POST', '/api/analyze/qualitative'],
     ['POST', '/api/analyze/ask-sources']
   ];
@@ -69,4 +73,4 @@ try {
 const failed = results.filter((r) => !r.ok).length;
 console.log(`\n${results.length - failed} passed, ${failed} failed, ${used} requests used of a budget of ${budget}.`);
 if (logPath) fs.writeFileSync(logPath, JSON.stringify({ base, when: new Date().toISOString(), requestsUsed: used, budget, results }, null, 2));
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

@@ -308,3 +308,42 @@ If namespace ids 7101 to 7103 are already used by another Worker in the account,
 ### 16.5 Not part of this step
 
 Fixtures Worker; edge CPU and memory measurement of document fetching (needs fixtures and a further approval); the AI phase; the real-browser database-upgrade and extension tests (manual, section 10); any production change.
+
+
+## 17. Staging created and first test run (2026-10-26, 18:57 to 19:00 UTC)
+
+**Authorization:** Mari approved exactly one staging KV namespace and one staging Worker, switches off at first, a 60-request cap, and a limiter probe using only `probe.invalid`. Nothing else was created. Production was not touched.
+
+### 17.1 What exists now
+
+| Item | Value |
+|---|---|
+| Staging Worker | `chronium-mind-staging`, https://chronium-mind-staging.truewolfflix777.workers.dev (workers.dev and preview URLs enabled), **left deployed with every guarded feature off** |
+| Staging KV namespace | title `staging-CONNECTOR_HEALTH`, id `8253207c950845bb8c32622952585e14` (production's is `4ed1a352…`, different) |
+| Bindings (read back from the account) | `CONNECTOR_HEALTH` (staging KV), `RL_FETCH` ns 7101 (15/60 s), `RL_VIEWCAPTURE` ns 7102 (15/60 s), `RL_AI` ns 7103 (3/60 s), `ASSETS`, and eight plain variables: `ENVIRONMENT=staging`, `RATE_LIMIT_BINDING=required`, `AI_PROVIDER=anthropic`, and `FEATURE_DISCOVERY_FETCH`, `FEATURE_DISCOVERY_CAPTURES`, `FEATURE_VIEW_CAPTURE`, `FEATURE_ASK_SOURCES`, `AI_ENABLED`, all `off`. **No secret of any kind is bound.** |
+| Versions | `f52516f2-d74a-4479-8e01-c16ada57ec52` (initial, all off) → `49413483-087f-41dc-9b39-bc50c9690d67` (fetch on, probe, 18:58:52Z) → `db94028d-a8e1-4896-8596-84226a7fc90c` (all off, 18:59:30Z, **current**) |
+| Namespace-id check | Before deploying, every Worker in the account (8) and every Pages project (4) was read through the API (read-only): none declares a Rate Limiting binding, so ids 7101 to 7103 were unused |
+| Production | untouched: still version `60045ea5-992c-499e-8290-a8ef08572667`, same 4 bindings (including its own `ANTHROPIC_API_KEY` secret and its own KV) |
+
+### 17.2 Results
+
+- **Rate Limiting binding on the Free plan: accepted.** `wrangler deploy` succeeded with the three `ratelimit` bindings on the Workers Free plan, no upgrade or payment.
+- **Phase A (switches off): passed.** 15 of 15 checks, 10 requests. Every guarded route answered 404 `not-available`; every feature reported off; pages and the upgrade script loaded; no key or secret appeared in any response.
+- **Phase B (fetch on, limiter probe): INCONCLUSIVE, and the binding did NOT visibly enforce its limit.** 25 sequential requests to `probe.invalid` were all answered `400 address-refused / no-address`; **none was refused by the burst limiter** although the configured limit is 15 per 60 s. The cap of 25 was reached. No successful fetch, no 5xx, no network failure. The binding is documented as approximate and per location, so this cannot be called a bug, but it also means the binding cannot be relied on as a limiter on this evidence. Local simulation (wrangler dev) had refused from request 16. The order of checks "limiter before reserved-name rejection" is therefore not proven on the edge (it is proven locally and in the unit tests). **Not retried, per instructions; a retry or a different design needs approval.** Possible explanations to test, not assumed: the limit counts per location and eventually (sequential requests 0.5 to 1 s apart may be counted late); the production edge may smooth or sample the counter; a configuration detail. The existing per-visitor counters (not the binding) remain the enforced limit.
+- **Disabling after the probe: done, with a propagation lesson.** The redeploy that turned fetch off was uploaded at 18:59:30Z, but the previous version kept serving for roughly 20 more seconds. The disabled-state smoke test, run in that window, therefore saw the route still on, and its probe address `https://example.org/` **was actually fetched once (HTTP 200)**: one request to the IANA-reserved example domain, an unintended successful fetch that the stop rules would forbid, caused by the test's probe address and not by the app. Fetch was **on for about a minute in total** (18:58:52Z to about 18:59:50Z). Confirmed off afterwards: `/api/features` all false at 18:59:52Z; `/api/fetch` and `/api/captures` answered 404 `not-available`; the account read-back shows every switch `off`.
+- **Fixes made because of this:** `scripts/smoke-staging.mjs` now uses `probe.invalid` for its probe addresses (a wrongly-on route can no longer fetch anything from any website) and **stops before the route probes if any feature still reports on**. Rule going forward: after every deploy, wait until `/api/features` shows the expected state before any other request.
+
+### 17.3 Request counts and observed edge numbers
+
+- **Requests sent by the scripts and me:** 49 of the 60 cap: Phase A 10; Phase B probe 25; disabled-state check 10; one direct `/api/fetch` check 1; features check 1; final route checks 2. Only `probe.invalid` and the one `example.org` request above were ever named in a fetch. No Copperas Cove, CivicPlus or other municipal address was requested.
+- **Cloudflare's own counts** (Workers analytics API, read afterwards; the data can lag and static-file requests do not invoke the Worker): 39 invocations: 7 on `f52516f2`, 30 on `49413483`, 2 on `db94028d`; **0 errors**; 6 subrequests, all on the fetch-on version.
+- **CPU and wall time per invocation** (microseconds as reported; tiny samples, **not a measurement of document fetching**, which needs the fixtures phase): all-off version, p50 0.83 ms, p99 1.6 ms CPU; fetch-on version (the probe plus the one example.org fetch), **p50 3.8 ms, p99 14.7 ms CPU** (above the Free plan's 10 ms for the slowest request, with no error status recorded), wall p50 45 ms, p99 205 ms. Memory: not available from this analytics source; to read in the dashboard (Workers & Pages → chronium-mind-staging → Metrics).
+- **Cost:** none observed; the Free plan was not exceeded. The dashboard figure for billable usage should still read $0.00.
+
+### 17.4 Final state
+
+Every guarded feature `off` on staging (fetch, captures, capture viewer, Ask Sources, AI); AI has no key; staging **retained, deployed**, all switches off; production unchanged. No further staging phase is started without approval.
+
+### 17.5 A production note found along the way (not changed)
+
+The production Worker has an `ANTHROPIC_API_KEY` secret bound, and the live production build predates Stage 0 (its `/api/features` route does not exist), so it has none of the Stage 0 AI switch, ceilings or protections as far as I can tell; I did not call its AI routes to find out. This is the exposure Stage 0 was written to remove (blocker B5, paid AI abuse); it remains live until a production release is separately approved. Nothing was changed.
