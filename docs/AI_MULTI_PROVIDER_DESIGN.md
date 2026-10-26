@@ -10,6 +10,7 @@ Standing rules, unchanged: AI stays **off** until Mari approves activation and c
 |---|---|
 | Production `chronium-mind` | `ANTHROPIC_API_KEY` is a **Secret** (`secret_text`), preserved. Live code is the August build (unguarded AI route; shutdown patch prepared, **not deployed**, paused) |
 | Staging `chronium-mind-staging` | `OPENAI_API_KEY` exists but is a **plain-text variable** (`plain_text`, value never shown), **not a Secret**; staging's secrets list is empty. Staging AI switch is `off`; the deployed staging code predates the OpenAI adapter and does not read the key |
+| Update later the same day | Mari converted `OPENAI_API_KEY` to a **Secret** (verified). Staging's `AI_PROVIDER` setting was also converted to a Secret **by accident**: documented, with a correction plan awaiting approval, in `docs/STAGING_AI_PROVIDER_CORRECTION.md` |
 | Repository (main) | Anthropic and OpenAI adapters, strict validation, caps, ceilings, token ceiling, latch, all with AI off by default |
 
 ## 1. Problem found in today's code: the controls are shared, not independent
