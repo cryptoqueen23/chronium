@@ -87,3 +87,60 @@ Then `node scripts\verify-crawler-release.mjs --package=.release\package --url=h
 ## 8. What was not done
 
 No deployment; no secret deleted or rotated; no variable changed; no Anthropic console access; no POST to any public site. The live Worker script was read through the account's read-only API using the existing Wrangler login (the token was used for GET requests only and never printed).
+
+
+## 9. Pre-deployment checklist: results (second pass, 2026-10-26)
+
+| # | Mari's check | Result | Evidence |
+|---|---|---|---|
+| 1 | The release branch is based on the exact deployed version, not on `main` | **Pass** | `release/ai-off` (`1575301`) has exactly one parent, `244a9d3`, the production package commit, which sits on `d80ef66`. `main` is **not** an ancestor of it and it is not an ancestor of `main`. The deployed Worker module is byte-identical to the compile of that package (SHA-256 `fa5429c6209fdfc8`). The exported package equals the commit exactly, file for file (stray local `.wrangler` scratch folders were removed) |
+| 2 | All existing website assets unchanged | **Pass** | `verify-ai-off-release.mjs` against the live site today: **16 of 16 static files byte-identical** to the package. The package differs from the production package only in `src/index.js` (5 lines); `wrangler.jsonc` and `package.json` are byte-identical to it. Dry-run upload sizes differ by 0.18 KiB |
+| 3 | It cannot upgrade IndexedDB from version 4 | **Pass, in a real browser** | `scripts/test-ai-off-browser.mjs` (Chrome for Testing, throwaway profile, the page's **own production code**, run against a local copy of the patched package): created a case with a source and two evidence passages in a version-4 database; reloaded; opened the Analysis tab; pressed the real "Run AI analysis" button; navigated; reloaded again. The database stayed **version 4 at every step**, the case and both passages were untouched, no `boot.js` or `upgrade.js` was ever requested, and every request stayed on the page's own origin. The same test on the **unpatched** production package (the control) also stays at version 4, so the test is sensitive to what it checks (there, the AI call answers 502 instead of 404). 10 of 10 checks both times |
+| 4 | Both old AI routes answer 404 when disabled | **Pass** | `GET /api/ai/usage` and `/api/analyze/qualitative` answer 404 for GET, POST, HEAD, OPTIONS and PUT; in the browser the live page shows the word `not-available` and keeps working. A side-by-side run of 29 requests against the production package and the patched one: 20 identical, 9 different, all 9 on these two routes |
+| 5 | Nothing in the deployment affects the personal Chrome extension | **Pass** | The extension (and the stable personal copy) call only `/api/search` and `/api/captures` on the server (and fetch sites directly); neither is changed (search and captures answer identically in the 29-request comparison; `/api/captures` is 404 on production today and stays 404). The extension contains **no reference** to the two AI routes (0 matches). It is a separate program with its own storage under its own ID; the deployment replaces only the website's Worker and its files remain identical. Nothing in `C:\Users\insur\ChroniumMind-Personal` is touched |
+| 6 | The exact rollback command and deployment target | **Pass** | Section 10 below. Target: Worker **`chronium-mind`**, account `marimercruz8@gmail.com` (`c0059d95...`, the only account this login sees), top-level configuration (no `--env`), KV `CONNECTOR_HEALTH` `4ed1a352…`. Rollback target `60045ea5-992c-499e-8290-a8ef08572667`, present in the version history |
+| 7 | The patch is fail-closed, including when `AI_ENABLED` is absent or malformed | **Pass** | `scripts/verify-ai-off-failclosed.mjs` loads the patched Worker unchanged and tries **36 values** (missing, null, empty, space, `ON`, `On`, `true`, `1`, numbers, booleans, `yes`, `enabled`, leading/trailing spaces, newline, tab, quotes, `off`, `false`, `0`, the words `null`/`undefined`, `{}`, `[]`, `["on"]`, an object whose text says "on", look-alike Cyrillic and full-width characters, a zero-width space, a 10,000-character string) against 7 requests each (GET, POST, HEAD, OPTIONS, PUT on the analysis route; usage; POST to usage): **every one answers 404**, and 12 path tricks (trailing slash, upper case, double slash, `%71`, `%00`, `?x=1`, `#frag`, `./`, `../`, `/api/ai/usage/`, `.json`, `/api/ai`) all answer 404. Only the exact string `on` enables it, and even then, with no key, a call fails inside the Worker before any network request. Zero outbound requests were attempted by any of it. The comparison is exact (`=== "on"`), made before any other code on those paths runs |
+| 8 | Whether any other live route can invoke Anthropic or incur charges | **None can** | In the Worker source there is exactly **one** call that reaches a model (`provider.complete`, inside `handleQualitativeAnalysis`) and **one** address that sends to Anthropic (`api.anthropic.com`, in the adapter); the analysis handler is called from one place, after the switch. `/api/ai/usage` only reads the counters (no model call) and is also behind the switch. The Worker has only a `fetch` handler (no scheduled, queue or email triggers). Its other outbound destinations are free public archive services with no key: Arquivo.pt, the Wayback Machine, Common Crawl, Memento. The only credentials it reads are the KV binding and `ANTHROPIC_API_KEY` (an R2 name appears in a comment only). The production configuration has no R2, D1, queue or AI bindings. The account is on the Workers Free plan, so Worker requests cannot be billed |
+
+## 10. The final release command, and rollback (NOT RUN: waiting for Mari's explicit approval)
+
+Before running it: confirm the current production version is still `60045ea5-992c-499e-8290-a8ef08572667` (`npx wrangler deployments list --name chronium-mind`) and that you have reviewed your Anthropic spending controls.
+
+**Deploy** (from the project folder, using the installed Wrangler 4.127.0):
+```
+cd C:\Users\insur\chronium\.release\ai-off-package
+node ..\..\node_modules\wrangler\bin\wrangler.js deploy --message "Switch off the paid-AI routes (Worker only; no front-end change)"
+```
+Expect: Worker `chronium-mind`; bindings exactly `CONNECTOR_HEALTH (4ed1a352…)`, `ASSETS`, `AI_PROVIDER ("anthropic")`; **no new assets uploaded**. **If it names a new or changed static file, stop and run the rollback.**
+
+**Verify** (read-only; wait 30 to 60 seconds for every location to switch first; on staging the previous version kept serving for up to a minute):
+```
+cd C:\Users\insur\chronium
+node scripts\verify-ai-off-release.mjs --package=.release\ai-off-package --url=https://chronium-mind.truewolfflix777.workers.dev --expect=after
+```
+Pass means: 16 of 16 static files identical, database version 4, no `boot.js`/`upgrade.js`, every other route unchanged, both AI routes 404. If `/api/ai/usage` still answers 200, wait a minute and rerun once.
+
+**Rollback** (one command; resources such as KV are not changed by a rollback):
+```
+cd C:\Users\insur\chronium\.release\ai-off-package
+node ..\..\node_modules\wrangler\bin\wrangler.js rollback 60045ea5-992c-499e-8290-a8ef08572667 --message "Roll back the AI-off release"
+```
+then `node scripts\verify-ai-off-release.mjs --package=.release\ai-off-package --url=https://chronium-mind.truewolfflix777.workers.dev --expect=before` (it expects the pre-release behaviour: usage 200, analysis 405).
+
+## 11. After the shutdown is deployed and verified: removing the Anthropic key (NOT DONE; waiting for approval)
+
+Not before section 10's verification passes, and not before you have reviewed your Anthropic account's spending controls.
+
+1. **Identify the key.** In the Anthropic Console, open the API keys list. The live counters show the last model call on **2026-08-29 about 22:09 UTC**: the key whose "last used" date matches is the one bound to this Worker. If you named a key for Chronium, that is it. Check no other project uses it.
+2. **Remove the secret from the Worker** (production). This creates a new version and deploys immediately:
+   ```
+   cd C:\Users\insur\chronium\.release\ai-off-package
+   node ..\..\node_modules\wrangler\bin\wrangler.js secret delete ANTHROPIC_API_KEY
+   ```
+   Then `node scripts\list-worker-bindings.mjs`: `chronium-mind` must list no `ANTHROPIC_API_KEY`; and rerun the verifier with `--expect=after`.
+3. **Revoke the key at Anthropic** (delete it in the Console's API keys page). **This is the step that makes it permanent.** Cloudflare's documentation does not say whether a rollback to an older version would restore a deleted secret (a secret change is recorded as its own version), so a revoked key is the only thing that guarantees the old route could never spend again even after a rollback.
+4. Leave `AI_PROVIDER` as it is; it is harmless. The route is already off.
+
+## 12. A finding during this pass: a credential stored as a plain variable (staging)
+
+On **2026-10-26** Mari added an OpenAI key to the **staging** Worker as a **plain-text variable** named `OPENAI_API_KEY` (the value was never displayed here: every check since redacts it). A plain-text variable is not a secret: its value is shown in the dashboard and returned by the account API to any tool using the Cloudflare login. Production has no OpenAI key. Staging's AI switch is `off` and the code deployed on staging (version `db94028d`) predates the OpenAI adapter and does not read it, so nothing can use or spend it. Fix (Mari's step, see `docs/AI_OPENAI_PLAN.md` section 1): delete the variable, add it back with the type **Secret** (or `npx wrangler secret put OPENAI_API_KEY --env staging`), and consider rotating the key since it has been stored as readable text. `scripts/list-worker-bindings.mjs` audits every Worker and flags this case without printing values. Also: by default a `wrangler deploy` replaces a Worker's plain variables with the ones in the configuration file (Wrangler has a `--keep-vars` option to prevent that), so a dashboard-added plain variable can be silently dropped by the next staging deploy; a secret is not affected.
