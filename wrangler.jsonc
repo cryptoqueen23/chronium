@@ -53,8 +53,18 @@
         "FEATURE_DISCOVERY_CAPTURES": "off",
         "FEATURE_VIEW_CAPTURE": "off",
         "FEATURE_ASK_SOURCES": "off",
-        "AI_ENABLED": "off"
-      }
+        "AI_ENABLED": "off",
+        // The burst limiter fails closed: if its binding is missing or broken, guarded routes refuse requests.
+        "RATE_LIMIT_BINDING": "required"
+      },
+      // Workers Rate Limiting binding (GA 2025-09-19). Windows are 10 or 60 seconds, counted per Cloudflare location and
+      // approximately. namespace_id only has to be a unique positive integer within the account. Whether the Workers
+      // Free plan accepts the binding is not stated in Cloudflare's documentation: the first staging deploy settles it.
+      "ratelimits": [
+        { "name": "RL_FETCH", "namespace_id": "7101", "simple": { "limit": 15, "period": 60 } },
+        { "name": "RL_VIEWCAPTURE", "namespace_id": "7102", "simple": { "limit": 15, "period": 60 } },
+        { "name": "RL_AI", "namespace_id": "7103", "simple": { "limit": 3, "period": 60 } }
+      ]
     }
   }
 }

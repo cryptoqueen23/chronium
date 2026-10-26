@@ -74,7 +74,8 @@ test('production-like configuration: test-only variables make every guarded feat
     assert.ok(configProblems(env).length, `${v} must be a problem in production`);
     assert.equal((await handleFetch(req('http://w/api/fetch?url=https://records.example.gov/x'), env, { fetchImpl: upstreamStub(PUBLIC) })).status, 503, v);
     assert.equal((await handleCaptures(req('http://w/api/captures?url=https://records.example.gov/x'), env)).status, 503);
-    assert.equal((await handleViewCapture(req('http://w/api/view-capture?url=https://web.archive.org/web/2024/x'), env, {})).status, 503);
+    // The capture viewer is never available in a production environment at all (404), which is checked before the unsafe-configuration 503.
+    assert.equal((await handleViewCapture(req('http://w/api/view-capture?url=https://web.archive.org/web/2024/x'), env, {})).status, 404);
     assert.equal((await aiRouteGuard(req('http://w/x', { method: 'POST', headers: { 'content-length': '5' } }), env, 'qualitative')).status, 503);
     assert.equal(featureEffective(env, 'discoveryFetch'), false);
   }

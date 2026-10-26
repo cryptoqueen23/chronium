@@ -148,7 +148,7 @@ try {
   check('C: an unsafe configuration turns every guarded feature off', Object.values(fc).every((v) => v === false), JSON.stringify(fc));
   const c1 = await raw(C, 'GET', `/api/fetch?url=http://127.0.0.1:${SITE}/plain.txt&ack=1`, { 'sec-fetch-site': 'same-origin' });
   const c2 = await raw(C, 'GET', '/api/view-capture?url=https://web.archive.org/web/2024/x', { 'sec-fetch-site': 'same-origin', 'sec-fetch-dest': 'empty' });
-  check('C: guarded routes refuse to run (503 unsafe-configuration) and nothing is fetched', c1.status === 503 && /unsafe-configuration/.test(c1.text) && c2.status === 503, `${c1.status}/${c2.status}`);
+  check('C: guarded routes refuse to run (503 unsafe-configuration; the capture viewer 404) and nothing is fetched', c1.status === 503 && /unsafe-configuration/.test(c1.text) && c2.status === 404, `${c1.status}/${c2.status}`); // the capture viewer is never available in a production environment, so it answers 404 before the unsafe-configuration check
   check('C: the rest of the site keeps working', (await raw(C, 'GET', '/api/health')).status === 200);
 
   // ================= legacy routes, find-records message, upgrade gate (on A) =================

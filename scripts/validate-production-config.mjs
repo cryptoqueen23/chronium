@@ -49,6 +49,7 @@ export function validateConfig(config, { env = null, vars = null, allowOn = [] }
     if (value === 'on' && !allowOn.includes(name)) problems.push(`${name} is "on" but was not named with --allow-on; turning a feature on must be a deliberate, recorded choice`);
     void feature;
   }
+  if (v.FEATURE_VIEW_CAPTURE === 'on') problems.push('FEATURE_VIEW_CAPTURE cannot be deployed "on" anywhere public: archived pages must first be served from their own separate origin (docs/STAGE1_STAGING_PROPOSAL.md section 7); --allow-on does not override this');
   if (v.AI_ENABLED === 'on' || v.FEATURE_ASK_SOURCES === 'on') {
     if (!isWhole(v.AI_PER_VISITOR_PER_DAY) || !isWhole(v.AI_DAILY_CEILING)) problems.push('paid AI cannot be on without AI_PER_VISITOR_PER_DAY and AI_DAILY_CEILING set to whole numbers');
     if (v.FEATURE_ASK_SOURCES === 'on' && v.AI_ENABLED !== 'on') problems.push('FEATURE_ASK_SOURCES needs AI_ENABLED to be on as well');
@@ -57,6 +58,22 @@ export function validateConfig(config, { env = null, vars = null, allowOn = [] }
   if (!block.name && !env) problems.push('the Worker has no name');
   if (!config.compatibility_date) problems.push('compatibility_date is missing');
   if (!(config.assets?.run_worker_first || []).includes('/api/*')) problems.push('assets.run_worker_first must include "/api/*" so the Worker sees every API request');
+  // Rate Limiting binding: staging must require it and declare every binding it needs; production must not use it yet.
+  const rl = block.ratelimits || [];
+  if (env) {
+    if (v.RATE_LIMIT_BINDING !== 'required') problems.push('staging must set RATE_LIMIT_BINDING to "required" so the burst limiter fails closed');
+    for (const name of ['RL_FETCH', 'RL_VIEWCAPTURE', 'RL_AI']) {
+      const b = rl.find((x) => x.name === name);
+      if (!b) { problems.push(`staging has no ratelimits binding named ${name}`); continue; }
+      if (!isWhole(b.namespace_id)) problems.push(`${name}: namespace_id must be a positive whole number written as a string`);
+      if (![10, 60].includes(b.simple?.period)) problems.push(`${name}: period must be 10 or 60`);
+      if (!Number.isInteger(b.simple?.limit) || b.simple.limit < 1) problems.push(`${name}: limit must be a positive whole number`);
+    }
+    const ids = rl.map((x) => x.namespace_id); if (new Set(ids).size !== ids.length) problems.push('ratelimits namespace_id values must be unique');
+    if (ids.some((id) => (config.ratelimits || []).some((x) => x.namespace_id === id))) problems.push('staging reuses a production ratelimits namespace_id');
+  } else {
+    if (rl.length || v.RATE_LIMIT_BINDING !== undefined) problems.push('production must not use the Rate Limiting binding yet (it is staging-only until measured)');
+  }
   if (env) {
     const prodName = config.name; const prodKv = (config.kv_namespaces || []).map((k) => k.id);
     if (!block.name || block.name === prodName) problems.push('staging must be a separate Worker with its own name');

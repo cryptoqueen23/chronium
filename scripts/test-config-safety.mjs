@@ -30,9 +30,14 @@ test('a missing or wrong ENVIRONMENT, a missing switch, or a switch with a loose
   for (const bad of ['ON', 'true', '1', 'enabled', '']) { c = clone(real); c.vars.FEATURE_DISCOVERY_FETCH = bad; assert.ok(validateConfig(c).some((p) => /exactly "on" or "off"/.test(p)), bad); }
 });
 test('turning a feature on needs a deliberate flag, and AI needs both ceilings', () => {
-  let c = clone(real); c.vars.FEATURE_VIEW_CAPTURE = 'on';
+  let c = clone(real); c.vars.FEATURE_DISCOVERY_FETCH = 'on';
   assert.ok(validateConfig(c).some((p) => /not named with --allow-on/.test(p)));
-  assert.deepEqual(validateConfig(c, { allowOn: ['FEATURE_VIEW_CAPTURE'] }), []);
+  assert.deepEqual(validateConfig(c, { allowOn: ['FEATURE_DISCOVERY_FETCH'] }), []);
+  // The capture viewer is different: no flag can turn it on in any deployed configuration (separate origin first).
+  c = clone(real); c.vars.FEATURE_VIEW_CAPTURE = 'on';
+  assert.ok(validateConfig(c, { allowOn: ['FEATURE_VIEW_CAPTURE'] }).some((p) => /separate origin/.test(p)), 'production');
+  c = clone(real); c.env.staging.kv_namespaces[0].id = 'aaaabbbbccccddddeeeeffff00001111'; c.env.staging.vars.FEATURE_VIEW_CAPTURE = 'on';
+  assert.ok(validateConfig(c, { env: 'staging', allowOn: ['FEATURE_VIEW_CAPTURE'] }).some((p) => /separate origin/.test(p)), 'staging');
   c = clone(real); c.vars.AI_ENABLED = 'on';
   assert.ok(validateConfig(c, { allowOn: ['AI_ENABLED'] }).some((p) => /cost|AI_DAILY_CEILING/.test(p)), 'AI on without ceilings');
   c.vars.AI_PER_VISITOR_PER_DAY = '10'; c.vars.AI_DAILY_CEILING = '200';
@@ -68,4 +73,16 @@ test('the deploy scripts run the validator first', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   assert.match(pkg.scripts.deploy, /validate-production-config\.mjs/); assert.ok(pkg.scripts.deploy.indexOf('validate-production-config') < pkg.scripts.deploy.indexOf('wrangler deploy'));
   assert.match(pkg.scripts['deploy:staging'], /--env=staging/); assert.match(pkg.scripts['deploy:staging'], /wrangler deploy --env staging/);
+});
+
+test('staging requires the burst limiter, with every binding declared, and production must not use it yet', () => {
+  const ok = (c) => { c.env.staging.kv_namespaces[0].id = 'aaaabbbbccccddddeeeeffff00001111'; return c; };
+  assert.deepEqual(validateConfig(ok(clone(real)), { env: 'staging' }), []);
+  assert.equal(real.env.staging.vars.RATE_LIMIT_BINDING, 'required');
+  let c = ok(clone(real)); c.env.staging.vars.RATE_LIMIT_BINDING = 'on'; assert.ok(validateConfig(c, { env: 'staging' }).some((p) => /RATE_LIMIT_BINDING/.test(p)));
+  for (const name of ['RL_FETCH', 'RL_VIEWCAPTURE', 'RL_AI']) { c = ok(clone(real)); c.env.staging.ratelimits = c.env.staging.ratelimits.filter((b) => b.name !== name); assert.ok(validateConfig(c, { env: 'staging' }).some((p) => p.includes(name)), name); }
+  c = ok(clone(real)); c.env.staging.ratelimits[0].simple.period = 30; assert.ok(validateConfig(c, { env: 'staging' }).some((p) => /period must be 10 or 60/.test(p)));
+  c = ok(clone(real)); c.env.staging.ratelimits[1].namespace_id = c.env.staging.ratelimits[0].namespace_id; assert.ok(validateConfig(c, { env: 'staging' }).some((p) => /unique/.test(p)));
+  c = clone(real); c.ratelimits = [{ name: 'RL_FETCH', namespace_id: '1', simple: { limit: 5, period: 60 } }]; assert.ok(validateConfig(c).some((p) => /production must not use/.test(p)));
+  c = clone(real); c.vars.RATE_LIMIT_BINDING = 'required'; assert.ok(validateConfig(c).some((p) => /production must not use/.test(p)));
 });

@@ -49,8 +49,11 @@ export function aiCeilings(env) {
   const perVisitor = posInt(env?.AI_PER_VISITOR_PER_DAY); const global = posInt(env?.AI_DAILY_CEILING);
   return perVisitor && global ? { perVisitor, global } : null;
 }
+// Archived pages are third-party HTML. Until they are served from their own separate origin (docs/STAGE1_STAGING_PROPOSAL.md,
+// section 7), the capture viewer is never available in a production environment, whatever its switch says.
+const neverInProduction = (env, feature) => feature === 'viewCapture' && isProduction(env);
 export function featureEffective(env, feature) {
-  if (!featureSwitch(env, feature) || configProblems(env).length) return false;
+  if (!featureSwitch(env, feature) || configProblems(env).length || neverInProduction(env, feature)) return false;
   if (feature === 'ai') return !!aiCeilings(env);
   if (feature === 'askSources') return featureSwitch(env, 'ai') && !!aiCeilings(env);
   return true;
@@ -62,7 +65,7 @@ export function publicFeatures(env) {
 // Answers for a switched-off or unsafe feature. A switched-off feature looks absent (404) so that it cannot be probed.
 export function featureGate(env, feature) {
   const problems = configProblems(env);
-  if (!featureSwitch(env, feature)) return reply({ error: 'not-available' }, 404);
+  if (!featureSwitch(env, feature) || neverInProduction(env, feature)) return reply({ error: 'not-available' }, 404);
   if (problems.length) return reply({ error: 'unsafe-configuration' }, 503);
   if (feature === 'ai' && !aiCeilings(env)) return reply({ error: 'not-available' }, 404);
   if (feature === 'askSources' && (!featureSwitch(env, 'ai') || !aiCeilings(env))) return reply({ error: 'not-available' }, 404);
@@ -136,11 +139,32 @@ export function visitorKey(request, env) {
   return request.headers.get('cf-connecting-ip') || (isTestMode(env) ? 'test-visitor' : 'unknown');
 }
 
+// ---- Workers Rate Limiting binding (a burst limiter in front of the counters above) ----
+// Opt-in per environment: it is enforced only when RATE_LIMIT_BINDING is exactly "required" (staging sets it; production
+// does not, so production behaves exactly as before). Once required it FAILS CLOSED: a missing or broken binding, a
+// binding that throws, or an answer that is not exactly { success: true } all refuse the request. The binding counts
+// per Cloudflare location and approximately, so it is a burst brake, not a quota; the counters and the provider-side
+// spend cap remain the limits that matter.
+export const RATE_LIMIT_BINDINGS = Object.freeze({ fetch: 'RL_FETCH', captures: 'RL_FETCH', viewCapture: 'RL_VIEWCAPTURE', ai: 'RL_AI' });
+export const bindingRequired = (env) => !!env && env.RATE_LIMIT_BINDING === 'required';
+export async function enforceBindingLimit(request, env, route) {
+  if (!bindingRequired(env)) return null;
+  const binding = env[RATE_LIMIT_BINDINGS[route]];
+  if (!binding || typeof binding.limit !== 'function') return reply({ error: 'protection-unavailable' }, 503);
+  let outcome;
+  try { outcome = await binding.limit({ key: `${route}:${visitorKey(request, env)}` }); } catch { return reply({ error: 'protection-unavailable' }, 503); }
+  if (outcome && outcome.success === true) return null;
+  if (outcome && outcome.success === false) return reply({ error: 'rate-limited', scope: 'burst' }, 429, { 'retry-after': '60' });
+  return reply({ error: 'protection-unavailable' }, 503);
+}
+
 /**
  * Enforces per-visitor and per-site (per minute) and global (per day) request counts. Returns a refusal Response, or null.
  * If the counting storage is missing or fails, the request is refused (503): no limit means no service.
  */
 export async function enforceLimits(request, env, route, { site = null } = {}) {
+  const burst = await enforceBindingLimit(request, env, route);
+  if (burst) return burst;
   const lim = limitsFor(env, route);
   const minute = Math.floor(Date.now() / 60_000); const day = new Date().toISOString().slice(0, 10);
   try {
@@ -157,6 +181,8 @@ export async function enforceLimits(request, env, route, { site = null } = {}) {
 export async function enforceAiLimits(request, env) {
   const c = aiCeilings(env);
   if (!c) return reply({ error: 'not-available' }, 404);
+  const burst = await enforceBindingLimit(request, env, 'ai');
+  if (burst) return burst;
   const day = new Date().toISOString().slice(0, 10); const minute = Math.floor(Date.now() / 60_000);
   const lim = limitsFor(env, 'ai');
   try {

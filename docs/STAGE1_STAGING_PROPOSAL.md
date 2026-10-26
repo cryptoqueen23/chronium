@@ -60,7 +60,7 @@ Three layers, in order of how firm they are:
 | `/api/fetch` | 10 | 10 | 300 | 2 | 10 MB |
 | `/api/captures` | 10 | 20 | 300 | 2 | 64 KB |
 | `/api/view-capture` | 10 | 20 | 200 | 2 | 15 MB |
-| AI routes | 3 | n/a | 10 (see section 5) | 1 | 64 KB |
+| AI routes | 3 | n/a | 10 (see section 5) | 1 | request body 256 KB (hard-coded; see 15.4) |
 
    Proposed production values if features are ever enabled: the current built-in defaults (fetch 30/min/visitor, 30/min/site, 3,000/day, 4 concurrent; captures 30/60/3,000; view-capture 20/60/3,000; AI 6/min). Production would start at half of those and rise only on evidence.
 
@@ -174,6 +174,72 @@ Free plan figures used: 100,000 requests per day; 10 ms CPU per request; 128 MB 
 7. Whether the website's Find Records ships at all, or stays an extension feature (decided by the Free-plan measurements plus your preference).
 8. Open facts only the staging deploy or the dashboard can settle: whether the Rate Limiting binding is available on Free; whether the daily 100,000 allowance is per account; whether a Worker can fetch another `workers.dev` Worker on the Free plan (the fixtures design depends on it; if not, fixtures move to a free static host such as Pages); the exact Workers Builds setting for production (section 14).
 
-## 14. GitHub push and Workers Builds
+## 14. GitHub push and Workers Builds (resolved 2026-10-26: Mari checked the dashboard; Builds shows "Connect", so no repository is connected; the three commits were pushed, `main` = `65490df`)
 
 Workers Builds is opt-in (the dashboard connects a repository only if someone chooses Connect), and a connected Worker deploys on every push to its production branch. I could not read this Worker's setting: the CLI login has no builds scope and I have no dashboard access. **Indirect evidence that it is not connected:** eight pushes to `main` on 2026-10-23 (16:16 to 18:05 local) produced exactly one new deployment, the documented manual page release at 22:54Z, and none for the pushes made after it. The check for you in the dashboard: Workers & Pages → `chronium-mind` → Settings → Builds (it should say nothing is connected; if a repository is shown, press Disconnect before pushing).
+
+## 15. Stage 1 direction update (2026-10-26, after review)
+
+Mari's directions for this round, and where each stands. **No staging resource exists; nothing is deployed; production services and settings are unchanged.**
+
+### 15.1 Cloudflare capabilities verified, and what could not be verified
+
+| Question | Answer | Source / status |
+|---|---|---|
+| Is the Workers Rate Limiting binding real and stable? | Yes. "Generally Available" since 2025-09-19; the `ratelimit` binding "is now stable and recommended for all production workloads". | Cloudflare changelog (official) |
+| Does it work on the Workers **Free** plan? | **Not stated anywhere in Cloudflare's official documentation** (the binding page, the pricing page and the changelog are all silent on plans). A third-party comparison says there is no extra charge for the binding itself. | **UNVERIFIED.** Only a real deploy can settle it. Wrangler's local simulation accepts it (see 15.3), which proves the code and config, not the plan |
+| Binding limits | Window must be exactly 10 or 60 seconds; counted per Cloudflare location; approximate (can overshoot while counts propagate); `namespace_id` is a unique positive integer per account; several bindings per Worker allowed | Official binding page |
+| Is the Free daily request allowance shared with production? | Cloudflare's wording is account-level: "Accounts on the Workers Free plan have a daily request limit of 100,000 requests, resetting at midnight UTC", and Error 1027 is "Worker exceeded free tier daily request limit". The page does not say in so many words that all Workers share it, and does not mention Pages Functions. **The natural reading is that one account-wide counter covers every Worker in the account.** Secondary sources say the same | Official wording; sharing is a strong inference, not an explicit statement |
+| What is the account's plan? | **Unknown to me.** The CLI login cannot read billing. If the account is already on Workers Paid there is no daily cap (and extra requests cost money: 10 million included per month, then $0.30 per million); if it is on Free, the cap exists and is shared | **Must be checked in the dashboard (Billing / Workers plan)** |
+| Does the account hold other live projects? | **Yes.** `wrangler d1 list` shows the production databases `infinpay`, `truewolfwaves`, `truewolfwaves-content`, `truewolfflix-content`, `waves` and `sdklanding-leads` in the same account. Those apps' Workers and Pages Functions would draw from the same daily allowance if the account is on Free | Read from the account (read-only commands) |
+| WAF rate-limiting rule availability | Per zone only (Free: 1 rule, IP only, 10 s window and block); a `workers.dev` hostname is not a zone I control | Official; applicability to `workers.dev` unverified |
+| Workers metrics | CPU time quantiles, wall time, per-isolate memory P50/P90/P99/P999, requests, errors by invocation status, 3 months of history | Official |
+| Turnstile | Free, unlimited challenges, 20 widgets | Official plans page |
+| Anthropic workspace spend limits | Monthly spend limit per workspace, own keys per workspace, spend alerts | Anthropic announcement and docs; the exact console steps were not shown in what I read |
+
+### 15.2 Account-level quota and cost exposure (why nothing is created yet)
+
+- One Cloudflare account carries production Infin.Pay, TrueWolf Waves and other live projects. If it is on Free, **a staging test that burns the shared 100,000-per-day allowance would take those apps down with Error 1027 until midnight UTC.**
+- Each staging proxy request that fetches a fixture is **two invocations** (the staging Worker and the fixtures Worker), so the earlier budget of 2,000 test requests a day is up to 4,000 invocations: 4% of the allowance at most. It is small, but the allowance is already partly used by the other apps, and I do not know by how much.
+- Before anything is created, the dashboard needs to answer, and I need you to tell me: (1) which plan the account is on; (2) the account's busiest day of requests in the last 30 days (Workers & Pages overview); (3) whether any Worker or Pages project in the account is not yours to put at risk.
+- Decision rule proposed: if the account is on Free and its recent peak is above 70,000 requests in a day, **do not create staging in this account**; use a separate free Cloudflare account for staging and fixtures instead (an account has its own allowance, its own KV, and no access to production). That also gives the cleanest isolation. If the account is on Workers Paid, staging cannot lock anything out, the exposure is money only (cents at these volumes), and the 2,000-requests-per-day test budget stands.
+- A separate account also resolves the same-site concern in section 1: its `workers.dev` subdomain is a different registrable domain.
+
+### 15.3 Rate Limiting binding integration: built, staging-only, fail closed (committed locally, not deployed)
+
+- `src/guard.js`: `enforceBindingLimit` runs **first** in `enforceLimits` (fetch, captures, capture viewer) and in `enforceAiLimits`, before the existing counters. It acts only when `RATE_LIMIT_BINDING` is exactly `"required"`. Then: a missing or malformed binding, a binding that throws, or any answer other than exactly `{ success: true }` refuses the request with 503; `{ success: false }` gives 429 `rate-limited / scope: burst` with `Retry-After`. Any other value of the variable (`on`, `true`, `Required`, empty) leaves the binding untouched, so production behaves exactly as before.
+- `wrangler.jsonc`, **staging block only**: `RATE_LIMIT_BINDING: "required"` and three bindings: `RL_FETCH` (namespace 7101, 15 per 60 s; shared by fetch and captures with separate keys), `RL_VIEWCAPTURE` (7102, 15 per 60 s), `RL_AI` (7103, 3 per 60 s). Keys are `route:visitor-ip`.
+- `scripts/validate-production-config.mjs`: staging must require the binding and declare all three with a 10 or 60 s window, a positive limit, unique namespace ids and no reuse of a production id; **production must not declare any ratelimits binding or the variable** (staging-only until measured).
+- Tests (deterministic, no network): `scripts/test-ratelimit-binding.mjs` (11 tests: untouched when not required, key shape, 429, eleven kinds of broken binding all refused, per-route bindings, binding checked before counters and a refusal never touches them, counters still apply after an allow, no fallback to counters when the binding is missing, AI route, older AI 404 rule intact) and 1 added to `scripts/test-config-safety.mjs`. Both are in `npm test`.
+- Real-runtime check, local only: `wrangler dev --env staging` loaded the three bindings (`env.RL_AI (3 requests/60s) Rate Limit local`), and six requests to the AI route gave three allowed then `429 burst` for every later one. **This is the local simulation, not Cloudflare.** Whether the Free plan accepts the binding, and how accurately it counts across locations, remain to be observed on a deployed staging Worker.
+
+### 15.4 Staging AI stays disabled; proposed enforced token caps and workspace
+
+- Staging has `AI_ENABLED: "off"` and no secret. Nothing in this round changes that.
+- **What is enforced today** (read from the code): output `max_tokens` 1,200; evidence text 12,000 characters (question 500, previous answer 1,000); request body 256 KB (`aiRouteGuard`). Correction to section 4: the 64 KB figure in the built-in AI limits is **not** the enforced cap; the enforced one is 256 KB, hard-coded.
+- **Proposed caps for when AI is ever switched on** (not implemented; needs your approval): output 600 tokens, evidence text 8,000 characters, request body 64 KB, each as a lower-only setting (the same rule as the `LIMIT_*` variables: configuration may only lower them). Worst case per call becomes about 3,000 input tokens × $1/M + 600 output tokens × $5/M = $0.003 + $0.003 = **$0.006**. At the staging ceilings (3 per visitor, 10 global per day): at most $0.06 per day; the $5 workspace cap would last about 800 worst-case calls.
+- **Dedicated workspace:** one Anthropic workspace named for staging with a **$5 monthly spend limit** and a spend alert at $2.50, one workspace-scoped API key, created and revoked by you in the console (I cannot see or operate your console). The key is stored only with `wrangler secret put … --env staging` and deleted after the test. Production gets its own workspace and cap later (proposed $20) and never shares a key with staging.
+
+### 15.5 Capture viewing: the separate-origin design is a requirement; the existing endpoint is not enabled anywhere public
+
+- Section 7's separate-origin design (own Worker, own origin, no cookies, no CORS grant, restrictive CSP, framed with a `sandbox` attribute) is now a **requirement** for any future capture viewing, not an option. (Earlier I recommended deferring it; that recommendation is withdrawn as to viewing, and stands only as to the order of work.)
+- Enforced in two places: **the Worker** treats `FEATURE_VIEW_CAPTURE` as never effective when `ENVIRONMENT` is production (or unset, which counts as production), whatever the variable says; **the deploy validator** refuses `FEATURE_VIEW_CAPTURE: "on"` in any deployed configuration, production or staging, and `--allow-on` does not override it. Tested in `test-ratelimit-binding.mjs` and `test-config-safety.mjs`. The local unit-test environments are unchanged.
+- The staging smoke test confirms the capture route answers 404 (switched off), and the staging configuration cannot be deployed with it on.
+
+### 15.6 Website Find Records stays on the roadmap with automated retrieval disabled
+
+The Find Records tab stays in the product. With `FEATURE_DISCOVERY_FETCH` and `FEATURE_DISCOVERY_CAPTURES` off, the screen already explains plainly that searching a website from the website is not switched on and that the extension can do it; the person's own cases and documents they add are unaffected (existing behaviour from Stage 0; unchanged). The decision to switch retrieval on for the website remains with the Stage 1 measurements and your approval. Copperas Cove and CivicPlus remain blocked in the code and are never a test target.
+
+### 15.7 Initial staging smoke test (built; run locally against a staging-configured Worker)
+
+`scripts/smoke-staging.mjs --base=<address> [--budget=40] [--log=<file>]`. It makes **10 requests** and runs 15 checks: health; every guarded feature reports off; each of the five guarded routes answers 404 `not-available` and leaks no key name or secret; the home page loads through `boot.js` with `app.js` preloaded; the public crawler page loads; the storage-upgrade script is served. It uses harmless `example.org` addresses (never fetched, because the routes are off), refuses to run against the production hostname, refuses to build any request mentioning a `.gov`, Copperas Cove or CivicPlus address, stops at its request budget, makes no browser, stores nothing except an optional log file, and relies on the staging Worker's own storage (its own KV namespace, enforced by the validator). Result against `wrangler dev --env staging` on this machine: 15 passed, 0 failed, 10 requests. The real-browser database-upgrade prompt and the extension permission prompt remain manual tests (section 10).
+
+### 15.8 Remaining blockers before any resource is created
+
+1. **Account plan and quota** (15.2): your answers on the plan, the 30-day peak, and whether to use a separate free account for staging. Nothing is created until this is settled.
+2. **Workers Builds** check for `chronium-mind` (section 14): still waiting for your confirmation before the three commits (now four, with this round's) are pushed.
+3. Approval of the staging KV namespace, staging Worker and fixtures Worker, after items 1 and 2.
+4. Anthropic staging workspace and $5 cap (yours to create), only if the AI phase is wanted at all.
+5. Custom domain yes or no (needed only for zone rate-limit rules, the DNS-change test, and the strongest separate-origin form).
+6. Approval of the proposed lower AI caps (15.4) before they are implemented.
+7. Open facts that only a deploy settles: Free-plan acceptance of the Rate Limiting binding; whether a Free-plan Worker may fetch another `workers.dev` Worker (fixtures design); the real edge CPU and memory.

@@ -27,7 +27,7 @@ My name is Marimer Cruz. I build Chronium Mind, a free research tool that helps 
 - At least 10 seconds between requests, the Crawl-delay in your robots.txt (never faster, even if the site responds quickly).
 - It obeys robots.txt, including every disallowed path, and does not log in, submit forms, or use any page that needs an account.
 - It identifies itself in every request with the name "ChroniumMind" and a link to a page describing the tool and giving my contact details.
-- A hard ceiling of 500 requests per day to your site per user (far below the 1,000-pages-per-day figure in the CivicPlus Terms of Use), and each search is capped at about 150 pages and 100 documents.
+- A ceiling of 500 requests per day per browser to a particular site, and a limit of approximately 150 pages and 100 documents per search. These are maximum limits, not intended request counts. [Replaced 2026-10-26: this line used to compare the ceiling with the 1,000-requests figure in the CivicPlus Terms of Use. That comparison was withdrawn because staying under a numerical threshold is not assumed to establish compliance. See docs/CIVICPLUS_LETTER_FINAL.md for the current wording.]
 - It stops if the site answers "slow down" (HTTP 429 or 503) or asks it to wait.
 - Documents are stored on the user's device only. Chronium does not republish them. Every saved document keeps its original address, the time it was retrieved and a fingerprint, so anyone can check it against your site.
 - Searches run only when a person starts one, and can be paused or cancelled at any time.
