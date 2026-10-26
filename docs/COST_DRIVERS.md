@@ -44,6 +44,10 @@ Cost classes: `local` (user's browser, $0 to Chronium) / `edge-cached` /
 3. Capture proxying bandwidth.
 4. AI calls, if a Chronium-owned key is ever used for free users (today: opt-in, usage counted).
 
+## Stage 0 measurements (2026-10-26, local workerd, not edge)
+
+Fetching one document through the Worker used 47 to 125 ms of local CPU (1 to 10 MB) and a whole-process working set of 130 to 207 MB. The Free plan allows 10 ms CPU and 128 MB per request/isolate; the local numbers are not comparable one-to-one, so the question is **open** and the fetch and capture features stay switched off until a staging Worker is measured. Details: `docs/STAGE0_SECURITY.md` section 7.
+
 ## Entitlement seam (not implemented)
 
 Each row above that is not `local` is a candidate capability name. When

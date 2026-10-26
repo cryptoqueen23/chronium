@@ -65,9 +65,47 @@ Official limits were read from the Cloudflare documentation (Workers Free plan) 
 
 Local measurements (`node scripts/measure-worker-resources.mjs`, local workerd, local fixtures; **not edge numbers**):
 
-MEASUREMENTS_PLACEHOLDER
+Run 2026-10-26 on this Windows machine, Node v24.15.0, a clean machine (no other workerd running), one run each (no averaging). CPU is the total processor time of all workerd processes during the request, so it includes runtime overhead and is an upper bound for the Worker's own work. Memory is the largest working set of any workerd process after the request (the runtime's baseline is included).
 
-What this does and does not tell us: bodies are streamed and byte-capped, so memory does not grow with document size, and over-limit documents are cut off at the cap. CPU on the edge for large bodies has **not** been measured and must be read from the Workers metrics of a staging Worker in Stage 1 before any feature is switched on.
+| Case | HTTP | Bytes returned | Wall ms | CPU ms (workerd) | Peak workerd memory MB |
+|---|---|---|---|---|---|
+| 1 MB document | 200 | 1,048,576 | 43 | 47 | 130 |
+| 5 MB document | 200 | 5,242,880 | 80 | 94 | 146 |
+| 10 MB document (at the default limit) | 200 | 10,485,760 | 129 | 125 | 167 |
+| 12 MB document (over the limit) | 200, cut off, marked truncated | 10,485,760 | 115 | 109 | 203 |
+| 1 MB web page (HTML) | 200 | 1,025,270 | 38 | 31 | 207 |
+| Upstream never answers (3 s test timeout) | 504 | 19 | 3,029 | 16 | n/a |
+| 6 simultaneous slow requests (limit 4) | 4 served, 2 told "busy" (429) | n/a | 2,582 | 156 | n/a |
+
+Findings, stated plainly:
+
+- **The over-limit document is cut off at exactly the cap** (10,485,760 bytes, marked truncated), and the hang is cut off by the Worker's own timeout with a 504. The concurrency limit holds: 4 served, 2 refused.
+- **Memory is not flat.** The working set rose from 130 MB (1 MB document) to 167 MB (10 MB) and 203 MB (12 MB, cut off). Part of this may be the runtime not yet collecting memory, but it was not shown to be, so "memory does not grow with document size" is **not established** by this run. The Workers Free plan allows 128 MB per isolate; the local figure is a whole-process working set and is not comparable to the per-isolate limit.
+- **CPU is above the Free plan's 10 ms per request on every document case** (31 to 125 ms locally). The local number includes more than the Worker's own work and waiting on the network is not CPU time at the edge, so this does not prove the limit would be exceeded, but it does not show it would be met either. **It is unresolved.**
+- **Consequence:** `FEATURE_DISCOVERY_FETCH` and `FEATURE_DISCOVERY_CAPTURES` stay off in the committed configuration, and must not be switched on in production until CPU time and memory are read from the Workers metrics of a staging Worker (Stage 1) and are within the limits of the plan in use. The per-request 10 MB cap is the first lever if they are not (it can be lowered by configuration).
+
+What this does and does not tell us: bodies are streamed and byte-capped, over-limit documents are cut off at the cap, and concurrency and timeouts behave as designed. It does **not** tell us the edge CPU time or per-isolate memory, which must be read from the Workers metrics of a staging Worker in Stage 1 before any feature is switched on.
+
+## 7b. Browser regression investigation (2026-10-26)
+
+Three suites failed in the first full run (`node scripts/run-browser-suites.mjs`). Result of the investigation, per suite:
+
+**portable-browser: caused by Stage 0 (a real start-up change); fixed in application code and in the test.**
+- Failed assertion: `test ran without throwing :: TimeoutError: Waiting for selector [data-open-investigation] failed` (scripts/test-portable-browser.mjs, the step that opens the website case after it is built through db.js).
+- Reproduction: load `/#/investigations`, wait for `#allInvestigationsList`, switch the page offline, build a case, go to `#/investigations`. Failed every time (not intermittent).
+- Root cause: Stage 0 changed `index.html` to load `boot.js`, which checks storage and only then does `import('./app.js')`. `#allInvestigationsList` is in the static HTML, so the test treated the page as ready and cut the network before `app.js` had been fetched. Console: `Failed to fetch dynamically imported module: /app.js`, list stays empty. Before Stage 0, `app.js` was a normal script fetched in parallel, so the window did not exist.
+- Fixes: (1) application: `<link rel="modulepreload" href="/app.js">` in `index.html`, so the app is fetched in parallel with the storage check as before (no behavior change otherwise); (2) test: wait for `import('/app.js')` to finish before going offline. Result: 14/14.
+- Residual: a person who loses the network in the first moments of a page load, before the app is cached, gets a page that does not start. That was true before Stage 0 for any script; `boot.js` makes the window slightly longer, and modulepreload narrows it.
+
+**a11y-deep and a11y-modes: NOT reproduced, root cause NOT established.**
+- First-run output was not saved, so the exact assertions can only be quoted from the earlier note: a11y-deep, one failure, "detached Frame"; a11y-modes, website dark, "focus on the Ask box" contrast 1.77 (needs 3) and a closed-page error.
+- Not reproduced in: one solo rerun, one full clean run (13/13 suites, a11y-deep 128/128, a11y-modes 146/146), and one run under heavy artificial CPU load (12 busy processes on 12 cores; 128/128 and 146/146).
+- What is known: both suites measure with screenshots taken after fixed sleeps (250 ms) and click through pages that re-render, so a slow or interrupted page (a reload or navigation during an evaluate gives "detached Frame"; a mid-transition or mid-render screenshot gives a wrong contrast) is a plausible mechanism. The stale-Worker problem is a second plausible one: the earlier full run happened with leftover wrangler/workerd processes from previous sessions listening on 8787/8791 (still present, found and killed at the start of this session), which can serve old code or configuration to the suites. **Neither mechanism was demonstrated.** Not classified as flaky; classified as unexplained. No Stage 0 file touches the Ask box styling (`styles.css` changes are limited to the `#upgradeGate` block).
+- Action: both suites are in every full run; if either fails again, save the full output first (the runner prints only the first 12 matching lines).
+
+**stage0-http (real workerd + Chrome): one failure in 4 runs, test race, fixed.** One run failed the "backup file was saved" check (`bk` null, then `BackupFileError` from the next step); three other runs, including two straight reruns, passed 56/56. The test read the downloaded backup after a fixed 500 ms sleep, while Chrome writes downloads asynchronously. The failure detail line was not captured, so the cause is inferred from the mechanism, not proven. The test now waits (up to 10 s) for the finished file. 56/56 after the change.
+
+Test infrastructure note: `scripts/run-browser-suites.mjs` and the measurement script leave wrangler/workerd processes behind when they are killed by a timeout; stale ones silently serve old code. Kill them before every run (match `workerd.exe` and node processes whose command line contains `wrangler` only).
 
 ## 8. Remaining risks and decisions that need approval
 

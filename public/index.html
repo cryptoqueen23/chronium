@@ -9,6 +9,8 @@
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/discovery/discovery.css" />
   <link rel="stylesheet" href="/recovery/recovery.css" />
+  <!-- boot.js checks storage first and then loads the app; fetching the app in parallel keeps start-up as fast as before. -->
+  <link rel="modulepreload" href="/app.js" />
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to content</a>

@@ -78,6 +78,8 @@ try {
   web.on('dialog', (d) => d.accept());
   await web.goto(`${BASE}/#/investigations`);
   await web.waitForSelector('#allInvestigationsList');
+  // The list container is in the static HTML; boot.js loads the app module after its storage checks. Wait for the app itself before going offline.
+  await web.evaluate(() => import('/app.js'));
 
   const panel = await b.newPage();
   panel.on('pageerror', (e) => errs.push('ext: ' + e.message));

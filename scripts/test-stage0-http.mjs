@@ -189,7 +189,8 @@ try {
   const cdp = await ui.createCDPSession(); await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: dir });
   await ui.focus('#ug-backup'); await ui.keyboard.press('Enter');
   await ui.waitForFunction(() => !document.querySelector('#ug-go').disabled, { timeout: 15000 });
-  await sleep(500);
+  // Chrome writes the download asynchronously (a .crdownload file is renamed when complete): wait for the finished file.
+  for (let i = 0; i < 40 && !fs.readdirSync(dir).some((f) => f.endsWith('.json')); i++) await sleep(250);
   const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
   const bk = files.length ? JSON.parse(fs.readFileSync(path.join(dir, files[0]), 'utf8')) : null;
   check('upgrade: the backup file was saved with every store, at the OLD version, and the database was still not upgraded', !!bk && bk.dbVersion === 4 && bk.counts.investigations === 1 && bk.counts.records === 1 && bk.counts.evidenceItems === 1 && (await dbVersion(ui)) === 4, files.join(',') + (bk ? JSON.stringify(bk.counts) : ''));

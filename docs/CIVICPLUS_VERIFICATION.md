@@ -38,7 +38,7 @@ Verified 2026-10-23. Purpose: decide whether an automated CivicPlus adapter may 
 ## Safeguards that apply even if the host is later cleared
 
 - Honour `Crawl-delay` (10 s) and never run parallel workers against the host.
-- A per-host daily request ceiling of 500 per browser (well under the 1,000-pages-a-day figure in the CivicPlus terms), counted across runs.
+- A per-host daily request ceiling of 500 per browser (a ceiling, not an intended request count; staying below the 1,000-pages-a-day figure in the CivicPlus terms is not assumed to establish compliance), counted across runs.
 - Runs are user-started, capped, and logged in the coverage ledger.
 
 ## Remaining work for the CivicPlus adapter

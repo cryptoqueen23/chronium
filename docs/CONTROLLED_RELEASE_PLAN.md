@@ -134,3 +134,7 @@ The Copperas Cove / CivicPlus block is independent of all stages and stays in pl
 3. Rate-limit rule: approve configuring a Cloudflare rate-limiting rule on `/api/*` (dashboard setting; she or I with her authentication).
 4. Whether the first public release should include the website's Find Records at all (stage 4), or ship the website without it and keep discovery extension-only until the extension's permission-prompt test is done.
 5. AI ceilings: the daily token ceiling for the optional AI features.
+
+## Status update, 2026-10-26: Stage 0 built locally
+
+Stage 0 (B1 to B7) is implemented and verified locally (local commit only; not pushed, not deployed). Evidence, open risks and the decisions that still need approval: `docs/STAGE0_SECURITY.md` (sections 7, 7b and 8). Stage 1 (a staging Worker, edge CPU and memory measurements) has not started and is the gate for switching any feature on.
