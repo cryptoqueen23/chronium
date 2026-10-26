@@ -5,7 +5,7 @@
 // It also counts the Worker requests the run made.
 //
 // Needs the Worker running with the test site exempted from the private-address guard:
-//   npx wrangler dev --port 8791 --var DISCOVERY_ALLOW_PRIVATE:127.0.0.1:8790 --var DISCOVERY_IP_PER_MINUTE:5000 --var DISCOVERY_HOST_PER_MINUTE:5000
+//   npx wrangler dev --port 8791 --var ENVIRONMENT:development --var TEST_MODE:on --var FEATURE_DISCOVERY_FETCH:on --var FEATURE_DISCOVERY_CAPTURES:on --var DISCOVERY_ALLOW_PRIVATE:127.0.0.1:8790 --var LIMIT_FETCH_PER_IP_PER_MIN:5000 --var LIMIT_FETCH_PER_SITE_PER_MIN:5000 --var LIMIT_FETCH_GLOBAL_PER_DAY:100000
 // Usage: node scripts/test-discovery-ui.mjs [--chrome=<Chrome for Testing exe>] [--worker=http://127.0.0.1:8791]
 import puppeteer from 'puppeteer-core';
 import path from 'node:path';

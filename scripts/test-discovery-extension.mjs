@@ -8,7 +8,7 @@
 // engine rightly refuses IP addresses and odd ports. The extension is copied to a temp folder with two changes
 // for the test only: host permissions for the test site (the real extension asks the person per site) and a
 // shorter politeness delay.
-// Needs the Worker for archive lookups:  npx wrangler dev --port 8791
+// Needs the Worker for archive lookups:  npx wrangler dev --port 8791 --var ENVIRONMENT:development --var TEST_MODE:on --var FEATURE_DISCOVERY_CAPTURES:on --var ALLOWED_EXTENSION_ORIGINS:<the extension origin the test prints>
 // Usage: node scripts/test-discovery-extension.mjs [--chrome=<Chrome for Testing exe>] [--worker=http://127.0.0.1:8791]
 import puppeteer from 'puppeteer-core';
 import path from 'node:path';

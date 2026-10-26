@@ -14,6 +14,16 @@ import { buildCoverageReport, coverageReportHtml, coverageReportText } from '../
 import { CivicPlusAdapter, defaultHostPolicies, defaultConnectors, HostPolicyRegistry, AUTOMATION, Connector, ConnectorRegistry, GenericLinkConnector } from '../public/discovery/connector.js';
 import { handleFetch, handleCaptures } from '../src/discoveryProxy.js';
 
+// The Worker refuses callers that are not this site's own browser pages (Sec-Fetch-Site: same-origin), so the test
+// requests carry that header, as a real browser would send it.
+const NativeRequest = globalThis.Request;
+globalThis.Request = class extends NativeRequest {
+  constructor(input, init = {}) { const h = new Headers(init.headers || {}); if (!h.has('sec-fetch-site')) h.set('sec-fetch-site', 'same-origin'); super(input, { ...init, headers: h }); }
+};
+// A test environment: features on, test mode on (never production), generous limits unless a test overrides them.
+const LIMITS_HIGH = { fetch: { perIpPerMin: 500, perSitePerMin: 500, globalPerDay: 100000, maxConcurrent: 4 }, captures: { perIpPerMin: 500, perSitePerMin: 500, globalPerDay: 100000, maxConcurrent: 4 } };
+const testEnv = (site, extra = {}) => ({ ENVIRONMENT: 'test', TEST_MODE: 'on', FEATURE_DISCOVERY_FETCH: 'on', FEATURE_DISCOVERY_CAPTURES: 'on', ...(site ? { DISCOVERY_ALLOW_PRIVATE: site.hostPort } : {}), TEST_LIMIT_OVERRIDES: JSON.stringify(LIMITS_HIGH), ...extra });
+
 globalThis.indexedDB = new IDBFactory();
 const db = await import('../public/db.js');
 const { createDocumentSaver, recordRun, plainTextExtract } = await import('../public/discovery/save.js');
@@ -391,12 +401,12 @@ test('proxy: refuses unsafe, policy-blocked, robots-disallowed and unacknowledge
   withCaches();
   const site = await startTestSite();
   try {
-    const env = { DISCOVERY_ALLOW_PRIVATE: site.hostPort, DISCOVERY_IP_PER_MINUTE: '500', DISCOVERY_HOST_PER_MINUTE: '500' };
+    const env = testEnv(site);
     const call = async (url, q = '') => { const r = await handleFetch(new Request(`http://w/api/fetch?url=${encodeURIComponent(url)}${q}`), env); return { r, body: r.headers.get('x-chronium-status') === null ? await r.json() : null }; };
     for (const bad of ['http://169.254.169.254/latest/meta-data/', 'http://localhost/', 'http://[::1]/', 'file:///etc/passwd', 'http://10.0.0.1/', 'ftp://example.com/']) assert.equal((await call(bad, '&ack=1')).r.status, 400, bad);
     const civic = await call('https://www.copperascovetx.gov/AgendaCenter', '&ack=1'); assert.equal(civic.r.status, 403); assert.equal(civic.body.error, 'policy-refused');
     assert.equal((await call('https://emma.msrb.org/', '&ack=1')).r.status, 403);
-    const bare = await handleFetch(new Request(`http://w/api/fetch?ack=1&url=${encodeURIComponent(site.origin + '/library')}`), {}); assert.equal(bare.status, 400, 'a private host is refused when the environment does not exempt it');
+    const bare = await handleFetch(new Request(`http://w/api/fetch?ack=1&url=${encodeURIComponent(site.origin + '/library')}`), { ENVIRONMENT: 'test', TEST_MODE: 'on', FEATURE_DISCOVERY_FETCH: 'on', TEST_LIMIT_OVERRIDES: JSON.stringify(LIMITS_HIGH) }); assert.equal(bare.status, 400, 'a private host is refused when the environment does not exempt it');
     const noAck = await handleFetch(new Request(`http://w/api/fetch?url=${encodeURIComponent('https://example.org/')}`), env); assert.equal(noAck.status, 403);
     const blocked = await call(site.origin + '/private/secret.html', '&ack=1&seed=1'); assert.equal(blocked.r.status, 403); assert.equal(blocked.body.error, 'robots-refused');
     const post = await handleFetch(new Request(`http://w/api/fetch?url=x`, { method: 'POST' }), env); assert.equal(post.status, 405);
@@ -408,7 +418,7 @@ test('proxy: returns the upstream status, headers and bytes, never follows redir
   withCaches();
   const site = await startTestSite();
   try {
-    const env = { DISCOVERY_ALLOW_PRIVATE: site.hostPort, DISCOVERY_IP_PER_MINUTE: '500', DISCOVERY_HOST_PER_MINUTE: '500' };
+    const env = testEnv(site);
     const get = (p) => handleFetch(new Request(`http://w/api/fetch?ack=1&url=${encodeURIComponent(site.origin + p)}`), env);
     const ok = await get('/docs/notes.txt');
     assert.equal(ok.status, 200); assert.equal(ok.headers.get('x-chronium-status'), '200'); assert.equal(ok.headers.get('x-chronium-etag'), '"d1"');
@@ -425,7 +435,7 @@ test('proxy: per-visitor and per-site rate limits answer 429', async () => {
   withCaches();
   const site = await startTestSite();
   try {
-    const env = { DISCOVERY_ALLOW_PRIVATE: site.hostPort, DISCOVERY_IP_PER_MINUTE: '3', DISCOVERY_HOST_PER_MINUTE: '500' };
+    const env = testEnv(site, { TEST_LIMIT_OVERRIDES: JSON.stringify({ fetch: { perIpPerMin: 3, perSitePerMin: 500, globalPerDay: 100000, maxConcurrent: 4 } }) });
     const codes = [];
     for (let i = 0; i < 5; i++) codes.push((await handleFetch(new Request(`http://w/api/fetch?ack=1&url=${encodeURIComponent(site.origin + '/robots.txt')}`), env)).status);
     assert.deepEqual(codes.slice(0, 3), [200, 200, 200]); assert.equal(codes[4], 429);
@@ -436,7 +446,7 @@ test('website mode end to end: the engine through the proxy fetcher finds, retri
   withCaches();
   const site = await startTestSite();
   try {
-    const env = { DISCOVERY_ALLOW_PRIVATE: site.hostPort, DISCOVERY_IP_PER_MINUTE: '5000', DISCOVERY_HOST_PER_MINUTE: '5000', DISCOVERY_UPSTREAM_TIMEOUT_MS: '300' };
+    const env = testEnv(site, { DISCOVERY_UPSTREAM_TIMEOUT_MS: '300' });
     const fetcher = createProxyFetcher({ base: 'http://w', fetchImpl: workerFetch(env) });
     const { result } = await runDocs(site, { mode: 'website', fetcher, limits: { maxWebsiteFetches: 50, requestTimeoutMs: 400 } });
     const out = (p) => docByPath(result, site, p);
@@ -460,7 +470,7 @@ test('archive lookup client and /api/captures: found, none, unavailable; private
     ];
     let i = 0; let mode = 'ok';
     globalThis.fetch = async () => { if (mode === 'down') throw new Error('network'); return new Response(JSON.stringify(answers[i++ % answers.length]), { headers: { 'content-type': 'application/json' } }); };
-    const env = {};
+    const env = testEnv(null);
     const lookup = createArchiveLookup({ base: 'http://w', fetchImpl: (u, init) => handleCaptures(new Request(u, init), env) });
     const found = await lookup('https://x.gov/a.pdf');
     assert.equal(found.status, 'found'); assert.equal(found.copies[0].captureDate, '2023-01-01T00:00:00Z'); assert.ok(found.copies[0].archiveUrl.startsWith('https://web.archive.org/'));
@@ -475,7 +485,7 @@ test('proxy: the robots.txt it just served is reused, so the site is not asked f
   withCaches();
   const site = await startTestSite();
   try {
-    const env = { DISCOVERY_ALLOW_PRIVATE: site.hostPort, DISCOVERY_IP_PER_MINUTE: '500', DISCOVERY_HOST_PER_MINUTE: '500' };
+    const env = testEnv(site);
     const get = (p, q = '') => handleFetch(new Request(`http://w/api/fetch?ack=1${q}&url=${encodeURIComponent(site.origin + p)}`), env);
     assert.equal((await get('/robots.txt')).headers.get('x-chronium-status'), '200');
     assert.equal((await get('/docs/notes.txt')).headers.get('x-chronium-status'), '200');

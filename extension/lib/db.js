@@ -55,8 +55,8 @@ import {
   IngestionValidationError, WatchlistValidationError, ReviewCandidateValidationError
 } from './ingestionReview.js';
 
-const DB_NAME = 'chronium';
-const DB_VERSION = 12;
+export const DB_NAME = 'chronium';
+export const DB_VERSION = 12;
 let dbPromise = null;
 // Drops the cached connection so the next call reopens the database. Used by
 // tests that swap in a fresh IndexedDB to simulate a second device.
@@ -276,8 +276,15 @@ export function openDb() {
         db.createObjectStore('recoverySettings', { keyPath: 'investigationId' });
       }
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const db = req.result;
+      // A later version of the app in another tab can upgrade the database: step aside instead of blocking it.
+      db.onversionchange = () => { db.close(); dbPromise = null; };
+      resolve(db);
+    };
+    // Another tab running an older version still holds the database open: the upgrade waits. The page can tell the person.
+    req.onblocked = () => { try { globalThis.dispatchEvent(new CustomEvent('chronium-db-blocked')); } catch { /* no window */ } };
+    req.onerror = () => { dbPromise = null; reject(req.error); };
   }).then(async (db) => { await ensureClaimEvidenceBackfill(db); return db; });
   return dbPromise;
 }

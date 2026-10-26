@@ -20,6 +20,41 @@
     // The actual credential is a secret, never a var: run
     //   wrangler secret put ANTHROPIC_API_KEY
     // locally to set it (never committed, never sent to the client).
-    "AI_PROVIDER": "anthropic"
+    "AI_PROVIDER": "anthropic",
+
+    // PRODUCTION SAFETY (docs/STAGE0_SECURITY.md). Every new network-facing feature is OFF unless its switch is exactly
+    // "on", and the Worker itself refuses requests to a feature that is off. Turning a feature on is a deliberate,
+    // recorded change. Test-only variables (TEST_MODE, DISCOVERY_ALLOW_PRIVATE, ...) must never appear here:
+    // scripts/validate-production-config.mjs rejects them and the Worker refuses to run guarded features if they exist.
+    "ENVIRONMENT": "production",
+    "FEATURE_DISCOVERY_FETCH": "off",
+    "FEATURE_DISCOVERY_CAPTURES": "off",
+    "FEATURE_VIEW_CAPTURE": "off",
+    "FEATURE_ASK_SOURCES": "off",
+    // Paid AI is off. It can only be turned on together with BOTH cost ceilings (AI_PER_VISITOR_PER_DAY and
+    // AI_DAILY_CEILING, whole numbers); without them the AI routes answer 404 even when this says "on".
+    "AI_ENABLED": "off"
+  },
+
+  // STAGING: a separate Worker with its own name, its own storage and its own (empty) secrets. It cannot read or
+  // write production data and holds no production AI credential. Create its KV namespace first
+  //   wrangler kv namespace create CONNECTOR_HEALTH --env staging
+  // and replace the placeholder id; scripts/validate-production-config.mjs refuses to deploy while it is a placeholder.
+  "env": {
+    "staging": {
+      "name": "chronium-mind-staging",
+      "kv_namespaces": [
+        { "binding": "CONNECTOR_HEALTH", "id": "REPLACE_WITH_STAGING_KV_NAMESPACE_ID" }
+      ],
+      "vars": {
+        "AI_PROVIDER": "anthropic",
+        "ENVIRONMENT": "staging",
+        "FEATURE_DISCOVERY_FETCH": "off",
+        "FEATURE_DISCOVERY_CAPTURES": "off",
+        "FEATURE_VIEW_CAPTURE": "off",
+        "FEATURE_ASK_SOURCES": "off",
+        "AI_ENABLED": "off"
+      }
+    }
   }
 }

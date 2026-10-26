@@ -694,3 +694,14 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
   --dc-fg: var(--text); --dc-muted: var(--text-secondary); --dc-line: var(--control-border); --dc-panel: var(--surface-raised);
   --dc-accent: var(--accent); --dc-on-accent: var(--on-accent); --dc-bad: var(--danger); --dc-link: var(--link);
 }
+
+/* Start-up gate for the storage update (public/boot.js). */
+#upgradeGate .ug-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, .75); z-index: 1000; }
+#upgradeGate .ug-box { position: fixed; z-index: 1001; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(92vw, 40rem); max-height: 90vh; overflow: auto; box-sizing: border-box; padding: 20px; background: var(--surface-raised, #171a1e); color: var(--text, #f2f1ed); border: 2px solid var(--control-border, #7a828b); border-radius: 12px; }
+#upgradeGate h1 { font-size: clamp(1.15rem, 1rem + 1vw, 1.5rem); margin: 0 0 12px; }
+#upgradeGate button { min-height: 44px; min-width: 44px; padding: 0 14px; font: inherit; color: var(--text, #f2f1ed); background: var(--surface, #111417); border: 1px solid var(--control-border, #7a828b); border-radius: 8px; cursor: pointer; }
+#upgradeGate button.ug-primary { background: var(--accent, #d6a84b); color: var(--on-accent, #14100a); border-color: var(--accent, #d6a84b); font-weight: 600; }
+#upgradeGate button:disabled { opacity: .6; cursor: default; }
+#upgradeGate :focus-visible { outline: 3px solid var(--accent, #d6a84b); outline-offset: 2px; }
+#upgradeGate .ug-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+#upgradeGate .ug-hint { font-size: .95rem; color: var(--text-secondary, #a8adb3); }

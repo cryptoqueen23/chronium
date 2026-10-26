@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Browser tests for Records Recovery: the website tab (and its Big Picture summary, Deep Dive section and Report
 // appendix) and the extension's Big Picture summary and Reports appendix, in a real Chrome. Synthetic case only.
-// Needs the site served:  npx wrangler dev --port 8791
+// Needs the site served:  npx wrangler dev --port 8791   (committed configuration: no server features needed)
 // Usage: node scripts/test-recovery-ui.mjs [--chrome=<Chrome for Testing exe>] [--site=http://127.0.0.1:8791]
 import puppeteer from 'puppeteer-core';
 import path from 'node:path';

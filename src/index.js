@@ -1,4 +1,6 @@
-import { handleFetch, handleCaptures } from "./discoveryProxy.js";
+import { handleFetch, handleCaptures, handleFeatures } from "./discoveryProxy.js";
+import { aiRouteGuard } from "./guard.js";
+import { handleViewCapture } from "./viewCapture.js";
 import corpus from "../data/copperas-cove/normalized.json";
 import { getAIProvider } from "./ai/index.js";
 
@@ -161,6 +163,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
+    if (url.pathname === "/api/features") return handleFeatures(request, env);
     if (url.pathname === "/api/fetch") return handleFetch(request, env);
     if (url.pathname === "/api/captures") return handleCaptures(request, env);
 
@@ -237,103 +240,7 @@ export default {
     //                      Content-Disposition forced to "attachment".
     // Only known archive hosts are proxied - this endpoint is not an open
     // proxy for arbitrary URLs.
-    if (url.pathname === "/api/view-capture") {
-      const target = url.searchParams.get("url") || "";
-      const download = url.searchParams.get("download") === "1";
-      if (!/^https?:\/\//i.test(target)) return json({ ok: false, error: "Invalid URL" }, 400);
-      if (!isKnownArchiveHost(target)) return json({ ok: false, error: "Not a recognized archive host" }, 400);
-
-      const cache = caches.default;
-      const cacheKey = new Request(`${url.origin}/api/view-capture?url=${encodeURIComponent(target)}&download=${download ? 1 : 0}`);
-      const hit = await cache.match(cacheKey);
-      if (hit) return hit;
-
-      // Arquivo.pt and Wayback Machine both replay through pywb, which
-      // serves a toolbar+frameset wrapper at the normal capture URL - the
-      // actual archived page sits in a *static* nested <iframe> at a
-      // modifier-suffixed URL (Arquivo: .../wayback/<ts>mp_/<url>, Wayback:
-      // .../web/<ts>if_/<url>). Rendering the wrapper directly (with scripts
-      // sandboxed off, as this viewer requires) would show pywb's own chrome
-      // - never the page. View mode fetches the direct-content variant;
-      // download mode still fetches the exact URL Chronium cited, unmodified,
-      // for evidence integrity.
-      const fetchTarget = download ? target : toDirectContentUrl(target);
-
-      let upstream;
-      try {
-        upstream = await fetchResilient(fetchTarget, 15000, { redirect: "follow" });
-      } catch (e) {
-        return json({ ok: false, error: `Could not reach this capture (${classifyError(e?.message) || "network error"}).` }, 502);
-      }
-      if (!upstream.ok) {
-        upstream.body?.cancel?.();
-        return json({ ok: false, error: `Capture responded with HTTP ${upstream.status}.` }, 502);
-      }
-
-      const contentType = (upstream.headers.get("content-type") || "application/octet-stream").split(";")[0].trim().toLowerCase();
-
-      if (download) {
-        // Raw, unmodified passthrough - the actual archived bytes, for
-        // evidence integrity. No content-type restriction: if it was
-        // reachable, the researcher can save it.
-        const response = new Response(upstream.body, {
-          status: 200,
-          headers: {
-            "content-type": contentType,
-            "content-disposition": `attachment; filename="${filenameForCapture(target, contentType)}"`,
-            "cache-control": "private, max-age=300"
-          }
-        });
-        ctx.waitUntil(cache.put(cacheKey, response.clone()));
-        return response;
-      }
-
-      const RENDERABLE_TYPES = new Set([
-        "text/html", "application/xhtml+xml", "application/pdf",
-        "text/plain", "application/json", "text/xml", "application/xml", "text/csv", "application/csv",
-        "image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"
-      ]);
-      if (!RENDERABLE_TYPES.has(contentType)) {
-        upstream.body?.cancel?.();
-        return json({ ok: false, error: `Chronium can't safely preview "${contentType}" content.`, unsupported: true }, 415);
-      }
-
-      const contentLength = Number(upstream.headers.get("content-length") || 0);
-      const MAX_PROXY_BYTES = 30 * 1024 * 1024;
-      if (contentLength > MAX_PROXY_BYTES) {
-        upstream.body?.cancel?.();
-        return json({ ok: false, error: "Capture is too large to preview safely.", tooLarge: true }, 413);
-      }
-
-      let response;
-      if (contentType === "text/html" || contentType === "application/xhtml+xml") {
-        const MAX_HTML_CHARS = 8 * 1024 * 1024;
-        const html = await upstream.text();
-        if (html.length > MAX_HTML_CHARS) {
-          return json({ ok: false, error: "Capture is too large to preview safely.", tooLarge: true }, 413);
-        }
-        // The HTML now comes from Chronium's own origin, but its relative
-        // (and root-relative) asset/link URLs were written to resolve
-        // against fetchTarget (the direct-content URL for pywb captures) -
-        // a <base> tag is enough to fix that for the whole document, no
-        // need to rewrite every href/src.
-        const baseTag = `<base href="${fetchTarget.replace(/"/g, "&quot;")}">`;
-        const withBase = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => `${m}${baseTag}`) : baseTag + html;
-        response = new Response(withBase, {
-          status: 200,
-          headers: { "content-type": "text/html; charset=utf-8", "content-disposition": "inline", "cache-control": "public, max-age=1800" }
-        });
-      } else {
-        // PDF/image/text - streamed straight through, never buffered, so a
-        // large PDF doesn't sit in Worker memory just to be re-sent.
-        response = new Response(upstream.body, {
-          status: 200,
-          headers: { "content-type": contentType, "content-disposition": "inline", "cache-control": "public, max-age=1800" }
-        });
-      }
-      ctx.waitUntil(cache.put(cacheKey, response.clone()));
-      return response;
-    }
+    if (url.pathname === "/api/view-capture") return handleViewCapture(request, env, ctx);
 
     // Read-only AI usage/cost visibility - the "cost per successful
     // investigation/search" metric from docs/CANON.md's Cost Principle,
@@ -344,14 +251,13 @@ export default {
       return json({ provider: provider.id, ...usage });
     }
 
-    if (url.pathname === "/api/analyze/qualitative") {
-      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
-      return handleQualitativeAnalysis(request, env, ctx);
-    }
-
-    if (url.pathname === "/api/analyze/ask-sources") {
-      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
-      return handleAskSources(request, env, ctx);
+    // Paid-AI routes. Enforced here, on the server: the switch must be on, the cost ceilings must be configured,
+    // the caller must be this site's own page, the body must be small, and the per-visitor and global daily
+    // ceilings must not be reached. Missing configuration means the route does not exist (404), never "open".
+    if (url.pathname === "/api/analyze/qualitative" || url.pathname === "/api/analyze/ask-sources") {
+      const denied = await aiRouteGuard(request, env, url.pathname.endsWith("ask-sources") ? "ask-sources" : "qualitative");
+      if (denied) return denied;
+      return url.pathname.endsWith("ask-sources") ? handleAskSources(request, env, ctx) : handleQualitativeAnalysis(request, env, ctx);
     }
 
     if (url.pathname === "/api/search") {
@@ -697,54 +603,6 @@ function labelForArchiveHost(u) {
   if (host.includes("webarchive.loc.gov") || host.includes("loc.gov")) return "Library of Congress Web Archive";
   if (host.includes("arquivo.pt")) return "Arquivo.pt";
   return host;
-}
-
-// /api/view-capture only ever proxies known archive hosts - this is what
-// keeps it from becoming an open proxy for arbitrary URLs.
-const KNOWN_ARCHIVE_HOSTS = [
-  "web.archive.org", "archive-it.org", "nationalarchives.gov.uk", "webarchive.loc.gov", "loc.gov",
-  "arquivo.pt", "commoncrawl.org", "data.commoncrawl.org", "index.commoncrawl.org", "timetravel.mementoweb.org"
-];
-function isKnownArchiveHost(u) {
-  let host;
-  try { host = new URL(u).hostname.toLowerCase(); } catch { return false; }
-  return KNOWN_ARCHIVE_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
-}
-
-// pywb (Arquivo.pt, Wayback Machine) replay URLs serve a toolbar+frameset
-// wrapper by default; appending a modifier right after the 14-digit
-// timestamp switches to direct content with no wrapper - what the
-// wrapper's own nested <iframe> points at. Only rewrites URLs that already
-// match the exact unmodified pattern, so it's a no-op (and never
-// double-applies) for anything else, including an already-modified URL.
-// The wrapper-frameset problem is HTML-specific: pywb only injects its
-// toolbar chrome around a replayed HTML page. A capture URL that's clearly
-// a non-HTML file (PDF, image, doc, spreadsheet, archive...) already
-// resolves straight to the raw bytes with no wrapper to strip, and
-// applying an "if_"/"mp_" modifier to it is unnecessary at best.
-const NON_HTML_EXT = /\.(pdf|docx?|xlsx?|csv|zip|jpg|jpeg|png|gif|webp|svg|json|xml|txt|mp3|mp4|wav)(\?|#|$)/i;
-function toDirectContentUrl(u) {
-  try {
-    const host = new URL(u).hostname.toLowerCase();
-    if (NON_HTML_EXT.test(u)) return u;
-    if (host.endsWith("arquivo.pt") && /\/wayback\/\d{14}\//.test(u)) return u.replace(/(\/wayback\/\d{14})\//, "$1mp_/");
-    if (host.endsWith("web.archive.org") && /\/web\/\d{14}\//.test(u)) return u.replace(/(\/web\/\d{14})\//, "$1if_/");
-    return u;
-  } catch { return u; }
-}
-
-const EXT_FOR_CONTENT_TYPE = {
-  "text/html": "html", "application/xhtml+xml": "html", "application/pdf": "pdf",
-  "text/plain": "txt", "application/json": "json", "text/xml": "xml", "application/xml": "xml",
-  "text/csv": "csv", "application/csv": "csv",
-  "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/svg+xml": "svg"
-};
-function filenameForCapture(target, contentType) {
-  let last = "capture";
-  try { last = new URL(target).pathname.split("/").filter(Boolean).pop() || "capture"; } catch { /* keep default */ }
-  last = last.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "capture";
-  if (/\.[a-z0-9]{1,6}$/i.test(last)) return last;
-  return `${last}.${EXT_FOR_CONTENT_TYPE[contentType] || "bin"}`;
 }
 
 async function searchLocalCorpora(query, limit) {

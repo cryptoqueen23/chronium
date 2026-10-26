@@ -454,10 +454,27 @@ document.querySelector('#caseFileInput').addEventListener('change', async (e) =>
 // ---------------------------------------------------------------------------
 const VIEW_TITLES = { home: 'Chronium Mind', investigations: 'Investigations', library: 'My Library', settings: 'Settings & Help', workspace: 'Workspace' };
 
+// Bookmarks from the earlier version of the workspace. Each old page now lives inside a current tab.
+const LEGACY_WORKSPACE_ROUTES = {
+  sources: { to: 'research', says: 'Sources are now in Research' },
+  outline: { to: 'research', says: 'The outline is now in Research' },
+  claims: { to: 'findings/claims', says: 'Claims are now in Findings, Claims' },
+  timeline: { to: 'findings/timeline', says: 'The timeline is now in Findings, Timeline' },
+  gaps: { to: 'findings/gaps', says: 'Gaps are now in Findings, Gaps' },
+  analysis: { to: 'findings/analysis', says: 'Analysis is now in Findings, Analysis' }
+};
+const KNOWN_WORKSPACE_TABS = new Set(['bigpicture', 'overview', 'deepdive', 'research', 'discover', 'recovery', 'review', 'subjects', 'evidence', 'findings', 'report']);
+
 function parseHash() {
   const path = (location.hash || '#/').slice(1) || '/';
   const parts = path.split('/').filter(Boolean);
-  if (parts[0] === 'workspace') return { view: 'workspace', tab: parts[1] || 'bigpicture', subtab: parts[2] || null, arg: parts.slice(3).join('/') || null };
+  if (parts[0] === 'workspace') {
+    const tab = parts[1] || 'bigpicture';
+    const legacy = LEGACY_WORKSPACE_ROUTES[tab];
+    if (legacy) { const [t, s] = legacy.to.split('/'); return { view: 'workspace', tab: t, subtab: s || null, arg: null, moved: legacy.says, canonical: `#/workspace/${legacy.to}` }; }
+    if (!KNOWN_WORKSPACE_TABS.has(tab)) return { view: 'workspace', tab: 'bigpicture', subtab: null, arg: null, moved: 'That page is not available any more; showing the Big Picture', canonical: '#/workspace/bigpicture' };
+    return { view: 'workspace', tab, subtab: parts[2] || null, arg: parts.slice(3).join('/') || null };
+  }
   if (['investigations', 'library', 'settings'].includes(parts[0])) return { view: parts[0] };
   return { view: 'home' };
 }
@@ -472,6 +489,10 @@ function updateNavActiveStates(route) {
 
 async function renderRoute() {
   const route = parseHash();
+  // An old bookmark: replace the address with the current one (so the right tab is selected and the link keeps working)
+  // and tell the person, politely, what moved.
+  if (route.moved) { history.replaceState(null, '', route.canonical); const n = document.querySelector('#routeNotice'); if (n) n.textContent = `${route.moved}.`; }
+  else { const n = document.querySelector('#routeNotice'); if (n) n.textContent = ''; }
   document.querySelectorAll('.view').forEach((v) => v.classList.add('hidden'));
   const target = document.querySelector(`#view-${route.view}`);
   target.classList.remove('hidden');
@@ -729,6 +750,7 @@ function showLinkUnavailable(btn) {
 // content-type, render, or fall through to the next known capture.
 // ---------------------------------------------------------------------------
 async function fetchCaptureForView(archiveUrl) {
+  if (!(await loadFeatures()).viewCapture) return { ok: false, error: 'The in-page archive viewer is switched off right now. Use the archive link to open the capture there.' };
   const res = await fetch(`/api/view-capture?url=${encodeURIComponent(archiveUrl)}`);
   const contentType = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
   if (!res.ok) {
@@ -1280,16 +1302,32 @@ function renderRecoveryPanel() {
 
 // Deep Discovery (Find Records): mounted once so a search keeps running while you look at other tabs.
 let discoveryPanel = null;
-function renderDiscoverPanel(inv) {
+// Which server features are switched on. The Worker enforces the same switches, so this only decides what to show.
+let featuresPromise = null;
+function loadFeatures() {
+  featuresPromise ||= fetch('/api/features').then((r) => (r.ok ? r.json() : { features: {} })).then((d) => d.features || {}).catch(() => ({}));
+  return featuresPromise;
+}
+// Plain-language reasons for the server's refusals.
+function apiErrorMessage(res, data, fallback) {
+  const code = data && data.error;
+  const text = { 'not-available': 'This feature is switched off right now.', 'daily-limit': 'You have reached today\'s limit for this feature. Try again tomorrow.', 'unavailable-today': 'This feature is unavailable for the rest of today.', 'rate-limited': 'Too many requests. Wait a minute and try again.', 'protection-unavailable': 'This feature is temporarily unavailable.', 'unsafe-configuration': 'This feature is temporarily unavailable.', 'caller-not-allowed': 'Reload the page and try again.', busy: 'The server is busy. Try again in a few seconds.', 'too-large': 'That request is too large.' }[code];
+  return text || (typeof code === 'string' && code.length < 120 ? code : fallback);
+}
+
+async function renderDiscoverPanel(inv) {
   const mount = document.querySelector('#discoveryMount');
   if (!discoveryPanel) {
+    const features = await loadFeatures();
+    if (discoveryPanel) return; // another call finished first
     // Test-only options (a local test site, no waiting). Honoured only when this page itself is served from the local machine.
     const t = (['127.0.0.1', 'localhost'].includes(location.hostname) && window.__chroniumDiscoveryTest) || {};
     discoveryPanel = mountDiscoveryPanel(mount, {
       mode: 'website', guardOptions: t.guardOptions, limits: t.limits,
       getInvestigation: () => (activeInvestigationId ? { id: activeInvestigationId, name: document.querySelector('#workspaceTitle').textContent || 'Investigation' } : null),
       makeFetcher: () => createProxyFetcher({ base: '' }),
-      archiveLookup: createArchiveLookup({ base: '' }),
+      archiveLookup: features.discoveryCaptures ? createArchiveLookup({ base: '' }) : null,
+      unavailableMessage: features.discoveryFetch ? null : 'Searching a website from the website is not switched on right now. The Chronium browser extension does not need this and can search directly. Your cases and documents you add yourself are not affected.',
       requestAccess: async () => true,
       extract: extractContent,
       budgetStorage: webStorage(),
@@ -1328,7 +1366,7 @@ async function renderWorkspaceView(tab, subtab, arg) {
     investigationQuery.value = '';
     await renderAskSourcesHistory();
   } else if (tab === 'discover') {
-    renderDiscoverPanel(inv);
+    await renderDiscoverPanel(inv);
   } else if (tab === 'recovery') {
     renderRecoveryPanel();
   } else if (tab === 'review') {
@@ -1865,7 +1903,7 @@ askRunAiBtn.addEventListener('click', async () => {
       body: JSON.stringify({ question: lastAskQuestion, passages, previousQuestion: previousAskQuestion, previousAnswer: previousAskAiAnswer })
     });
     const data = await res.json();
-    if (!res.ok || data.ok === false) throw new Error(data.error || 'Analysis failed.');
+    if (!res.ok || data.ok === false) throw new Error(apiErrorMessage(res, data, 'Analysis failed.'));
     if (data.skipped) { askSourcesStatus.textContent = data.reason; return; }
     renderAskSourcesAiResult(data.result, passages);
     if (data.result && !data.result.insufficient && !data.result.parseError) lastAskAiAnswer = data.result.answer || '';
@@ -3552,7 +3590,7 @@ async function renderQualitativeSection(evidenceItems, claims, outline) {
         })
       });
       const data = await res.json();
-      if (!res.ok || data.ok === false) throw new Error(data.error || 'Analysis failed.');
+      if (!res.ok || data.ok === false) throw new Error(apiErrorMessage(res, data, 'Analysis failed.'));
       if (data.skipped) { statusEl.textContent = data.reason; return; }
       await saveQualitativeAnalysis(activeInvestigationId, { result: data.result, model: data.model });
       renderQualitativeResult(data.result, evidenceItems, claims);

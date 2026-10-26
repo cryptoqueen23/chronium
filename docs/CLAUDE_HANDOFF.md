@@ -4,6 +4,21 @@ Start a new session here. This file is rewritten at the end of meaningful work, 
 
 Repo: github.com/cryptoqueen23/chronium, local clone `C:\Users\insur\chronium`. Cloudflare Worker (`wrangler dev` / `wrangler deploy`), static front end in `public/`, Chromium MV3 extension in `extension/`.
 
+## >>> STAGE 0 IN PROGRESS (read first; written 2026-10-26)
+
+Mari authorized Stage 0 (blockers B1 to B7) **locally only**. HEAD `595d885` was pushed earlier; Stage 0 is on top of it as a WIP local commit (see `git log`). **Not pushed. Not deployed. Stage 1 not started.** Full design, risks and decisions: `docs/STAGE0_SECURITY.md` (read it).
+
+Done: Worker-enforced kill switches (all off in committed `wrangler.jsonc`), limits, isolation headers, DNS/redirect checks, AI ceilings (`src/guard.js`, `viewCapture.js`, `archive.js`, `discoveryProxy.js`); deploy validator (`scripts/validate-production-config.mjs`, `npm run deploy` runs it); staging block (placeholder KV id, not created); start-up backup gate + one-way DB door (`public/upgrade.js`, `boot.js`); six legacy workspace routes. Passing: stage0-security 28, config-safety 8, db-upgrade 6, discovery-phase1 26, **stage0-http 56/56 (real workerd + Chrome)**, browser suites a11y 37, contrast 132, ask 16, views 57, crawler page 25, discovery-browser 26, discovery-ui 74, discovery-extension 28, recovery-ui 75, extension 9.
+
+Still to do before Stage 0 can be reported:
+1. **Three browser failures from the full run (`node scripts/run-browser-suites.mjs`)**: `portable-browser` (times out waiting for `[data-open-investigation]` after the case is created through db.js; suspect boot.js/db.js change; re-run alone with `node scripts/run-browser-suites.mjs portable-browser`), `a11y-deep` (1 fail, "detached Frame": possibly flaky), `a11y-modes` (website dark: Ask box focus ring contrast 1.77 and a closed-page error: check against baseline, may be flaky or pre-existing). Resolve or show they are pre-existing.
+2. Run `node scripts/measure-worker-resources.mjs` (written, never run; needs port 8790 and 8798 free) and paste results into the MEASUREMENTS_PLACEHOLDER in `docs/STAGE0_SECURITY.md`.
+3. Run `npm run check` and `npm test` (package.json already lists the new tests), update `docs/CONTROLLED_RELEASE_PLAN.md`, `COST_DRIVERS.md`, this file.
+4. Final Stage 0 report to Mari: commit hash, fixes, tests, remaining risks, measurements, decisions needing approval (STAGE0_SECURITY section 8), updated letters.
+5. **Ask Mari for the "three wording corrections" to the CivicPlus letters: they were never provided; do not guess.** Letters stay UNSENT; Copperas Cove automation stays BLOCKED. Real Chrome permission-prompt test still NOT RUN.
+
+Gotchas this session: stale `wrangler dev`/workerd processes silently serve old config (kill them before tests; never kill with a pattern that matches your own shell); wrangler state persists between runs (use `--persist-to <fresh dir>`); Chrome's HTTP cache can answer repeat fetches (use `cache:'no-store'` + unique query); `--var` values with `;` or `=` are unreliable on Windows, use one variable per setting (test mode may set exact `LIMIT_<ROUTE>_...`); browser suites expect Workers on 8787 and 8791 and `--chrome=` Chrome for Testing; a held IndexedDB connection makes a fresh `indexedDB.open` hang, read its version from the held connection instead. Live site was checked 2026-10-25: 200 on `/`, `/crawler`, `/api/health`.
+
 ## State right now
 
 | Item | State |

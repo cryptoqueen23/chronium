@@ -67,12 +67,14 @@ export function mountDiscoveryPanel(container, deps, { id = 'dc' } = {}) {
 
   const showErr = (el, msg) => { el.textContent = msg; el.hidden = !msg; };
   const planText = () => `Plan: at most ${limits.maxPages} pages and ${limits.maxDocuments} documents, one request at a time, waiting at least ${limits.minDelayMs / 1000} seconds between requests (longer if the site asks). A full run can take ${minutes((limits.maxPages + limits.maxDocuments) * limits.minDelayMs)} or more. You can pause, resume or cancel at any time, and you can search ${limits.maxRunsPerDay} times a day. ${deps.mode === 'website' ? `Searches started from the website make at most ${limits.maxWebsiteFetches} requests; the extension has no such limit.` : ''}`;
-  $('plan').textContent = planText();
+  $('plan').textContent = deps.unavailableMessage || planText();
+  if (deps.unavailableMessage) { $('plan').setAttribute('role', 'status'); }
+  if (!deps.archiveLookup) { $('arch').checked = false; $('arch').disabled = true; }
 
   function refreshCaseLine() {
     const inv = deps.getInvestigation();
     $('case').textContent = inv ? `Results will be saved to the case: ${inv.name}` : 'No case is open. Open or create a case first; results are saved to the open case.';
-    $('start').disabled = !inv || (run && ['running', 'paused', 'preparing'].includes(run.state));
+    $('start').disabled = !inv || !!deps.unavailableMessage || (run && ['running', 'paused', 'preparing'].includes(run.state));
   }
 
   async function renderRuns() {
@@ -115,6 +117,7 @@ export function mountDiscoveryPanel(container, deps, { id = 'dc' } = {}) {
   }
 
   async function start({ continueFrom = null } = {}) {
+    if (deps.unavailableMessage) return;
     const inv = deps.getInvestigation();
     if (!inv) { showErr($('url-err'), 'Open or create a case first.'); return; }
     const urlEl = $('url');
