@@ -355,6 +355,24 @@ export async function createInvestigation({ name, description }) {
   return investigation;
 }
 
+// Renames a case and/or changes its description. Nothing else about the case is touched.
+export async function updateInvestigation(investigationId, { name, description } = {}) {
+  const db = await openDb();
+  return tx(db, ['investigations'], 'readwrite', async (t) => {
+    const store = t.objectStore('investigations');
+    const current = await reqToPromise(store.get(investigationId));
+    if (!current) throw new Error('That case no longer exists.');
+    const next = {
+      ...current,
+      name: name === undefined ? current.name : String(name).trim(),
+      description: description === undefined ? current.description : String(description).trim(),
+      updatedAt: new Date().toISOString()
+    };
+    if (!next.name) throw new Error('A case needs a name.');
+    await reqToPromise(store.put(next));
+    return next;
+  });
+}
 export async function deleteInvestigation(investigationId) {
   const db = await openDb();
   await tx(db, ['investigations', 'investigationRecords', 'discoveryRuns', 'discoveryLedger', 'recoveryReviews', 'recoveryRequests', 'recoverySettings'], 'readwrite', async (t) => {

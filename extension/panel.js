@@ -1,7 +1,10 @@
 import {
   listInvestigations, createInvestigation, deleteInvestigation,
-  saveRecordToInvestigation, listInvestigationRecords, getSavedCanonicalKeys, searchLibrary, searchInvestigation
+  saveRecordToInvestigation, listInvestigationRecords, getSavedCanonicalKeys, searchLibrary, searchInvestigation,
+  updateInvestigation, createEvidenceItem, listEvidenceItems, openDb
 } from './lib/db.js';
+import { buildRawBackup, restoreRawBackup, parseBackupText, backupFileName, BackupFileError } from './lib/upgrade.js';
+import { startupGate } from './startupGate.js';
 import { answerQuestion } from './lib/askRouter.js';
 import { answerHtml } from './lib/askRender.js';
 import { extractSearchTerms } from './lib/askCommands.js';
@@ -77,6 +80,7 @@ async function renderCases() {
       <button type="button" data-del="${esc(c.id)}" aria-label="Delete case ${esc(c.name)}">Delete</button>
     </span></li>`).join('')}</ul>` : '<p class="hint">No cases yet. A case holds the sources you save while researching one subject.</p>';
   await renderViewer();
+  await renderCaseTools(cases);
   const active = cases.find((c) => c.id === activeCaseId);
   $('#askCaseLine').textContent = active ? `Asking about: ${active.name}` : 'No case selected.';
   if (discovery) discovery.refresh();
@@ -91,17 +95,162 @@ $('#newCaseForm').addEventListener('submit', async (e) => {
 $('#caseList').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.use) { activeCaseId = b.dataset.use; await setStore('activeCaseId', activeCaseId); renderCases(); }
-  if (b.dataset.del && confirm('Delete this case and its saved sources? This cannot be undone.')) { await deleteInvestigation(b.dataset.del); renderCases(); }
+  if (b.dataset.del) {
+    // Deleting is two deliberate steps. Step 1 saves a copy of the case to Downloads and deletes NOTHING. Step 2 (below) deletes
+    // only after the person confirms the copy is there, because the browser cannot tell this page whether a download finished.
+    try {
+      const filename = await downloadCaseFile(b.dataset.del);
+      $('#importBox').innerHTML = `<div class="notice" role="group" aria-labelledby="delTitle"><p id="delTitle"><strong>Delete this case?</strong></p>
+        <p>A backup copy was saved as <strong>${esc(filename)}</strong>. Check that the file is in your Downloads folder before you continue. If you delete the case, the only way to get it back is Import case file with that file.</p>
+        <p class="actions"><button type="button" id="keepCase" class="primary">Keep the case</button> <button type="button" id="confirmDelete" data-del-id="${esc(b.dataset.del)}">Delete the case</button></p></div>`;
+      $('#keepCase').focus();
+    } catch (err) { $('#importBox').textContent = `Nothing was deleted, because the backup copy could not be saved: ${err.message}`; }
+  }
   if (b.dataset.export) {
     try {
-      const { filename, text } = await exportInvestigationFile(b.dataset.export);
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = filename; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      const filename = await downloadCaseFile(b.dataset.export);
       $('#importBox').textContent = `Saved ${filename}. Open it on the website or another device with Import case file.`;
     } catch (err) { $('#importBox').textContent = `Could not export: ${err.message}`; }
   }
   if (b.dataset.open) { viewCaseId = b.dataset.open; viewTab = 'bigpicture'; viewTarget = null; await renderViewer(); }
+});
+
+async function downloadCaseFile(caseId) {
+  const { filename, text } = await exportInvestigationFile(caseId);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  return filename;
+}
+
+// ---- case tools: rename, add a source by hand, add an evidence passage by hand ----
+let toolsOpen = false;
+async function renderCaseTools(cases) {
+  const box = $('#caseTools');
+  const active = cases.find((c) => c.id === activeCaseId);
+  if (!active) { box.innerHTML = ''; return; }
+  const sources = await listInvestigationRecords(activeCaseId);
+  const sourceOptions = sources.map((r) => `<option value="${esc(r.id)}">${esc((r.title || r.originalUrl || 'Untitled source').slice(0, 90))}</option>`).join('');
+  box.innerHTML = `<details class="tools" id="toolsDetails"${toolsOpen ? ' open' : ''}>
+    <summary>Edit this case and add material by hand</summary>
+    <form id="renameForm" class="stack" novalidate>
+      <h4>Case name</h4>
+      <label for="renameInput">Name of the active case</label>
+      <input id="renameInput" type="text" maxlength="120" value="${esc(active.name)}" required aria-describedby="toolsError" />
+      <button type="submit">Save name</button>
+    </form>
+    <form id="addSourceForm" class="stack" novalidate>
+      <h4>Add a document or source by hand</h4>
+      <label for="srcTitle">Title (required)</label>
+      <input id="srcTitle" type="text" maxlength="300" required aria-describedby="toolsError" />
+      <label for="srcUrl">Web address (optional, starts with https://)</label>
+      <input id="srcUrl" type="url" maxlength="2000" placeholder="https://" aria-describedby="toolsError" />
+      <label for="srcDate">Date of the document (optional)</label>
+      <input id="srcDate" type="date" />
+      <label for="srcFrom">Where it came from (optional)</label>
+      <input id="srcFrom" type="text" maxlength="200" placeholder="For example: City Hall records office" />
+      <label for="srcText">Its text, or your notes about it (optional)</label>
+      <textarea id="srcText" maxlength="50000"></textarea>
+      <button type="submit" class="primary">Add to this case</button>
+    </form>
+    <form id="addEvidenceForm" class="stack" novalidate>
+      <h4>Add an evidence passage by hand</h4>
+      ${sources.length ? `<label for="evSource">From which source</label>
+      <select id="evSource" required aria-describedby="toolsError">${sourceOptions}</select>
+      <label for="evText">The passage or quote (required)</label>
+      <textarea id="evText" maxlength="5000" required aria-describedby="toolsError"></textarea>
+      <label for="evLocation">Page or place in the document (optional)</label>
+      <input id="evLocation" type="text" maxlength="200" placeholder="For example: page 4, paragraph 2" />
+      <label for="evNotes">Your note (optional)</label>
+      <input id="evNotes" type="text" maxlength="500" />
+      <button type="submit" class="primary">Save passage</button>` : '<p class="hint">Add a source first (above, or from Search). A passage always belongs to a source, so anyone can check where it came from.</p>'}
+    </form>
+    <p id="toolsError" class="field-error" role="alert" hidden></p>
+    <p id="toolsStatus" class="toolsStatus" role="status" aria-live="polite"></p>
+  </details>`;
+  $('#toolsDetails').addEventListener('toggle', (e) => { toolsOpen = e.target.open; });
+}
+function toolsFail(message, field) {
+  const err = $('#toolsError'); err.textContent = message; err.hidden = false;
+  $('#toolsStatus').textContent = '';
+  if (field) { field.setAttribute('aria-invalid', 'true'); field.focus(); }
+}
+function toolsOk(message) {
+  const err = $('#toolsError'); err.hidden = true; err.textContent = '';
+  document.querySelectorAll('#caseTools [aria-invalid]').forEach((f) => f.removeAttribute('aria-invalid'));
+  $('#toolsStatus').textContent = message;
+}
+$('#caseTools').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = e.target.id;
+  try {
+    if (id === 'renameForm') {
+      const input = $('#renameInput'); const name = input.value.trim();
+      if (!name) return toolsFail('A case needs a name.', input);
+      await updateInvestigation(activeCaseId, { name });
+      await renderCases(); toolsOk(`Saved. The case is now called "${name}".`);
+    } else if (id === 'addSourceForm') {
+      const title = $('#srcTitle'); const url = $('#srcUrl');
+      if (!title.value.trim()) return toolsFail('Give the document a title.', title);
+      let address = '';
+      if (url.value.trim()) { address = safeUrl(url.value.trim()); if (!address) return toolsFail('The web address must start with https:// or http://. Leave it empty if the document has none.', url); }
+      const text = $('#srcText').value.trim(); const date = $('#srcDate').value;
+      const key = address || `manual:${crypto.randomUUID()}`;
+      if (address && (await getSavedCanonicalKeys(activeCaseId)).has(key)) return toolsFail('That web address is already saved in this case.', url);
+      await saveRecordToInvestigation(activeCaseId, {
+        canonicalKey: key, title: title.value.trim(), originalUrl: address, archiveUrl: '', source: $('#srcFrom').value.trim() || 'Added by hand',
+        captureDate: date || null, snippet: text.slice(0, 300), extractedText: text, addedBy: 'hand'
+      });
+      toolsOpen = true; await renderCases(); toolsOk(`Added "${title.value.trim()}" to this case.`);
+    } else if (id === 'addEvidenceForm') {
+      const text = $('#evText');
+      if (!text.value.trim()) return toolsFail('Type or paste the passage you want to keep.', text);
+      await createEvidenceItem(activeCaseId, { sourceRecordId: $('#evSource').value, excerptType: 'quote', excerptText: text.value, location: $('#evLocation').value, notes: $('#evNotes').value });
+      toolsOpen = true; await renderCases(); toolsOk('Saved the passage. It is listed under its source in this case.');
+    }
+  } catch (err) { toolsFail(`Could not save: ${err.message}`); }
+});
+
+// ---- back up or restore everything (whole database; restoring never overwrites) ----
+let pendingRestore = null;
+$('#backupAllBtn').addEventListener('click', async () => {
+  const box = $('#backupBox');
+  try {
+    const backup = await buildRawBackup();
+    if (!backup) { box.textContent = 'There is nothing to back up yet.'; return; }
+    const name = backupFileName(backup);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json' })); a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+    const c = backup.counts || {};
+    box.textContent = `Saved ${name}: ${c.investigations || 0} case(s), ${c.records || 0} source(s), ${c.evidenceItems || 0} evidence passage(s). Keep it somewhere safe.`;
+  } catch (err) { box.textContent = `The backup could not be made: ${err.message}. Nothing was changed.`; }
+});
+$('#restoreBtn').addEventListener('click', () => $('#restoreFileInput').click());
+$('#restoreFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0]; e.target.value = ''; pendingRestore = null;
+  if (!file) return;
+  const box = $('#backupBox');
+  try {
+    const backup = parseBackupText(await file.text());
+    pendingRestore = backup;
+    const c = backup.counts || {};
+    box.innerHTML = `<div class="notice"><p><strong>Restore this backup?</strong></p><p>It holds ${c.investigations || 0} case(s), ${c.records || 0} source(s) and ${c.evidenceItems || 0} evidence passage(s), saved ${esc(String(backup.createdAt || '').slice(0, 10))}. Anything you already have stays exactly as it is; only what is missing is added.</p>
+      <p class="actions"><button type="button" id="confirmRestore" class="primary">Restore</button> <button type="button" id="cancelRestore">Cancel</button></p></div>`;
+    $('#confirmRestore').focus();
+  } catch (err) { box.innerHTML = `<p class="notice">${esc(err instanceof BackupFileError ? err.message : 'That file could not be read: ' + err.message)}</p>`; }
+});
+$('#backupBox').addEventListener('click', async (e) => {
+  if (e.target.id === 'cancelRestore') { pendingRestore = null; $('#backupBox').textContent = ''; }
+  if (e.target.id === 'confirmRestore' && pendingRestore) {
+    try {
+      const rep = await restoreRawBackup(pendingRestore, { openCurrentDb: () => openDb() });
+      pendingRestore = null;
+      const added = Object.values(rep.added || {}).reduce((n, v) => n + v, 0);
+      $('#backupBox').textContent = `Restored. Added ${added} item(s); ${Object.values(rep.kept || {}).reduce((n, v) => n + v, 0)} you already had were left as they were.`;
+      await renderCases();
+    } catch (err) { $('#backupBox').textContent = `The restore failed and nothing was overwritten: ${err.message}`; }
+  }
 });
 
 // ---- investigation views: Big Picture / Overview / Deep Dive ----
@@ -166,6 +315,12 @@ $('#caseFileInput').addEventListener('change', async (e) => {
   }
 });
 $('#importBox').addEventListener('click', async (e) => {
+  if (e.target.id === 'keepCase') { $('#importBox').textContent = 'The case was kept. A backup copy is still in your Downloads folder.'; return; }
+  if (e.target.id === 'confirmDelete') {
+    try { await deleteInvestigation(e.target.dataset.delId); $('#importBox').textContent = 'The case was deleted. To get it back, use Import case file and choose the backup copy.'; }
+    catch (err) { $('#importBox').textContent = `The case could not be deleted: ${err.message}`; }
+    await renderCases(); return;
+  }
   if (e.target.id === 'cancelImport') { pendingBundle = null; $('#importBox').innerHTML = ''; }
   if (e.target.id === 'confirmImport' && pendingBundle) {
     try {
@@ -319,6 +474,11 @@ function mountDiscovery() {
 }
 
 (async function init() {
+  if (!(await startupGate())) return; // a message is on screen; the database was not changed
+  try {
+    const persisted = (await navigator.storage?.persisted?.()) || (await navigator.storage?.persist?.());
+    $('#persistLine').textContent = persisted ? 'Chrome has marked this storage as protected from automatic clean-up.' : 'Chrome has not marked this storage as protected from automatic clean-up. It is cleared only if you clear this extension\'s data, but keeping a backup file is wise.';
+  } catch { /* not available */ }
   workerUrl = await store('workerUrl', DEFAULT_WORKER);
   activeCaseId = await store('activeCaseId', null);
   $('#workerUrl').value = workerUrl;

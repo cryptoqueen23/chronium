@@ -1,6 +1,8 @@
 # Chronium Mind side panel (Chromium, Manifest V3)
 
-Load unpacked: `chrome://extensions` -> Developer mode -> Load unpacked -> this `extension/` folder. Click the toolbar icon to open the side panel.
+**For daily personal use, do not load this development folder.** Build the stable personal copy (`npm run extension:personal`, then follow `docs/EXTENSION_PERSONAL_USE.md`): it has a fixed extension ID, so your saved research is never affected by development changes. This folder is for development and tests only; Chrome stores its data under a different ID.
+
+Load unpacked (development): `chrome://extensions` -> Developer mode -> Load unpacked -> this `extension/` folder. Click the toolbar icon to open the side panel.
 
 - Talks to the Chronium Worker (default: the live workers.dev address; change under Settings in the panel, `http://127.0.0.1:8787` works for `wrangler dev`).
 - My Cases use the same `db.js` workspace code as the web app, copied into `lib/` by `node scripts/sync-extension.mjs` (run it after changing `public/db.js`, `entities.js`, `claims.js` or `ingestionReview.js`).
@@ -10,3 +12,5 @@ Load unpacked: `chrome://extensions` -> Developer mode -> Load unpacked -> this 
 - Not built yet: Compare (What Changed?), new connectors. (Ask Chronium is in the panel: My Research.)
 
 - **Records Recovery** (Phase 3): the case view's Big Picture shows a summary (counts and the notice that a gap in this case is not a gap in the government's records), and Reports appends the full plain-text Records Recovery section. The editing screen (requests, decisions, follow-up draft) is on the website; move decisions between the two with Export and Import. Shared code is copied to `lib/recovery/` by `node scripts/sync-extension.mjs`.
+
+- **Personal-use additions:** rename a case; add a source or an evidence passage by hand; **Back up everything** and **Restore** (whole database, never overwrites); deleting a case first saves a copy and asks again; a start-up guard (`startupGate.js`) that asks for a backup before any database upgrade and refuses data saved by a newer version. Test: `npm run test:extension:personal` (real Chrome for Testing, 59 checks). Square toolbar icons come from `node scripts/make-extension-icons.mjs`.

@@ -111,3 +111,23 @@ input[aria-invalid="true"]{border-color:var(--bad);border-width:2px}
 /* Deep Discovery (lib/discovery.css): colour roles from this palette. */
 :root{--dc-fg:var(--text);--dc-muted:var(--muted);--dc-line:var(--control);--dc-panel:var(--panel);--dc-accent:var(--accent);--dc-on-accent:#000;--dc-bad:var(--bad);--dc-link:var(--accent)}
 @media (prefers-color-scheme: light){:root{--dc-on-accent:#fff}}
+
+/* Case tools (rename, add a source or evidence by hand) and backup */
+.tools{border:1px solid var(--line);border-radius:10px;padding:0 12px;margin:12px 0;background:var(--panel)}
+.tools>summary,#backupDetails>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:600}
+form.stack{flex-direction:column;align-items:stretch;margin:10px 0 16px;padding-top:10px;border-top:1px solid var(--line)}
+form.stack h4{margin:0}
+form.stack label{display:block;font-size:.85rem;color:var(--muted);margin-top:4px}
+form.stack input,form.stack textarea,form.stack select{width:100%;min-height:44px;padding:8px 12px;background:var(--bg);color:var(--text);border:1px solid var(--control);border-radius:8px;font:inherit}
+form.stack textarea{min-height:110px;resize:vertical}
+form.stack input[type=date]{color-scheme:dark light}
+.toolsStatus{min-height:1.4em;margin:6px 0 12px}
+#backupDetails{margin-top:8px}
+#backupDetails .actions{margin:8px 0}
+
+/* Start-up guard dialog */
+#startupGate .ug-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000}
+#startupGate .ug-box{position:fixed;z-index:1001;left:50%;top:50%;transform:translate(-50%,-50%);width:min(94vw,34rem);max-height:92vh;overflow:auto;padding:18px;background:var(--panel);color:var(--text);border:2px solid var(--control);border-radius:12px}
+#startupGate h2{margin:0 0 10px}
+#startupGate .ug-actions{display:flex;flex-wrap:wrap;gap:8px}
+#startupGate button:disabled{opacity:.6}

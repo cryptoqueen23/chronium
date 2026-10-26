@@ -11,7 +11,7 @@
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="top">
-    <img src="icons/icon.png" alt="" width="32" height="32" />
+    <img src="icons/icon-48.png" alt="" width="32" height="32" />
     <div><h1>Chronium Mind</h1><p class="tag">Search. Discover. Verify.</p></div>
   </header>
 
@@ -55,6 +55,7 @@
       </div>
       <div id="importBox" role="status" aria-live="polite"></div>
       <div id="caseList"></div>
+      <div id="caseTools"></div>
       <section id="askBox" aria-labelledby="askHeading" class="askbox">
         <h3 id="askHeading">Ask Chronium</h3>
         <p class="hint" id="askCaseLine"></p>
@@ -83,6 +84,17 @@
       <input id="workerUrl" type="url" aria-describedby="workerUrlError" />
       <p id="workerUrlError" class="field-error" role="alert" hidden></p>
       <button type="button" id="saveWorkerUrl">Save</button>
+    </details>
+    <details id="backupDetails">
+      <summary>Back up or restore all my research</summary>
+      <p class="hint">Your research is saved only in this browser, on this computer. A backup file lets you keep a copy elsewhere or move to another computer. Restoring adds what is missing and never overwrites what you already have.</p>
+      <p class="actions">
+        <button type="button" id="backupAllBtn" class="primary">Back up everything</button>
+        <button type="button" id="restoreBtn">Restore from a backup file</button>
+        <input type="file" id="restoreFileInput" class="sr-only" accept=".json,application/json" aria-label="Choose a Chronium backup file to restore" tabindex="-1" />
+      </p>
+      <div id="backupBox" role="status" aria-live="polite"></div>
+      <p id="persistLine" class="hint"></p>
     </details>
   </footer>
   <script type="module" src="panel.js"></script>
