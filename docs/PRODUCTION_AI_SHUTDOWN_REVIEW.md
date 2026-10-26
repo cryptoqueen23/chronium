@@ -144,3 +144,22 @@ Not before section 10's verification passes, and not before you have reviewed yo
 ## 12. A finding during this pass: a credential stored as a plain variable (staging)
 
 On **2026-10-26** Mari added an OpenAI key to the **staging** Worker as a **plain-text variable** named `OPENAI_API_KEY` (the value was never displayed here: every check since redacts it). A plain-text variable is not a secret: its value is shown in the dashboard and returned by the account API to any tool using the Cloudflare login. Production has no OpenAI key. Staging's AI switch is `off` and the code deployed on staging (version `db94028d`) predates the OpenAI adapter and does not read it, so nothing can use or spend it. Fix (Mari's step, see `docs/AI_OPENAI_PLAN.md` section 1): delete the variable, add it back with the type **Secret** (or `npx wrangler secret put OPENAI_API_KEY --env staging`), and consider rotating the key since it has been stored as readable text. `scripts/list-worker-bindings.mjs` audits every Worker and flags this case without printing values. Also: by default a `wrangler deploy` replaces a Worker's plain variables with the ones in the configuration file (Wrangler has a `--keep-vars` option to prevent that), so a dashboard-added plain variable can be silently dropped by the next staging deploy; a secret is not affected.
+
+## 13. DEPLOYED (2026-10-26, 20:46:56 UTC) on Mari's approval
+
+`release/ai-off` (commit `1575301`) was deployed to the production Worker `chronium-mind` from `.release/ai-off-package`; nothing from `main` was deployed.
+
+| Item | Result |
+|---|---|
+| Preflight (all passed before deploying) | package equals the commit file for file; the deployed module equalled the compiled production package (`fa5429c6209fdfc8`); `AI_ENABLED` absent in production and in the package (effective off), fail-closed check over 36 values passed; 16 of 16 live static files identical, database version 4; the deploy's bindings equalled the live ones; rollback target `60045ea5-992c-499e-8290-a8ef08572667` was the current deployment and present in the history |
+| New version | **`f538f4bc-4393-4c42-8742-1b6cc49d098b`** (created 20:46:55 UTC; previous `60045ea5-992c-499e-8290-a8ef08572667`) |
+| Deploy output | no asset upload line at all (no static file changed); bindings `CONNECTOR_HEALTH` (`4ed1a352…`), `ASSETS`, `AI_PROVIDER` `"anthropic"` |
+| Propagation | both AI routes answered 404 within 2 seconds at the polling location; **20 of 20 samples over about a minute** were consistent |
+| Verifier `--expect=after` against production | **passed**: 16 of 16 static files byte-identical, front end still at database version 4, no `boot.js`/`upgrade.js`, every other route unchanged, `/api/ai/usage` and `/api/analyze/qualitative` **404** |
+| POST | three POSTs with an empty body answered 404 |
+| Deployed code | **byte-identical** to the compiled `release/ai-off` package (6,047,590 bytes, SHA-256 `476634ffdad316df`) |
+| Anthropic secret | `ANTHROPIC_API_KEY` still present, type Secret; not read, changed, deleted or revoked |
+| Live site in a real browser (throwaway profile, pages only: no button pressed, no POST) | the live page's own code sees only database `chronium` version **4**, before and after a reload; `/crawler` 200; no page errors; no `boot.js` or `upgrade.js` requested |
+| Rollback | still available: `node ..\..\node_modules\wrangler\bin\wrangler.js rollback 60045ea5-992c-499e-8290-a8ef08572667` from `.release\ai-off-package` |
+
+Remaining: the Anthropic key is still bound (unused); deleting it and revoking it at Anthropic is a separate step awaiting Mari's approval (section 11). The question of who added it (`docs/ANTHROPIC_KEY_PROVENANCE.md`) is still open.
