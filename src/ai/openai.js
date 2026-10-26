@@ -80,7 +80,9 @@ async function complete({ system, prompt, maxTokens, schema, safetyId, env }) {
     // Never pass the response text on: an error body can echo part of a key. Status and OpenAI's short code are enough to diagnose.
     let code = '';
     try { const j = await res.json(); code = String(j?.error?.code || j?.error?.type || '').replace(/[^a-z0-9_.-]/gi, '').slice(0, 60); } catch { /* no body */ }
-    throw new Error(`OpenAI HTTP ${res.status}${code ? ` ${code}` : ''}`);
+    const err = new Error(`OpenAI HTTP ${res.status}${code ? ` ${code}` : ''}`);
+    err.status = res.status; err.providerCode = code; // used by the Worker to stop calling OpenAI once a spend or credit limit is reported
+    throw err;
   }
   let data;
   try { data = await res.json(); } catch { throw new Error('OpenAI answered with something that was not JSON'); }

@@ -99,6 +99,24 @@ async function bump(kind, key, ttlSeconds) {
   return n + 1;
 }
 
+// Adds n to a counter and returns the new total / reads a counter. Same storage and the same looseness as bump(): the counters are per
+// data centre and not atomic, so these are a second, independent line of defence, never the only one.
+async function addTo(kind, key, ttlSeconds, n) {
+  const store = typeof caches !== 'undefined' ? caches.default : null;
+  if (!store) throw new Error('no limit storage');
+  const k = cacheKey(kind, key);
+  const hit = await store.match(k);
+  const total = (hit ? Number(await hit.text()) || 0 : 0) + n;
+  await store.put(k, new Response(String(total), { headers: { 'cache-control': `max-age=${ttlSeconds}` } }));
+  return total;
+}
+async function readCounter(kind, key) {
+  const store = typeof caches !== 'undefined' ? caches.default : null;
+  if (!store) throw new Error('no limit storage');
+  const hit = await store.match(cacheKey(kind, key));
+  return hit ? Number(await hit.text()) || 0 : 0;
+}
+
 const HARD_DEFAULTS = Object.freeze({
   fetch: { perIpPerMin: 30, perSitePerMin: 30, globalPerDay: 3000, maxConcurrent: 4, maxBytes: 10 * 1024 * 1024 },
   captures: { perIpPerMin: 30, perSitePerMin: 60, globalPerDay: 3000, maxConcurrent: 4, maxBytes: 64 * 1024 },
@@ -199,6 +217,31 @@ export function aiCaps(env) {
   return base;
 }
 
+// ---- independent server-side TOKEN limit and provider latch (they do not rely on the provider's own spend limit) ----
+// Worst case for ONE call at the default caps: about 2,600 input tokens (8,000 evidence characters plus prompt) and 600 output tokens;
+// 4,000 leaves margin. The daily token ceiling defaults to (global calls per day) x 4,000 and can only be LOWERED by AI_DAILY_TOKEN_CEILING.
+// Tokens are counted from what the provider reports it used (input + output, including calls that were cut off or refused, which cost money).
+export const AI_TOKENS_PER_CALL_WORST_CASE = 4000;
+export function aiTokenCeiling(env) {
+  const c = aiCeilings(env);
+  if (!c) return null;
+  const base = c.global * AI_TOKENS_PER_CALL_WORST_CASE;
+  const v = posInt(env?.AI_DAILY_TOKEN_CEILING);
+  return v !== null && (v < base || isTestMode(env)) ? v : base;
+}
+const today = () => new Date().toISOString().slice(0, 10);
+export async function recordAiTokens(env, tokens) {
+  const n = Math.max(0, Math.round(Number(tokens) || 0));
+  if (!n) return;
+  try { await addTo('ai-tokens-day', today(), 90_000, n); } catch { /* the next request's check fails closed if storage is broken */ }
+}
+// The provider said its spend, credit or usage limit is reached. Stop calling it for the rest of the UTC day instead of hammering it.
+export const PROVIDER_LIMIT_CODES = Object.freeze(['project_spend_limit_exceeded', 'organization_spend_limit_exceeded', 'insufficient_quota', 'credit_balance_exhausted', 'organization_usage_limit_exceeded']);
+export const isProviderLimitError = (e) => !!e && PROVIDER_LIMIT_CODES.includes(e.providerCode);
+export async function latchAiProvider(env) {
+  try { await addTo('ai-provider-latch', today(), 90_000, 1); } catch { /* fail closed on the next check */ }
+}
+
 // AI: per-visitor and global ceilings per UTC day, plus a short per-minute burst limit. Configuration is required.
 export async function enforceAiLimits(request, env) {
   const c = aiCeilings(env);
@@ -208,6 +251,8 @@ export async function enforceAiLimits(request, env) {
   const day = new Date().toISOString().slice(0, 10); const minute = Math.floor(Date.now() / 60_000);
   const lim = limitsFor(env, 'ai');
   try {
+    if (await readCounter('ai-provider-latch', today()) > 0) return reply({ error: 'unavailable-today' }, 503, { 'retry-after': '3600' });
+    if (await readCounter('ai-tokens-day', today()) >= aiTokenCeiling(env)) return reply({ error: 'unavailable-today' }, 503, { 'retry-after': '3600' });
     const who = visitorKey(request, env);
     if (await bump('rl-ai-min', `${who}/${minute}`, 90) > lim.perIpPerMin) return reply({ error: 'rate-limited', scope: 'visitor' }, 429, { 'retry-after': '60' });
     if (await bump('ai-visitor-day', `${who}/${day}`, 90_000) > c.perVisitor) return reply({ error: 'daily-limit', scope: 'visitor' }, 429, { 'retry-after': '3600' });

@@ -11,7 +11,7 @@ Nothing here was deployed. No API key was created, requested, rotated or seen. N
 Never in: the Chrome extension, the website or PWA files, GitHub (the repository is **public**), a variable in `wrangler.jsonc`, browser storage, an email or a chat. A test (`scripts/test-openai-provider.mjs`) fails if the key name, an OpenAI address or a key-shaped string ever appears in `extension/`, `public/` or any committed file.
 
 At activation (after your approval), in this order:
-1. In the OpenAI dashboard, make a **separate project** for staging (for example "chronium-staging"). Set a **hard monthly spend limit** (proposed **$5**) and an alert (for example $2.50). OpenAI's documentation says a hard limit makes affected requests answer `429`, so it is a real ceiling, enforced by OpenAI, not by our code. Create the API key **inside that project**; if the dashboard offers it, restrict the key to the Responses API only.
+1. In the OpenAI dashboard, make a **separate project** for staging (for example "chronium-staging"). Create the API key **inside that project**; if the dashboard offers it, restrict the key to the Responses API only. Then set an **enforced hard spending limit**, not just a budget notification. OpenAI's spend-limits guide gives the path: **Project settings, Limits, Spend, Edit spend limit, enter the Monthly spend limit (proposed $5), turn on "Enforce a hard limit", Save.** A spend *alert* only notifies ("Spend alerts do not enforce a cap"); only the hard limit makes requests fail, with HTTP 429 and the code `project_spend_limit_exceeded`. Add an alert as well (for example $2.50) as an early warning. **Nothing is switched on until the toggle has been seen set.** OpenAI also warns that "enforcement is not instantaneous, so recorded spend can slightly exceed the configured amount", which is why section 5b adds limits of our own that do not depend on OpenAI's.
 2. In a terminal in the project folder, run `npx wrangler secret put OPENAI_API_KEY --env staging`. Wrangler asks for the value in a **hidden prompt**: paste, press Enter. Nothing is shown or stored in your shell history. I never see it.
 3. Switch AI on for staging only with the two cost ceilings (a separate approval), run the measured test (section 9), then **delete the secret** (`npx wrangler secret delete OPENAI_API_KEY --env staging`) unless you want staging AI left on.
 4. Production gets its own project, its own key and its own limit, later, in a separate approval.
@@ -69,7 +69,7 @@ It exists, but **it does not fit Chronium's shape today**, and it is a limited t
 | Model | Input | Output | Notes |
 |---|---|---|---|
 | **gpt-6-luna** (proposed default) | $0.10 | $0.50 | "Our most efficient model for focused, high-volume tasks"; reasoning effort `none` supported |
-| gpt-6.1-terra | $1.00 | $5.00 | "fast, efficient"; `none` supported; the step up if Luna's answers are not good enough |
+| gpt-6.1-terra | $1.00 | $5.00 | has its own page on OpenAI's models site and is on the pricing page (2026-10-26): Responses API, structured outputs and `none` supported, default effort `medium`. **Not assumed to be available to your account**: only a call to `GET /v1/models` with your key can show which models you may use, and that waits for approval. Only a candidate if Luna fails |
 | gpt-6.1-sol | $2.00 | $10.00 | does **not** support `none`; would need a higher output cap |
 | gpt-6-astra | $10.00 | $50.00 | flagship; not for this job |
 | gpt-5-nano | $0.05 | $0.40 | older; secondary sources say its dated snapshot is scheduled to shut down 2026-12-11 (**UNVERIFIED**); not chosen |
@@ -92,9 +92,51 @@ The counters are loose across data centres (plan for about 3×), so the firm cei
 - **Errors never carry OpenAI's text** (an error body can echo part of a key): only the HTTP status and OpenAI's short code reach logs; users see a generic refusal.
 - **Unchanged protections:** the AI switch and both cost ceilings (the route is 404 without them), caller check, 600 output tokens, 8,000 evidence characters, 256 KB body, per-visitor and global daily ceilings, burst limiter, local-first features untouched. **Nothing in Search, Compare, My Research, Reports, export, backup or the personal extension depends on AI.**
 - **Configuration (plain variables, none secret):** `OPENAI_MODEL` (default `gpt-6-luna`), `OPENAI_REASONING_EFFORT` (default `none`), `OPENAI_STRUCTURED` (`off` omits the schema; validation still decides).
-- **Tests:** `scripts/test-openai-provider.mjs` (14): request shape, every response state, error-text hygiene, the key only in the Authorization header, registry default, end to end through the real Worker with OpenAI stubbed (capped, unstored, hashed visitor; truncated, reasoning-exhausted, refused, unfinished, empty, wrong-JSON and bad-citation answers all refused), and static scans proving no key or OpenAI address in `extension/` or `public/` and no key-shaped string committed.
+- **Tests:** `scripts/test-openai-provider.mjs` (14), plus `scripts/test-ai-limits.mjs` (9, section 5b): request shape, every response state, error-text hygiene, the key only in the Authorization header, registry default, end to end through the real Worker with OpenAI stubbed (capped, unstored, hashed visitor; truncated, reasoning-exhausted, refused, unfinished, empty, wrong-JSON and bad-citation answers all refused), and static scans proving no key or OpenAI address in `extension/` or `public/` and no key-shaped string committed.
 
-**UNVERIFIED until the staging AI phase (needs your approval, a key and a $5 limit):** that `gpt-6-luna` accepts strict `json_schema` together with `reasoning.effort: none` (OpenAI's models page does not list structured outputs per model); that its answers follow the schema, cite correctly and rarely hit the 600-token cap; that the account's key has credit and a usable tier. The measurement plan is in section 9.
+### Compatibility checked against OpenAI's current documentation (2026-10-26)
+
+| Question | Finding | Source |
+|---|---|---|
+| Does `gpt-6-luna` exist, and under what name? | Yes: model id `gpt-6-luna`, a single snapshot that is also the default. "Our most efficient model for focused, high-volume tasks." Text and image input, text output; 1,050,000-token context, 128,000 maximum output; knowledge cutoff 2026-05-18; no deprecation notice | its model page |
+| Responses API | **Supported** (also Chat Completions and Batch) | its model page |
+| Strict structured outputs | **Supported** (listed with streaming, function calling, file search, image input, web search, prompt caching) | its model page |
+| Reasoning settings | `reasoning.effort` accepts `none`, `low`, `medium` (**the default**), `high`, `xhigh`, `max`. So the default would spend the cap on hidden reasoning, and **our explicit `none` is required**, as built | its model page and the reasoning guide |
+| Reasoning tokens versus the cap | They count against `max_output_tokens`; if they use it all the response is `incomplete` with `incomplete_details.reason` `max_output_tokens`, possibly with no visible text | reasoning guide |
+| Request fields used | `model`, `instructions`, `input` (a string is accepted), `max_output_tokens`, `store`, `reasoning`, `text.format` (`type: json_schema`, `name`, `strict: true`, `schema`), `safety_identifier` | text, structured-outputs, data-controls and safety guides |
+| Response fields used | `output` (an array; text is in message items' `output_text` parts, a refusal in a `refusal` part), `status` (`incomplete` with a reason when cut off), `usage.input_tokens` / `output_tokens` | text, structured-outputs and reasoning guides |
+| Schema rules | Root must be an object; every property `required`; `additionalProperties: false`; at most 10 levels and 5,000 properties; no `allOf`, `not`, `if/then/else`. Our two schemas satisfy all of it, and a test asserts it | structured-outputs guide |
+| Limits for a new account | Build tier (after $5 of credit purchases): 5,000 requests and 2,000,000 tokens per minute for this model; far above anything planned | its model page, rate-limits guide |
+| `gpt-6.1-terra` | Documented on its own page; availability to your account unknown until `GET /v1/models` is called with a key | its model page |
+
+**Still UNVERIFIED (cannot be settled without a key and an approved staging run):** that strict `json_schema` and `reasoning.effort: none` work *together* on `gpt-6-luna` (each is documented as supported; the combination is not stated); that its answers follow the schema, cite correctly and rarely hit the 600-token cap; that your account can use the model and has credit; the real behaviour of the hard limit's `429`. The measurement plan is in section 9.
+
+## 5b. Independent server-side limits (built locally; they do not rely on OpenAI's own limits)
+
+OpenAI's hard spend limit is a real ceiling but, by its own documentation, enforcement lags, so spend can slightly overshoot. Our Worker therefore enforces its own limits **before any call is made**, and every one fails closed if its storage is unavailable:
+
+| Limit | Enforced where | Default | Can be |
+|---|---|---|---|
+| AI switch and both call ceilings (otherwise the route answers 404) | Worker | off | lowered or turned on only deliberately |
+| Per visitor per day (requests) | Worker | set by `AI_PER_VISITOR_PER_DAY` | required |
+| Global per day (requests) | Worker | set by `AI_DAILY_CEILING` | required |
+| Burst per minute per visitor, and the Rate Limiting binding on staging | Worker | 6 per minute | lowered |
+| Per-call output tokens | Worker (sent to OpenAI as `max_output_tokens`) | 600 | lowered only |
+| Per-call evidence text | Worker | 8,000 characters | lowered only |
+| Request body | Worker | 256 KB | lowered only |
+| **Daily token ceiling (new)** | Worker, counted from the token usage OpenAI reports for every call (including calls that were cut off or refused) | global calls per day x 4,000 tokens | lowered only (`AI_DAILY_TOKEN_CEILING`) |
+| **Provider latch (new)** | Worker: when OpenAI answers `project_spend_limit_exceeded`, `organization_spend_limit_exceeded`, `insufficient_quota`, `credit_balance_exhausted` or `organization_usage_limit_exceeded`, no further call is made to OpenAI for the rest of the UTC day | automatic | n/a |
+| Hard spend limit | OpenAI (project) | you set it | by you |
+
+Honest limits of our own counters: they live in Cloudflare's per-data-centre cache and are not atomic, so a burst across data centres can overshoot by a small multiple; that is why the OpenAI hard limit and the call ceilings are *both* required before activation. Tests: `scripts/test-ai-limits.mjs` (9): the token ceiling stops the next call before it reaches the provider; cut-off, refused and malformed calls still count; the ceiling is per UTC day; each spend/credit code latches and ordinary rate limits and server errors do not; refused requests use no visitor allowance; broken storage fails closed.
+
+## 5c. Activation checklist (nothing is switched on until every line is ticked and Mari approves in writing)
+
+1. OpenAI project created for staging; **hard spend limit enforced** (Project settings, Limits, Spend, "Enforce a hard limit" on), alert set, key created in that project and restricted if offered.
+2. `OPENAI_API_KEY` set by Mari as a staging Worker secret (hidden prompt). No other copy exists.
+3. Staging redeployed with `AI_PROVIDER=openai`, `AI_ENABLED=on`, the three ceilings set (proposed 3 per visitor, 10 calls and the derived 40,000 tokens per day), caps unchanged.
+4. Ten measured calls (section 9) with the limit and usage page watched; report; then the secret is deleted or AI is switched off again.
+5. Production later, with its own project, key, limit and approval.
 
 ## 6. The production Anthropic integration, and how to switch it off without touching anyone's saved cases
 
@@ -109,7 +151,7 @@ What is live (verified read-only; the deployed script was downloaded and read): 
 | **C-lite. Deploy the prepared Worker-only "AI off" release** (below) | The two AI routes answer 404 unless `AI_ENABLED` is `on` | **No** (front-end files byte-identical, proven) | yes (a production deploy) |
 | D. Deploy `main` (Stage 0 release) | Everything, including the front end | **Yes** (guarded, with a backup prompt) | a full release approval |
 
-**C-lite is prepared and tested locally; nothing was deployed.**
+**C-lite is prepared and tested locally; nothing was deployed. The final read-only review (evidence, route-by-route comparison, why the database cannot be upgraded, exact deploy and rollback commands) is `docs/PRODUCTION_AI_SHUTDOWN_REVIEW.md`.**
 - Branch `release/ai-off` (commit `1575301`, on top of the exact production release commit `244a9d3`), exported LF-exact to `.release/ai-off-package`. It differs from the production package in **one file, five lines in `src/index.js`**; `public/` and `wrangler.jsonc` are identical.
 - Verifier: `scripts/verify-ai-off-release.mjs`. Against **production now** (`--expect=before`): all **16 static files byte-identical**, the front end still opens the database at version 4, no `boot.js`/`upgrade.js`, other routes unchanged, `/api/ai/usage` 200, `/api/analyze/qualitative` 405. Against the package running locally (`--expect=after`): the same 16 files identical, both AI routes **404**. Turning the switch on locally (`AI_ENABLED:on`) restores the route (answering "add at least 2 evidence items" without any model call). Read-only GETs only; no POST is ever sent to production.
 - Approval-time steps (not run): `cd .release\ai-off-package`, `npx wrangler deploy` (expect no new assets uploaded), then the verifier with `--expect=after` against production; rollback `npx wrangler rollback 60045ea5-992c-499e-8290-a8ef08572667`.

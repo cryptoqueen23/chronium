@@ -40,3 +40,5 @@ No request to any AI route; no change to the production Worker, its variables or
 ## Update 2026-10-26: a prepared way to do option C without any database upgrade
 
 A Worker-only "AI off" release is prepared and verified locally (branch `release/ai-off`, package `.release/ai-off-package`, verifier `scripts/verify-ai-off-release.mjs`): it changes five lines in the Worker, leaves all 16 static files byte-identical to production (proved against the live site), and so cannot upgrade anyone's saved cases. Nothing was deployed. Details, the approval-time steps, the rollback target and the suggested order (cap the Anthropic workspace, then deploy this, then delete the secret) are in `docs/AI_OPENAI_PLAN.md`, section 6. The provider going forward is OpenAI, not Anthropic.
+
+**Final read-only review and recommendation (2026-10-26): `docs/PRODUCTION_AI_SHUTDOWN_REVIEW.md`.** Key result: the deployed Worker script is byte-identical to the production package, the patch adds two compiled lines, 16 of 16 static files stay identical, and the database cannot be upgraded by it.

@@ -15,7 +15,7 @@
     "test:ingestion": "node --test scripts/test-ingestion-review.mjs",
     "test:portable": "node --test scripts/test-portable.mjs",
     "test:ask": "node --test scripts/test-ask-router.mjs scripts/test-views.mjs",
-    "test": "node --test scripts/test-entities.mjs scripts/test-claims.mjs scripts/test-ingestion-review.mjs scripts/test-portable.mjs scripts/test-ask-router.mjs scripts/test-views.mjs scripts/test-discovery.mjs scripts/test-discovery-phase1.mjs scripts/test-recovery.mjs scripts/test-crawler-page.mjs scripts/test-upgrade-from-production.mjs scripts/test-stage0-security.mjs scripts/test-config-safety.mjs scripts/test-db-upgrade-safety.mjs scripts/test-ratelimit-binding.mjs scripts/test-ai-caps.mjs scripts/test-ai-incomplete.mjs scripts/test-openai-provider.mjs",
+    "test": "node --test scripts/test-entities.mjs scripts/test-claims.mjs scripts/test-ingestion-review.mjs scripts/test-portable.mjs scripts/test-ask-router.mjs scripts/test-views.mjs scripts/test-discovery.mjs scripts/test-discovery-phase1.mjs scripts/test-recovery.mjs scripts/test-crawler-page.mjs scripts/test-upgrade-from-production.mjs scripts/test-stage0-security.mjs scripts/test-config-safety.mjs scripts/test-db-upgrade-safety.mjs scripts/test-ratelimit-binding.mjs scripts/test-ai-caps.mjs scripts/test-ai-incomplete.mjs scripts/test-openai-provider.mjs scripts/test-ai-limits.mjs",
     "test:contrast": "node scripts/test-contrast.mjs",
     "test:a11y:modes": "node scripts/test-a11y-modes.mjs",
     "test:a11y:deep": "node scripts/test-a11y-deep.mjs",
