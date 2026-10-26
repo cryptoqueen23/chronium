@@ -1,4 +1,6 @@
-# AI plan: OpenAI is the provider (Anthropic is retired for new work)
+# AI plan: OpenAI adapter, caps, validation and key handling
+
+> **Updated 2026-10-26 (later): Mari decided to keep BOTH keys and to support both Claude and ChatGPT as optional, independent providers.** The "Anthropic is retired for new work" direction below is superseded by `docs/AI_MULTI_PROVIDER_DESIGN.md`. Everything here about the OpenAI adapter, the caps, the strict validation, the cost controls and key handling (Secret, never a plain variable) still applies to both providers. Keeping a key does not activate anything; AI stays off until Mari approves.
 
 Decision from Mari, 2026-10-26: **OpenAI is the preferred AI provider.** No new Anthropic integrations are planned. All AI stays **OFF** until Mari approves activation and its costs. Facts below were read from OpenAI's own documentation on 2026-10-26 unless marked **secondary** (news or blog coverage) or **UNVERIFIED**.
 
